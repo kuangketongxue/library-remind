@@ -711,6 +711,7 @@ class TrayIconController:
         self._registered_atom: int | None = None
         self._last_tray_message: int | None = None
         self._icon_path = _create_tray_icon_file()
+        self._last_recheck = time.time()
         self._thread.start()
         self._ready.wait(timeout=5)
 
@@ -731,6 +732,31 @@ class TrayIconController:
         self._add_ok = bool(shell32.Shell_NotifyIconW(NIM_ADD, ctypes.byref(self._nid)))
         self._nid.uTimeoutOrVersion = NOTIFYICON_VERSION_4
         shell32.Shell_NotifyIconW(NIM_SETVERSION, ctypes.byref(self._nid))
+    
+    def _check_and_restore_icon(self) -> bool:
+        try:
+            shell32 = ctypes.windll.shell32
+            if not self._hwnd:
+                return False
+            if not self._add_ok:
+                self._add_icon()
+                return self._add_ok
+            # 尝试修改图标来检查是否还在
+            test_tip = self.tooltip + " "
+            self._nid.szTip = test_tip
+            result = bool(shell32.Shell_NotifyIconW(NIM_MODIFY, ctypes.byref(self._nid)))
+            if not result:
+                # 可能图标已经消失了，重新添加
+                self._remove_icon()
+                self._nid.szTip = self.tooltip
+                self._add_icon()
+                return self._add_ok
+            # 恢复原来的提示
+            self._nid.szTip = self.tooltip
+            shell32.Shell_NotifyIconW(NIM_MODIFY, ctypes.byref(self._nid))
+            return True
+        except Exception:
+            return False
 
     def _remove_icon(self) -> None:
         if self._nid is None:
@@ -946,6 +972,9 @@ class TrayIconController:
     def request_restore(self) -> None:
         self._restore_requested.set()
 
+    def check_and_restore(self) -> bool:
+        return self._check_and_restore_icon()
+    
     def get_icon_rect(self):
         if not self._hwnd:
             return None
@@ -1408,6 +1437,9 @@ class BreakReminderApp:
                         self._expand_widget()
                     if self._tray_icon.consume_exit_request():
                         self._close_app()
+                    # 定期检查并恢复托盘图标（每30秒）
+                    if (now.second % 30) == 0:
+                        self._tray_icon.check_and_restore()
                 except Exception:
                     pass
             self._tick_after_id = self.root.after(self.check_interval_ms, self._tick)
@@ -1488,6 +1520,7 @@ def install_autostart() -> str:
     command = f'"{launcher}" "{script}"'
     startup_dir = Path.home() / "AppData" / "Roaming" / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
     launcher_file = startup_dir / "BreakReminderApp.vbs"
+    batch_file = startup_dir / "BreakReminderApp.bat"
 
     results: list[str] = []
     key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -1502,6 +1535,7 @@ def install_autostart() -> str:
 
     try:
         startup_dir.mkdir(parents=True, exist_ok=True)
+        # 创建VBS启动文件
         temp_file = launcher_file.with_suffix(".vbs.tmp")
         temp_file.write_text(
             'Set WshShell = CreateObject("WScript.Shell")\r\n'
@@ -1513,7 +1547,23 @@ def install_autostart() -> str:
         except OSError:
             pass
         temp_file.replace(launcher_file)
-        results.append("startup-folder")
+        results.append("startup-vbs")
+        
+        # 也创建一个批处理文件作为备用
+        try:
+            batch_temp = batch_file.with_suffix(".bat.tmp")
+            batch_temp.write_text(
+                f'@echo off\r\nstart "" {command}\r\n',
+                encoding="gbk",
+            )
+            try:
+                batch_file.unlink()
+            except OSError:
+                pass
+            batch_temp.replace(batch_file)
+            results.append("startup-bat")
+        except OSError:
+            pass
     except OSError:
         pass
 
