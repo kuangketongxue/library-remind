@@ -989,6 +989,13 @@ class BreakReminderApp:
         self.root.after(700, self._ensure_window_visible)
         self.root.after(1500, self._ensure_window_visible)
         self.root.after(5000, self._visibility_guard_tick)
+        
+        # 初始化系统托盘图标
+        self._tray_icon = TrayIconController(
+            tooltip="休息提醒 - 点击恢复",
+            on_restore_request=lambda: self.root.after(0, self._expand_widget),
+            on_exit_request=lambda: self.root.after(0, self._close_app)
+        )
 
         if smoke_seconds > 0:
             self.root.after(smoke_seconds * 1000, self._close_app)
@@ -1222,6 +1229,13 @@ class BreakReminderApp:
             try:
                 ctypes.windll.kernel32.CloseHandle(_singleton_mutex_handle)
                 _singleton_mutex_handle = None
+            except Exception:
+                pass
+        
+        # 清理托盘图标
+        if hasattr(self, '_tray_icon') and self._tray_icon:
+            try:
+                self._tray_icon.request_exit()
             except Exception:
                 pass
         
