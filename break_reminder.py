@@ -1235,8 +1235,8 @@ class BreakReminderApp:
                 self.root.configure(bg="#F6F7FB")
         self._last_audio_signature = current_signature
 
-    def _collapse_widget(self) -&gt; None:
-        self.is_collapsed = False
+    def _collapse_widget(self) -> None:
+        self.is_collapsed = True
         if self._startup_visible_after_id is not None:
             try:
                 self.root.after_cancel(self._startup_visible_after_id)
@@ -1245,8 +1245,7 @@ class BreakReminderApp:
             self._startup_visible_after_id = None
         if self.root.winfo_exists():
             try:
-                # 禁用最小化
-                pass
+                self.root.iconify()
             except tk.TclError:
                 pass
 
@@ -1273,9 +1272,8 @@ class BreakReminderApp:
         self._build_expanded_ui()
         self._ensure_window_visible()
 
-    def _hide_to_tray(self) -&gt; None:
-        # 禁用隐藏功能
-        pass
+    def _hide_to_tray(self) -> None:
+        self._collapse_widget()
 
     def _clear_alert(self) -> None:
         self.current_alert = None
