@@ -653,33 +653,32 @@ def _create_tray_icon_file() -> Path:
     except Exception:
         return icon_path
 
-    size = 64
-    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(image)
-    draw.rounded_rectangle((6, 6, size - 6, size - 6), radius=15, fill=(34, 117, 255, 255))
-    draw.rectangle((20, 18, 28, 46), fill=(255, 255, 255, 255))
-    draw.rectangle((36, 18, 44, 46), fill=(255, 255, 255, 255))
-    image.save(icon_path, format="ICO")
-    image.save(png_path, format="PNG")
+    try:
+        size = 64
+        image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(image)
+        draw.rounded_rectangle((6, 6, size - 6, size - 6), radius=15, fill=(34, 117, 255, 255))
+        draw.rectangle((20, 18, 28, 46), fill=(255, 255, 255, 255))
+        draw.rectangle((36, 18, 44, 46), fill=(255, 255, 255, 255))
+        image.save(icon_path, format="ICO")
+        image.save(png_path, format="PNG")
+    except Exception:
+        pass
     return icon_path
 
 
 def _restore_window(hwnd: int) -> None:
-    left, top, right, bottom = get_work_area()
-    width, height = 360, 360
-    x = max(left, right - width - 8)
-    y = max(top, top + ((bottom - top - height) // 2))
+        left, top, right, bottom = get_work_area()
+        width, height = 350, 300
+        x = 100  # 固定位置，确保在屏幕内
+        y = 100  # 固定位置，确保在屏幕内
 
-    user32 = ctypes.windll.user32
-    SW_RESTORE = 9
-    SWP_SHOWWINDOW = 0x0040
-    HWND_TOPMOST = -1
-    HWND_NOTOPMOST = -2
-    user32.ShowWindow(hwnd, SW_RESTORE)
-    user32.MoveWindow(hwnd, x, y, width, height, True)
-    user32.SetWindowPos(hwnd, HWND_TOPMOST, x, y, width, height, SWP_SHOWWINDOW)
-    user32.SetWindowPos(hwnd, HWND_NOTOPMOST, x, y, width, height, SWP_SHOWWINDOW)
-    user32.SetForegroundWindow(hwnd)
+        user32 = ctypes.windll.user32
+        SW_RESTORE = 9
+        SWP_SHOWWINDOW = 0x0040
+        user32.ShowWindow(hwnd, SW_RESTORE)
+        user32.MoveWindow(hwnd, x, y, width, height, True)
+        user32.SetForegroundWindow(hwnd)
 
 
 def _set_app_user_model_id() -> None:
@@ -949,12 +948,12 @@ class BreakReminderApp:
 
         self.root = tk.Tk()
         self.root.title(REMINDER_WINDOW_TITLE)
-        self.root.resizable(False, False)
+        self.root.resizable(True, True)  # 允许调整大小
         self.root.configure(bg="#F6F7FB")
         self.root.protocol("WM_DELETE_WINDOW", self._hide_to_tray)
 
-        self.expanded_size = (400, 400)
-        self.collapsed_size = (50, 200)
+        self.expanded_size = (350, 350)
+        self.collapsed_size = (60, 240)
         self.is_collapsed = False
         self.current_alert: str | None = None
         self.popup_windows: list[tk.Toplevel] = []
@@ -978,40 +977,63 @@ class BreakReminderApp:
         self.capture_var = tk.StringVar(value="麦克风：检查中")
         self.audio_detail_var = tk.StringVar(value="默认设备：检查中")
 
+        # 构建UI
         self._build_expanded_ui()
         self._refresh_audio_status(force=True)
-        self._dock_to_right(*self.expanded_size)
         self._set_window_icon()
         self._apply_app_icon()
         self.root.bind("<Map>", self._on_window_mapped, add="+")
         self.root.bind("<Unmap>", self._on_window_unmapped, add="+")
-        self._startup_visible_after_id = self.root.after(120, self._ensure_window_visible)
-        self.root.after(700, self._ensure_window_visible)
-        self.root.after(1500, self._ensure_window_visible)
-        self.root.after(5000, self._visibility_guard_tick)
+        
+        # 确保窗口可见
+        self.root.deiconify()
+        self.root.lift()
+        self.root.focus_force()
+        
+        # 立即设置窗口大小和位置
+        width = self.expanded_size[0]
+        height = self.expanded_size[1]
+        x = 100  # 固定位置，确保在屏幕内
+        y = 100  # 固定位置，确保在屏幕内
+        self.root.geometry(f"{width}x{height}+{x}+{y}")
+        self.root.update_idletasks()
+        
+        # 立即调用确保窗口可见的方法
+        self._ensure_window_visible()
+        
+        # 设置定期检查
+        self.root.after(1000, self._visibility_guard_tick)
 
         if smoke_seconds > 0:
             self.root.after(smoke_seconds * 1000, self._close_app)
 
     def _build_expanded_ui(self) -> None:
+        # 先设置窗口大小
         self.root.geometry(f"{self.expanded_size[0]}x{self.expanded_size[1]}")
+        # 清空所有子组件
         for child in self.root.winfo_children():
             child.destroy()
+        # 强制更新窗口
+        self.root.update_idletasks()
 
+        # 创建容器
         container = tk.Frame(self.root, bg="#F6F7FB", padx=14, pady=14)
         container.pack(fill="both", expand=True)
 
-        tk.Label(container, text=WIDGET_HEADER, font=("Microsoft YaHei UI", 14, "bold"), bg="#F6F7FB", fg="#1F2A44").pack(anchor="w")
-        tk.Label(container, textvariable=self.status_var, font=("Microsoft YaHei UI", 12, "bold"), bg="#F6F7FB", fg="#D7263D", pady=6).pack(anchor="w")
-        tk.Label(container, textvariable=self.detail_var, font=("Microsoft YaHei UI", 12), bg="#F6F7FB", fg="#2F3A4F", justify="left", wraplength=380).pack(anchor="w", pady=(0, 8))
-        tk.Label(container, textvariable=self.usage_var, font=("Microsoft YaHei UI", 12), bg="#F6F7FB", fg="#2F3A4F").pack(anchor="w")
-        tk.Label(container, textvariable=self.next_var, font=("Microsoft YaHei UI", 12), bg="#F6F7FB", fg="#2F3A4F", pady=4).pack(anchor="w")
-        tk.Label(container, textvariable=self.power_var, font=("Microsoft YaHei UI", 12), bg="#F6F7FB", fg="#2F3A4F").pack(anchor="w")
-        tk.Label(container, textvariable=self.raw_power_var, font=("Microsoft YaHei UI", 11), bg="#F6F7FB", fg="#5C677D", wraplength=380, justify="left").pack(anchor="w", pady=(4, 0))
-        tk.Label(container, textvariable=self.alt_power_var, font=("Microsoft YaHei UI", 11), bg="#F6F7FB", fg="#5C677D", wraplength=380, justify="left").pack(anchor="w", pady=(2, 0))
-        tk.Label(container, textvariable=self.render_var, font=("Microsoft YaHei UI", 11), bg="#F6F7FB", fg="#5C677D", wraplength=380, justify="left").pack(anchor="w", pady=(4, 0))
-        tk.Label(container, textvariable=self.capture_var, font=("Microsoft YaHei UI", 11), bg="#F6F7FB", fg="#5C677D", wraplength=380, justify="left").pack(anchor="w", pady=(2, 0))
-        tk.Label(container, textvariable=self.audio_detail_var, font=("Microsoft YaHei UI", 11), bg="#F6F7FB", fg="#5C677D", wraplength=380, justify="left").pack(anchor="w", pady=(2, 0))
+        # 确保中文字体正确显示
+        default_font = ("Microsoft YaHei UI", 11)
+        
+        tk.Label(container, text=WIDGET_HEADER, font=("Microsoft YaHei UI", 12, "bold"), bg="#F6F7FB", fg="#1F2A44").pack(anchor="w")
+        tk.Label(container, textvariable=self.status_var, font=("Microsoft YaHei UI", 11, "bold"), bg="#F6F7FB", fg="#D7263D", pady=4).pack(anchor="w")
+        tk.Label(container, textvariable=self.detail_var, font=default_font, bg="#F6F7FB", fg="#2F3A4F", justify="left", wraplength=300).pack(anchor="w", pady=(0, 6))
+        tk.Label(container, textvariable=self.usage_var, font=default_font, bg="#F6F7FB", fg="#2F3A4F").pack(anchor="w")
+        tk.Label(container, textvariable=self.next_var, font=default_font, bg="#F6F7FB", fg="#2F3A4F", pady=2).pack(anchor="w")
+        tk.Label(container, textvariable=self.power_var, font=default_font, bg="#F6F7FB", fg="#2F3A4F").pack(anchor="w")
+        tk.Label(container, textvariable=self.raw_power_var, font=("Microsoft YaHei UI", 10), bg="#F6F7FB", fg="#5C677D", wraplength=300, justify="left").pack(anchor="w", pady=(2, 0))
+        tk.Label(container, textvariable=self.alt_power_var, font=("Microsoft YaHei UI", 10), bg="#F6F7FB", fg="#5C677D", wraplength=300, justify="left").pack(anchor="w", pady=(1, 0))
+        tk.Label(container, textvariable=self.render_var, font=("Microsoft YaHei UI", 10), bg="#F6F7FB", fg="#5C677D", wraplength=300, justify="left").pack(anchor="w", pady=(2, 0))
+        tk.Label(container, textvariable=self.capture_var, font=("Microsoft YaHei UI", 10), bg="#F6F7FB", fg="#5C677D", wraplength=300, justify="left").pack(anchor="w", pady=(1, 0))
+        tk.Label(container, textvariable=self.audio_detail_var, font=("Microsoft YaHei UI", 10), bg="#F6F7FB", fg="#5C677D", wraplength=300, justify="left").pack(anchor="w", pady=(1, 0))
 
         btn_row = tk.Frame(container, bg="#F6F7FB")
         btn_row.pack(fill="x", pady=(12, 0))
@@ -1019,28 +1041,13 @@ class BreakReminderApp:
         tk.Button(btn_row, text="知道了", width=8, command=self._clear_alert).pack(side="left", padx=(8, 0))
         tk.Button(btn_row, text="退出", width=8, command=self._close_app).pack(side="right")
 
-    def _build_collapsed_ui(self) -> None:
-        return
-
     def _dock_to_right(self, width: int, height: int) -> None:
         left, top, right, bottom = get_work_area()
         x = max(left, right - width - 8)
         y = max(top, top + ((bottom - top - height) // 2))
         self.root.geometry(f"{width}x{height}+{x}+{y}")
 
-    def _dock_handle_to_right(self) -> None:
-        return
-
     def _ensure_window_visible(self) -> None:
-        if self.is_collapsed:
-            if self.root.winfo_exists():
-                try:
-                    if self.root.state() != "iconic":
-                        self.root.iconify()
-                except tk.TclError:
-                    pass
-            return
-
         if not self.root.winfo_exists():
             return
         try:
@@ -1049,44 +1056,45 @@ class BreakReminderApp:
             self.root.focus_force()
             width = self.expanded_size[0]
             height = self.expanded_size[1]
-            self._dock_to_right(width, height)
+            
+            # 获取屏幕工作区域，确保窗口在屏幕内
+            left, top, right, bottom = get_work_area()
+            screen_width = right - left
+            screen_height = bottom - top
+            
+            # 计算窗口位置，使其居中显示
+            x = left + (screen_width - width) // 2
+            y = top + (screen_height - height) // 2
+            
+            # 确保窗口不超出屏幕边界
+            x = max(left, min(x, right - width))
+            y = max(top, min(y, bottom - height))
+            
+            # 直接设置窗口位置
+            self.root.geometry(f"{width}x{height}+{x}+{y}")
             self.root.update_idletasks()
 
+            # 使用 Windows API 确保窗口可见
             hwnd = self.root.winfo_id()
             user32 = ctypes.windll.user32
             SW_RESTORE = 9
             SWP_SHOWWINDOW = 0x0040
-            left, top, right, bottom = get_work_area()
-            x = max(left, right - width - 8)
-            y = max(top, top + ((bottom - top - height) // 2))
             user32.ShowWindow(hwnd, SW_RESTORE)
             user32.SetWindowPos(hwnd, 0, x, y, width, height, SWP_SHOWWINDOW)
             user32.SetForegroundWindow(hwnd)
-        except Exception:
+        except Exception as e:
             pass
 
     def _visibility_guard_tick(self) -> None:
         if not self.root.winfo_exists():
             return
-        if self.is_collapsed:
-            return
         try:
-            needs_restore = self.root.state() != "normal"
-        except tk.TclError:
-            needs_restore = True
-        if not needs_restore:
-            try:
-                self.root.update_idletasks()
-                x, y = self.root.winfo_x(), self.root.winfo_y()
-                width = self.root.winfo_width()
-                height = self.root.winfo_height()
-                left, top, right, bottom = get_work_area()
-                if x < left - 4 or y < top - 4 or x + width > right + 4 or y + height > bottom + 4:
-                    needs_restore = True
-            except tk.TclError:
-                needs_restore = True
-        if needs_restore:
-            self._ensure_window_visible()
+            # 只在窗口被最小化且不是用户主动隐藏时才强制恢复窗口大小和位置
+            if self.root.state() == 'iconic' and not self.is_collapsed:
+                self._ensure_window_visible()
+        except Exception:
+            pass
+        # 减少执行频率，每5秒检查一次
         self.root.after(5000, self._visibility_guard_tick)
 
     def _refresh_audio_status(self, force: bool = False) -> None:
@@ -1096,20 +1104,20 @@ class BreakReminderApp:
         self._audio_probe_at = now
         render, capture = self.audio_monitor.probe()
         self.render_var.set(
-            f"声音：{render.status_text} | {render.friendly_name or render.device_id or '未知'} | "
+            f"{render.status_text} | {render.friendly_name or render.device_id or '未知'} | "
             f"mute={render.mute} | volume={render.volume_scalar} | mix={render.mix_format_ok}"
         )
         self.capture_var.set(
-            f"麦克风：{capture.status_text} | {capture.friendly_name or capture.device_id or '未知'} | "
+            f"{capture.status_text} | {capture.friendly_name or capture.device_id or '未知'} | "
             f"mute={capture.mute} | volume={capture.volume_scalar} | mix={capture.mix_format_ok}"
         )
         baseline_text = []
         if render.baseline_name:
-            baseline_text.append(f"声音设备：{render.baseline_name}")
+            baseline_text.append(f"{render.baseline_name}")
         if capture.baseline_name:
-            baseline_text.append(f"麦克风：{capture.baseline_name}")
+            baseline_text.append(f"{capture.baseline_name}")
         if not baseline_text:
-            baseline_text.append("默认设备：未知")
+            baseline_text.append("无默认设备")
         self.audio_detail_var.set(" | ".join(baseline_text))
 
         current_signature = (render.status_text, capture.status_text)
@@ -1119,18 +1127,18 @@ class BreakReminderApp:
         if problem_signature and problem_signature != self._last_audio_problem_signature:
             self._last_audio_problem_signature = problem_signature
             if self.current_alert is None:
-                self.detail_var.set(f"??????????{problem_signature}")
-                self.status_var.set("???????????")
+                self.detail_var.set(f"音频设备异常: {problem_signature}")
+                self.status_var.set("状态：音频异常")
                 self.root.configure(bg="#FFE8CC")
                 self._show_popup(
-                    "????????",
-                    "????????????????????\n?????????????????",
+                    "音频设备异常",
+                    "音频设备出现问题，请检查您的设备设置\n可能会影响提醒功能",
                 )
         elif not problem_signature and self._last_audio_problem_signature is not None:
             self._last_audio_problem_signature = None
             if self.current_alert is None:
-                self.status_var.set("?????")
-                self.detail_var.set("?????????????")
+                self.status_var.set("状态：正常")
+                self.detail_var.set("还没到提醒时间，继续专注。")
                 self.root.configure(bg="#F6F7FB")
         self._last_audio_signature = current_signature
 
@@ -1204,6 +1212,26 @@ class BreakReminderApp:
         for popup in list(self.popup_windows):
             if popup.winfo_exists():
                 popup.destroy()
+        
+        # 清理临时图标文件
+        try:
+            if hasattr(self, '_icon_path') and self._icon_path.exists():
+                self._icon_path.unlink()
+            png_path = self._icon_path.with_suffix('.png') if hasattr(self, '_icon_path') else None
+            if png_path and png_path.exists():
+                png_path.unlink()
+        except Exception:
+            pass
+        
+        # 释放互斥体
+        global _singleton_mutex_handle
+        if _singleton_mutex_handle:
+            try:
+                ctypes.windll.kernel32.CloseHandle(_singleton_mutex_handle)
+                _singleton_mutex_handle = None
+            except Exception:
+                pass
+        
         if self.root.winfo_exists():
             self.root.quit()
             self.root.destroy()
@@ -1696,6 +1724,7 @@ def main() -> None:
     args = parse_args()
     _set_app_user_model_id()
 
+    # 特殊模式不需要单实例检查
     if args.self_test:
         run_self_test()
         return
@@ -1727,6 +1756,7 @@ def main() -> None:
 
     ensure_autostart()
 
+    # 确保只有一个应用实例运行（包括测试模式）
     if not ensure_single_instance():
         activate_existing_window()
         return
