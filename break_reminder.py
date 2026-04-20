@@ -809,15 +809,6 @@ class TrayIconController:
             mii_restore.cch = len(mii_restore.dwTypeData)
             user32.InsertMenuItemW(hmenu, 0, True, ctypes.byref(mii_restore))
             
-            # 添加"退出"菜单项
-            mii_exit = MENUITEMINFO()
-            mii_exit.cbSize = ctypes.sizeof(MENUITEMINFO)
-            mii_exit.fMask = MIIM_STRING | MIIM_ID
-            mii_exit.wID = 1002
-            mii_exit.dwTypeData = "退出"
-            mii_exit.cch = len(mii_exit.dwTypeData)
-            user32.InsertMenuItemW(hmenu, 1, True, ctypes.byref(mii_exit))
-            
             # 显示菜单
             user32.SetForegroundWindow(hwnd)
             result = user32.TrackPopupMenuEx(
@@ -829,11 +820,9 @@ class TrayIconController:
                 None
             )
             
-            # 处理菜单选择
+            # 处理菜单选择（只有恢复选项）
             if result == 1001:
                 self._restore_requested.set()
-            elif result == 1002:
-                self._exit_requested.set()
             
             # 清理菜单
             user32.DestroyMenu(hmenu)
@@ -1129,7 +1118,6 @@ class BreakReminderApp:
         btn_row.pack(fill="x", pady=(12, 0))
         tk.Button(btn_row, text="隐藏", width=8, command=self._collapse_widget).pack(side="left")
         tk.Button(btn_row, text="知道了", width=8, command=self._clear_alert).pack(side="left", padx=(8, 0))
-        tk.Button(btn_row, text="退出", width=8, command=self._close_app).pack(side="right")
 
     def _build_collapsed_ui(self) -> None:
         return
