@@ -741,13 +741,89 @@ class TrayIconController:
             pass
         self._nid = None
 
+    def _show_context_menu(self, hwnd):
+        try:
+            user32 = ctypes.windll.user32
+            shell32 = ctypes.windll.shell32
+            
+            # 获取鼠标位置
+            point = POINT()
+            user32.GetCursorPos(ctypes.byref(point))
+            
+            # 创建菜单
+            hmenu = user32.CreatePopupMenu()
+            if not hmenu:
+                return
+            
+            # 添加菜单项
+            MIIM_STRING = 0x00000040
+            MIIM_ID = 0x00000002
+            
+            class MENUITEMINFO(ctypes.Structure):
+                _fields_ = [
+                    ('cbSize', ctypes.c_uint),
+                    ('fMask', ctypes.c_uint),
+                    ('fType', ctypes.c_uint),
+                    ('fState', ctypes.c_uint),
+                    ('wID', ctypes.c_uint),
+                    ('hSubMenu', ctypes.c_void_p),
+                    ('hBmpChecked', ctypes.c_void_p),
+                    ('hBmpUnchecked', ctypes.c_void_p),
+                    ('dwItemData', ctypes.c_ulonglong),
+                    ('dwTypeData', ctypes.c_wchar_p),
+                    ('cch', ctypes.c_uint),
+                ]
+            
+            # 添加"恢复"菜单项
+            mii_restore = MENUITEMINFO()
+            mii_restore.cbSize = ctypes.sizeof(MENUITEMINFO)
+            mii_restore.fMask = MIIM_STRING | MIIM_ID
+            mii_restore.wID = 1001
+            mii_restore.dwTypeData = "恢复"
+            mii_restore.cch = len(mii_restore.dwTypeData)
+            user32.InsertMenuItemW(hmenu, 0, True, ctypes.byref(mii_restore))
+            
+            # 添加"退出"菜单项
+            mii_exit = MENUITEMINFO()
+            mii_exit.cbSize = ctypes.sizeof(MENUITEMINFO)
+            mii_exit.fMask = MIIM_STRING | MIIM_ID
+            mii_exit.wID = 1002
+            mii_exit.dwTypeData = "退出"
+            mii_exit.cch = len(mii_exit.dwTypeData)
+            user32.InsertMenuItemW(hmenu, 1, True, ctypes.byref(mii_exit))
+            
+            # 显示菜单
+            user32.SetForegroundWindow(hwnd)
+            result = user32.TrackPopupMenuEx(
+                hmenu, 
+                0x00000040,  # TPM_RIGHTBUTTON
+                point.x, 
+                point.y, 
+                hwnd, 
+                None
+            )
+            
+            # 处理菜单选择
+            if result == 1001:
+                self._restore_requested.set()
+            elif result == 1002:
+                self._exit_requested.set()
+            
+            # 清理菜单
+            user32.DestroyMenu(hmenu)
+        except Exception:
+            pass
+
     def _window_proc(self, hwnd, msg, wparam, lparam):
         if msg in (WM_CREATE, WM_NCCREATE):
             return 1
         if msg == WM_TRAYICON:
             self._last_tray_message = int(lparam)
-            if lparam in (WM_LBUTTONUP, WM_LBUTTONDBLCLK, WM_RBUTTONUP):
+            if lparam in (WM_LBUTTONUP, WM_LBUTTONDBLCLK):
                 self._restore_requested.set()
+            elif lparam == WM_RBUTTONUP:
+                # 显示右键菜单
+                self._show_context_menu(hwnd)
             return 0
         if msg == 0x0010:  # WM_CLOSE
             self._stop.set()
@@ -1325,6 +1401,15 @@ class BreakReminderApp:
                 self._handle_power_event()
 
         if self.root.winfo_exists():
+            # 检查托盘图标请求
+            if hasattr(self, '_tray_icon') and self._tray_icon:
+                try:
+                    if self._tray_icon.consume_restore_request():
+                        self._expand_widget()
+                    if self._tray_icon.consume_exit_request():
+                        self._close_app()
+                except Exception:
+                    pass
             self._tick_after_id = self.root.after(self.check_interval_ms, self._tick)
 
     def _play_reminder_sound(self) -> None:
