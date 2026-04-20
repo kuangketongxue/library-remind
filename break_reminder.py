@@ -666,7 +666,7 @@ def _create_tray_icon_file() -> Path:
 
 def _restore_window(hwnd: int) -> None:
     left, top, right, bottom = get_work_area()
-    width, height = 360, 360
+    width, height = 350, 350
     x = max(left, right - width - 8)
     y = max(top, top + ((bottom - top - height) // 2))
 
@@ -953,7 +953,7 @@ class BreakReminderApp:
         self.root.configure(bg="#F6F7FB")
         self.root.protocol("WM_DELETE_WINDOW", self._hide_to_tray)
 
-        self.expanded_size = (400, 400)
+        self.expanded_size = (350, 350)
         self.collapsed_size = (50, 200)
         self.is_collapsed = False
         self.current_alert: str | None = None
@@ -1001,17 +1001,17 @@ class BreakReminderApp:
         container = tk.Frame(self.root, bg="#F6F7FB", padx=14, pady=14)
         container.pack(fill="both", expand=True)
 
-        tk.Label(container, text=WIDGET_HEADER, font=("Microsoft YaHei UI", 14, "bold"), bg="#F6F7FB", fg="#1F2A44").pack(anchor="w")
-        tk.Label(container, textvariable=self.status_var, font=("Microsoft YaHei UI", 12, "bold"), bg="#F6F7FB", fg="#D7263D", pady=6).pack(anchor="w")
-        tk.Label(container, textvariable=self.detail_var, font=("Microsoft YaHei UI", 12), bg="#F6F7FB", fg="#2F3A4F", justify="left", wraplength=380).pack(anchor="w", pady=(0, 8))
-        tk.Label(container, textvariable=self.usage_var, font=("Microsoft YaHei UI", 12), bg="#F6F7FB", fg="#2F3A4F").pack(anchor="w")
-        tk.Label(container, textvariable=self.next_var, font=("Microsoft YaHei UI", 12), bg="#F6F7FB", fg="#2F3A4F", pady=4).pack(anchor="w")
-        tk.Label(container, textvariable=self.power_var, font=("Microsoft YaHei UI", 12), bg="#F6F7FB", fg="#2F3A4F").pack(anchor="w")
-        tk.Label(container, textvariable=self.raw_power_var, font=("Microsoft YaHei UI", 11), bg="#F6F7FB", fg="#5C677D", wraplength=380, justify="left").pack(anchor="w", pady=(4, 0))
-        tk.Label(container, textvariable=self.alt_power_var, font=("Microsoft YaHei UI", 11), bg="#F6F7FB", fg="#5C677D", wraplength=380, justify="left").pack(anchor="w", pady=(2, 0))
-        tk.Label(container, textvariable=self.render_var, font=("Microsoft YaHei UI", 11), bg="#F6F7FB", fg="#5C677D", wraplength=380, justify="left").pack(anchor="w", pady=(4, 0))
-        tk.Label(container, textvariable=self.capture_var, font=("Microsoft YaHei UI", 11), bg="#F6F7FB", fg="#5C677D", wraplength=380, justify="left").pack(anchor="w", pady=(2, 0))
-        tk.Label(container, textvariable=self.audio_detail_var, font=("Microsoft YaHei UI", 11), bg="#F6F7FB", fg="#5C677D", wraplength=380, justify="left").pack(anchor="w", pady=(2, 0))
+        tk.Label(container, text=WIDGET_HEADER, font=("Microsoft YaHei UI", 12, "bold"), bg="#F6F7FB", fg="#1F2A44").pack(anchor="w")
+        tk.Label(container, textvariable=self.status_var, font=("Microsoft YaHei UI", 11, "bold"), bg="#F6F7FB", fg="#D7263D", pady=4).pack(anchor="w")
+        tk.Label(container, textvariable=self.detail_var, font=("Microsoft YaHei UI", 11), bg="#F6F7FB", fg="#2F3A4F", justify="left", wraplength=320).pack(anchor="w", pady=(0, 6))
+        tk.Label(container, textvariable=self.usage_var, font=("Microsoft YaHei UI", 11), bg="#F6F7FB", fg="#2F3A4F").pack(anchor="w")
+        tk.Label(container, textvariable=self.next_var, font=("Microsoft YaHei UI", 11), bg="#F6F7FB", fg="#2F3A4F", pady=2).pack(anchor="w")
+        tk.Label(container, textvariable=self.power_var, font=("Microsoft YaHei UI", 11), bg="#F6F7FB", fg="#2F3A4F").pack(anchor="w")
+        tk.Label(container, textvariable=self.raw_power_var, font=("Microsoft YaHei UI", 10), bg="#F6F7FB", fg="#5C677D", wraplength=320, justify="left").pack(anchor="w", pady=(2, 0))
+        tk.Label(container, textvariable=self.alt_power_var, font=("Microsoft YaHei UI", 10), bg="#F6F7FB", fg="#5C677D", wraplength=320, justify="left").pack(anchor="w", pady=(1, 0))
+        tk.Label(container, textvariable=self.render_var, font=("Microsoft YaHei UI", 10), bg="#F6F7FB", fg="#5C677D", wraplength=320, justify="left").pack(anchor="w", pady=(2, 0))
+        tk.Label(container, textvariable=self.capture_var, font=("Microsoft YaHei UI", 10), bg="#F6F7FB", fg="#5C677D", wraplength=320, justify="left").pack(anchor="w", pady=(1, 0))
+        tk.Label(container, textvariable=self.audio_detail_var, font=("Microsoft YaHei UI", 10), bg="#F6F7FB", fg="#5C677D", wraplength=320, justify="left").pack(anchor="w", pady=(1, 0))
 
         btn_row = tk.Frame(container, bg="#F6F7FB")
         btn_row.pack(fill="x", pady=(12, 0))
@@ -1069,6 +1069,7 @@ class BreakReminderApp:
         if not self.root.winfo_exists():
             return
         if self.is_collapsed:
+            self.root.after(5000, self._visibility_guard_tick)
             return
         try:
             needs_restore = self.root.state() != "normal"
@@ -1204,6 +1205,26 @@ class BreakReminderApp:
         for popup in list(self.popup_windows):
             if popup.winfo_exists():
                 popup.destroy()
+        
+        # 清理临时图标文件
+        try:
+            if hasattr(self, '_icon_path') and self._icon_path.exists():
+                self._icon_path.unlink()
+            png_path = self._icon_path.with_suffix(".png") if hasattr(self, "_icon_path") else None
+            if png_path and png_path.exists():
+                png_path.unlink()
+        except Exception:
+            pass
+        
+        # 释放互斥体
+        global _singleton_mutex_handle
+        if _singleton_mutex_handle:
+            try:
+                ctypes.windll.kernel32.CloseHandle(_singleton_mutex_handle)
+                _singleton_mutex_handle = None
+            except Exception:
+                pass
+        
         if self.root.winfo_exists():
             self.root.quit()
             self.root.destroy()
@@ -1696,6 +1717,7 @@ def main() -> None:
     args = parse_args()
     _set_app_user_model_id()
 
+    # 这些特殊模式不需要启动完整应用，所以直接执行后返回
     if args.self_test:
         run_self_test()
         return
@@ -1714,6 +1736,15 @@ def main() -> None:
     if args.taskbar_smoke:
         run_taskbar_smoke_test()
         return
+
+    # 对于需要启动应用的模式（包括demo_alert和正常模式），先检查单实例
+    if not ensure_single_instance():
+        activate_existing_window()
+        return
+
+    # 确保开机自启动
+    ensure_autostart()
+
     if args.demo_alert:
         app = BreakReminderApp(check_interval_ms=CHECK_INTERVAL_MS, test_mode=False, smoke_seconds=max(0, args.smoke_seconds))
         if args.demo_alert == "break":
@@ -1725,12 +1756,7 @@ def main() -> None:
         app.run()
         return
 
-    ensure_autostart()
-
-    if not ensure_single_instance():
-        activate_existing_window()
-        return
-
+    # 正常启动应用
     app = BreakReminderApp(check_interval_ms=CHECK_INTERVAL_MS, test_mode=args.test_mode, smoke_seconds=max(0, args.smoke_seconds))
     app.run()
 
