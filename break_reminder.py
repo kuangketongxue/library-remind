@@ -666,7 +666,7 @@ def _create_tray_icon_file() -> Path:
 
 def _restore_window(hwnd: int) -> None:
     left, top, right, bottom = get_work_area()
-    width, height = 350, 350
+    width, height = 420, 450
     x = max(left, right - width - 8)
     y = max(top, top + ((bottom - top - height) // 2))
 
@@ -1058,7 +1058,7 @@ class BreakReminderApp:
         self.root.configure(bg="#F6F7FB")
         self.root.protocol("WM_DELETE_WINDOW", self._hide_to_tray)
 
-        self.expanded_size = (350, 350)
+        self.expanded_size = (420, 450)
         self.collapsed_size = (50, 200)
         self.is_collapsed = False
         self.current_alert: str | None = None
@@ -1115,15 +1115,15 @@ class BreakReminderApp:
 
         tk.Label(container, text=WIDGET_HEADER, font=("Microsoft YaHei UI", 12, "bold"), bg="#F6F7FB", fg="#1F2A44").pack(anchor="w")
         tk.Label(container, textvariable=self.status_var, font=("Microsoft YaHei UI", 11, "bold"), bg="#F6F7FB", fg="#D7263D", pady=4).pack(anchor="w")
-        tk.Label(container, textvariable=self.detail_var, font=("Microsoft YaHei UI", 11), bg="#F6F7FB", fg="#2F3A4F", justify="left", wraplength=320).pack(anchor="w", pady=(0, 6))
+        tk.Label(container, textvariable=self.detail_var, font=("Microsoft YaHei UI", 11), bg="#F6F7FB", fg="#2F3A4F", justify="left", wraplength=390).pack(anchor="w", pady=(0, 6))
         tk.Label(container, textvariable=self.usage_var, font=("Microsoft YaHei UI", 11), bg="#F6F7FB", fg="#2F3A4F").pack(anchor="w")
         tk.Label(container, textvariable=self.next_var, font=("Microsoft YaHei UI", 11), bg="#F6F7FB", fg="#2F3A4F", pady=2).pack(anchor="w")
         tk.Label(container, textvariable=self.power_var, font=("Microsoft YaHei UI", 11), bg="#F6F7FB", fg="#2F3A4F").pack(anchor="w")
-        tk.Label(container, textvariable=self.raw_power_var, font=("Microsoft YaHei UI", 10), bg="#F6F7FB", fg="#5C677D", wraplength=320, justify="left").pack(anchor="w", pady=(2, 0))
-        tk.Label(container, textvariable=self.alt_power_var, font=("Microsoft YaHei UI", 10), bg="#F6F7FB", fg="#5C677D", wraplength=320, justify="left").pack(anchor="w", pady=(1, 0))
-        tk.Label(container, textvariable=self.render_var, font=("Microsoft YaHei UI", 10), bg="#F6F7FB", fg="#5C677D", wraplength=320, justify="left").pack(anchor="w", pady=(2, 0))
-        tk.Label(container, textvariable=self.capture_var, font=("Microsoft YaHei UI", 10), bg="#F6F7FB", fg="#5C677D", wraplength=320, justify="left").pack(anchor="w", pady=(1, 0))
-        tk.Label(container, textvariable=self.audio_detail_var, font=("Microsoft YaHei UI", 10), bg="#F6F7FB", fg="#5C677D", wraplength=320, justify="left").pack(anchor="w", pady=(1, 0))
+        tk.Label(container, textvariable=self.raw_power_var, font=("Microsoft YaHei UI", 10), bg="#F6F7FB", fg="#5C677D", wraplength=390, justify="left").pack(anchor="w", pady=(2, 0))
+        tk.Label(container, textvariable=self.alt_power_var, font=("Microsoft YaHei UI", 10), bg="#F6F7FB", fg="#5C677D", wraplength=390, justify="left").pack(anchor="w", pady=(1, 0))
+        tk.Label(container, textvariable=self.render_var, font=("Microsoft YaHei UI", 10), bg="#F6F7FB", fg="#5C677D", wraplength=390, justify="left").pack(anchor="w", pady=(2, 0))
+        tk.Label(container, textvariable=self.capture_var, font=("Microsoft YaHei UI", 10), bg="#F6F7FB", fg="#5C677D", wraplength=390, justify="left").pack(anchor="w", pady=(1, 0))
+        tk.Label(container, textvariable=self.audio_detail_var, font=("Microsoft YaHei UI", 10), bg="#F6F7FB", fg="#5C677D", wraplength=390, justify="left").pack(anchor="w", pady=(1, 0))
 
         btn_row = tk.Frame(container, bg="#F6F7FB")
         btn_row.pack(fill="x", pady=(12, 0))
@@ -1232,18 +1232,18 @@ class BreakReminderApp:
         if problem_signature and problem_signature != self._last_audio_problem_signature:
             self._last_audio_problem_signature = problem_signature
             if self.current_alert is None:
-                self.detail_var.set(f"??????????{problem_signature}")
-                self.status_var.set("???????????")
+                self.detail_var.set(f"声音/麦克风异常：{problem_signature}")
+                self.status_var.set("状态：音频异常")
                 self.root.configure(bg="#FFE8CC")
                 self._show_popup(
-                    "????????",
-                    "????????????????????\n?????????????????",
+                    "音频设备异常",
+                    "检测到声音或麦克风设备异常，\n请检查您的音频设备设置。",
                 )
         elif not problem_signature and self._last_audio_problem_signature is not None:
             self._last_audio_problem_signature = None
             if self.current_alert is None:
-                self.status_var.set("?????")
-                self.detail_var.set("?????????????")
+                self.status_var.set("状态：正常")
+                self.detail_var.set("音频设备已恢复正常。")
                 self.root.configure(bg="#F6F7FB")
         self._last_audio_signature = current_signature
 
