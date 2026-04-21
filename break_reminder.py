@@ -330,6 +330,8 @@ def _probe_audio_endpoint_strict(flow: int, role: str, baseline: dict[str, dict[
         volume_ok = True
         if mute is True:
             volume_ok = False
+        if mute is None:
+            volume_ok = False
         if volume_scalar is not None and volume_scalar <= 0.02:
             volume_ok = False
         if client_ptr.value:
