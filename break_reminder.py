@@ -1072,13 +1072,15 @@ class BreakReminderApp:
         self.capture_var = tk.StringVar(value="麦克风：检查中")
         self.audio_detail_var = tk.StringVar(value="默认设备：检查中")
 
-        self._build_expanded_ui()
-        self._refresh_audio_status(force=True)
-        self._dock_to_right(*self.expanded_size)
         self._set_window_icon()
         self._apply_app_icon()
+        self._build_expanded_ui()
+        self._refresh_audio_status(force=True)
         self.root.bind("<Map>", self._on_window_mapped, add="+")
         self.root.bind("<Unmap>", self._on_window_unmapped, add="+")
+        
+        # 立即确保窗口可见，避免启动时尺寸不正确
+        self._ensure_window_visible()
         self._startup_visible_after_id = self.root.after(120, self._ensure_window_visible)
         self.root.after(700, self._ensure_window_visible)
         self.root.after(1500, self._ensure_window_visible)
@@ -1136,7 +1138,7 @@ class BreakReminderApp:
             if self.root.winfo_exists():
                 try:
                     if self.root.state() != "iconic":
-                        self.root.iconify()
+                        pass
                 except tk.TclError:
                     pass
             return
