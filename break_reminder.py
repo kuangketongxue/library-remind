@@ -325,7 +325,7 @@ def _probe_audio_endpoint_strict(flow: int, role: str, baseline: dict[str, dict[
         activate = _com_method(device_ptr, 3, ctypes.c_long, ctypes.POINTER(GUID), wintypes.DWORD, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p))
         hr_client = activate(device_ptr, ctypes.byref(IID_IAudioClient), CLSCTX_ALL, None, ctypes.byref(client_ptr))
         client_ok = hr_client == 0 and bool(client_ptr.value)
-        mix_format_ok = client_ok
+        mix_format_ok = client_ok and _check_mix_format(device_ptr)
         mute, volume_scalar = _read_endpoint_mute_and_volume(device_ptr)
         volume_ok = True
         if mute is True:
