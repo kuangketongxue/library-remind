@@ -1,34 +1,41 @@
 # Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Windows
-Thumbs.db
-ehthumbs.db
+# Virtual Environment
+venv/
+ENV/
+env/
 
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
 
-# Environment variables
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
 
 # Logs
-start_stderr.log
-start_stdout.log
-
-# Images
-*.png
-
-# Build files
-kkagent/.next/
-kkagent/.vercel/
-
-# Audio baseline
-audio_device_baseline.json
+*.log
