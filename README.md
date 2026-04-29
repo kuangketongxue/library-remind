@@ -70,16 +70,25 @@ pip install -r requirements.txt
 
 #### 2. 运行程序
 
+**推荐方式（不依赖终端）：**
 ```bash
-# 正常启动（显示窗口）
-python rest_reminder.py
+# 双击运行 start.vbs 或 启动程序.vbs
+# 程序会在后台启动，关闭终端也不会退出
+```
 
-# 后台运行（无控制台窗口）
+**或使用命令行：**
+```bash
+# 后台运行（无控制台窗口，独立进程）
 pythonw rest_reminder.py
+
+# 正常启动（显示窗口，用于调试）
+python rest_reminder.py
 
 # 静默启动（开机自启动模式）
 pythonw rest_reminder.py --startup
 ```
+
+**注意：** 使用 `pythonw` 而不是 `python`，这样程序会作为独立进程运行，关闭终端不会影响程序。
 
 #### 3. 设置开机自启动
 

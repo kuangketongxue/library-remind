@@ -17,8 +17,8 @@ if errorlevel 1 (
 echo [信息] 正在后台启动休息提醒挂件...
 echo.
 
-REM 使用pythonw启动程序（无控制台窗口）
-start "" pythonw rest_reminder.py
+REM 使用pythonw启动程序（无控制台窗口，独立进程）
+start "" /B pythonw rest_reminder.py
 
 if errorlevel 1 (
     echo [错误] 程序启动失败
@@ -31,4 +31,6 @@ echo [成功] 程序已在后台启动
 echo 挂件将显示在屏幕右侧
 echo 可通过系统托盘图标控制显示/隐藏
 echo.
-timeout /t 2 >nul
+echo 注意：关闭此窗口不会影响程序运行
+echo.
+timeout /t 3 >nul
