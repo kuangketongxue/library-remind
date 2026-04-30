@@ -10,11 +10,112 @@ import random
 import requests
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel, 
-                             QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton)
+                             QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox)
 from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtGui import QIcon, QFont
 import json
 import psutil
+import os
+import tempfile
+import atexit
+
+
+class SingleInstanceChecker:
+    """单实例检查器 - 确保程序只运行一个实例"""
+    def __init__(self):
+        self.lock_file = None
+        self.lock_path = os.path.join(tempfile.gettempdir(), 'rest_reminder.lock')
+        self.lock_handle = None
+        
+    def is_already_running(self):
+        """检查程序是否已经在运行"""
+        try:
+            # 在Windows上使用文件独占锁
+            import msvcrt
+            
+            # 尝试打开或创建锁文件
+            try:
+                # 以读写模式打开，如果不存在则创建
+                self.lock_handle = open(self.lock_path, 'w')
+                # 尝试获取独占锁（非阻塞）
+                msvcrt.locking(self.lock_handle.fileno(), msvcrt.LK_NBLCK, 1)
+                
+                # 成功获取锁，写入当前PID
+                self.lock_handle.write(str(os.getpid()))
+                self.lock_handle.flush()
+                
+                self.lock_file = self.lock_path
+                # 注册退出时删除锁文件
+                atexit.register(self.cleanup)
+                return False
+                
+            except IOError:
+                # 无法获取锁，说明已有实例在运行
+                if self.lock_handle:
+                    self.lock_handle.close()
+                    self.lock_handle = None
+                return True
+                
+        except ImportError:
+            # 如果msvcrt不可用（非Windows），使用原来的方法
+            return self._fallback_check()
+        except Exception as e:
+            print(f'单实例检查失败: {e}')
+            return False
+    
+    def _fallback_check(self):
+        """备用检查方法（用于非Windows系统）"""
+        try:
+            if os.path.exists(self.lock_path):
+                try:
+                    with open(self.lock_path, 'r') as f:
+                        old_pid = int(f.read().strip())
+                    
+                    if psutil.pid_exists(old_pid):
+                        try:
+                            proc = psutil.Process(old_pid)
+                            cmdline = ' '.join(proc.cmdline())
+                            if 'rest_reminder' in cmdline:
+                                return True
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            pass
+                    
+                    os.remove(self.lock_path)
+                except (ValueError, IOError):
+                    try:
+                        os.remove(self.lock_path)
+                    except:
+                        pass
+            
+            with open(self.lock_path, 'w') as f:
+                f.write(str(os.getpid()))
+            
+            self.lock_file = self.lock_path
+            atexit.register(self.cleanup)
+            return False
+            
+        except Exception as e:
+            print(f'备用单实例检查失败: {e}')
+            return False
+    
+    def cleanup(self):
+        """清理锁文件"""
+        try:
+            # 释放文件锁
+            if self.lock_handle:
+                try:
+                    import msvcrt
+                    msvcrt.locking(self.lock_handle.fileno(), msvcrt.LK_UNLCK, 1)
+                except:
+                    pass
+                self.lock_handle.close()
+                self.lock_handle = None
+            
+            # 删除锁文件
+            if self.lock_file and os.path.exists(self.lock_file):
+                os.remove(self.lock_file)
+        except:
+            pass
 
 
 class RestReminderWidget(QWidget):
@@ -27,6 +128,8 @@ class RestReminderWidget(QWidget):
         self.battery_warning_shown = False  # 是否已显示电池警告
         self.silent_start = silent_start  # 静默启动模式
         self.battery_notification_active = False  # 电池通知是否正在显示
+        self.study_hours_count = 0  # 学习小时计数
+        self.current_date = datetime.now().date()  # 记录当前日期，用于检测日期变化
         
         self.init_ui()
         self.position_to_right()  # 定位到屏幕右侧
@@ -36,8 +139,8 @@ class RestReminderWidget(QWidget):
     def init_ui(self):
         """初始化UI界面"""
         self.setWindowTitle('休息提醒')
-        self.widget_width = 320
-        self.widget_height = 180
+        self.widget_width = 340
+        self.widget_height = 220
         self.setGeometry(100, 100, self.widget_width, self.widget_height)
         
         # 设置窗口置顶和无边框（移除Tool标志，让窗口可以在任务栏显示）
@@ -52,7 +155,7 @@ class RestReminderWidget(QWidget):
             }
             QLabel {
                 color: white;
-                font-size: 14px;
+                font-size: 15px;
             }
             QPushButton#closeBtn {
                 background-color: transparent;
@@ -72,6 +175,7 @@ class RestReminderWidget(QWidget):
                 border-radius: 5px;
                 text-align: center;
                 background-color: #333;
+                font-size: 14px;
             }
             QProgressBar::chunk {
                 background-color: #00AFF0;
@@ -96,7 +200,7 @@ class RestReminderWidget(QWidget):
         
         # 标题
         self.title_label = QLabel('⏰ 休息提醒')
-        self.title_label.setFont(QFont('Microsoft YaHei', 12, QFont.Bold))
+        self.title_label.setFont(QFont('Microsoft YaHei', 13, QFont.Bold))
         self.title_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         top_layout.addWidget(self.title_label)
         
@@ -116,6 +220,7 @@ class RestReminderWidget(QWidget):
         
         # 时间显示
         self.time_label = QLabel('距离下次休息: 60:00')
+        self.time_label.setFont(QFont('Microsoft YaHei', 15))
         self.time_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(self.time_label)
         
@@ -127,12 +232,19 @@ class RestReminderWidget(QWidget):
         self.progress_bar.setFormat('%p%')
         main_layout.addWidget(self.progress_bar)
         
+        # 学习时长统计提醒
+        self.study_hours_label = QLabel('📊 已学习: 0 小时')
+        self.study_hours_label.setFont(QFont('Microsoft YaHei', 12))
+        self.study_hours_label.setAlignment(Qt.AlignCenter)
+        self.study_hours_label.setStyleSheet('color: #FFD700; font-weight: bold;')
+        main_layout.addWidget(self.study_hours_label)
+        
         # 电池状态区域
         battery_layout = QHBoxLayout()
         
         # 电池图标和状态文字
         self.battery_label = QLabel('🔋 检测中...')
-        self.battery_label.setFont(QFont('Microsoft YaHei', 11))
+        self.battery_label.setFont(QFont('Microsoft YaHei', 12))
         battery_layout.addWidget(self.battery_label)
         
         main_layout.addLayout(battery_layout)
@@ -227,6 +339,15 @@ class RestReminderWidget(QWidget):
     def update_display(self):
         """更新显示内容"""
         now = datetime.now()
+        
+        # 检查日期是否变化（过了零点）
+        if now.date() != self.current_date:
+            # 新的一天，重置学习时长统计
+            self.study_hours_count = 0
+            self.current_date = now.date()
+            self.study_hours_label.setText(f'📊 已学习: 0 小时')
+            print(f'新的一天开始，学习时长已重置: {self.current_date}')
+        
         elapsed = (now - self.start_time).total_seconds()
         total_seconds = self.interval_minutes * 60
         remaining_seconds = total_seconds - elapsed
@@ -234,6 +355,14 @@ class RestReminderWidget(QWidget):
         if remaining_seconds <= 0:
             # 时间到，打开视频
             self.open_random_video()
+            
+            # 增加学习小时计数
+            self.study_hours_count += 1
+            self.study_hours_label.setText(f'📊 已学习: {self.study_hours_count} 小时')
+            
+            # 显示飞书时长统计提醒
+            self.show_feishu_reminder()
+            
             # 重置计时器
             self.start_time = datetime.now()
             remaining_seconds = total_seconds
@@ -347,6 +476,30 @@ class RestReminderWidget(QWidget):
             QTimer.singleShot(200, lambda: self.setWindowOpacity(1.0))
             QTimer.singleShot(400, lambda: self.setWindowOpacity(0.5))
             QTimer.singleShot(600, lambda: self.setWindowOpacity(1.0))
+    
+    def show_feishu_reminder(self):
+        """显示飞书工作时长统计提醒"""
+        self.tray_icon.showMessage(
+            '📊 记录学习时长',
+            f'你已经学习了 {self.study_hours_count} 小时！\n\n'
+            '别忘了到飞书多维表格的\n'
+            '【工作时长】当天统计里加 1 小时哦~',
+            QSystemTrayIcon.Information,
+            8000  # 显示8秒
+        )
+        
+        # 如果窗口可见，也闪烁提醒
+        if self.isVisible():
+            # 让学习时长标签闪烁
+            original_style = self.study_hours_label.styleSheet()
+            flash_style = 'color: #FF6B6B; font-weight: bold; background-color: rgba(255, 215, 0, 50);'
+            
+            self.study_hours_label.setStyleSheet(flash_style)
+            QTimer.singleShot(500, lambda: self.study_hours_label.setStyleSheet(original_style))
+            QTimer.singleShot(1000, lambda: self.study_hours_label.setStyleSheet(flash_style))
+            QTimer.singleShot(1500, lambda: self.study_hours_label.setStyleSheet(original_style))
+            QTimer.singleShot(2000, lambda: self.study_hours_label.setStyleSheet(flash_style))
+            QTimer.singleShot(2500, lambda: self.study_hours_label.setStyleSheet(original_style))
         
     def get_bilibili_videos(self):
         """
@@ -448,6 +601,31 @@ class RestReminderWidget(QWidget):
 
 
 def main():
+    # 单实例检查
+    instance_checker = SingleInstanceChecker()
+    if instance_checker.is_already_running():
+        print('休息提醒程序已经在运行中！')
+        print('如果您看到此消息但找不到程序窗口，请：')
+        print('1. 检查系统托盘（任务栏右下角）是否有程序图标')
+        print('2. 双击托盘图标可显示窗口')
+        print('3. 或者先结束已运行的进程再重新启动')
+        
+        # 检查是否是静默启动，如果不是则显示对话框
+        if '--silent' not in sys.argv and '--startup' not in sys.argv:
+            # 创建临时应用以显示消息框
+            temp_app = QApplication(sys.argv)
+            QMessageBox.warning(
+                None,
+                '程序已在运行',
+                '休息提醒程序已经在运行中！\n\n'
+                '请检查系统托盘（任务栏右下角）是否有程序图标。\n'
+                '双击托盘图标可显示窗口。\n\n'
+                '如需重新启动，请先右键托盘图标选择"退出"。',
+                QMessageBox.Ok
+            )
+        
+        sys.exit(1)
+    
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)  # 关闭窗口不退出程序
     
