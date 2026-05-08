@@ -412,65 +412,51 @@ class RestReminderWidget(QWidget):
         
     def update_display(self):
         """更新显示内容"""
-        try:
-            now = datetime.now()
+        now = datetime.now()
 
-            # 检查日期是否变化（过了零点）
-            if now.date() != self.current_date:
-                self.played_today = set()
-                self.feishu_hours = None
-                self.feishu_stretch_items = []
-                self.current_date = now.date()
-                self.update_feishu_display()
-                self.fetch_feishu_data()
-                print(f'新的一天，飞书数据已重置: {self.current_date}')
+        # 检查日期是否变化（过了零点）
+        if now.date() != self.current_date:
+            self.played_today = set()
+            self.feishu_hours = None
+            self.feishu_stretch_items = []
+            self.current_date = now.date()
+            self.update_feishu_display()
+            self.fetch_feishu_data()
+            print(f'新的一天，飞书数据已重置: {self.current_date}')
 
-            elapsed = (now - self.start_time).total_seconds()
-            total_seconds = self.interval_minutes * 60
-            remaining_seconds = total_seconds - elapsed
+        elapsed = (now - self.start_time).total_seconds()
+        total_seconds = self.interval_minutes * 60
+        remaining_seconds = total_seconds - elapsed
 
-            if remaining_seconds <= 0:
-                # 时间到，打开视频
-                self.open_random_video()
+        if remaining_seconds <= 0:
+            self.open_random_video()
+            self.show_feishu_reminder()
+            self.show_stretch_reminder()
+            self.start_time = datetime.now()
+            remaining_seconds = total_seconds
 
-                # 提醒去飞书更新数据
-                self.show_feishu_reminder()
+        minutes = int(remaining_seconds // 60)
+        seconds = int(remaining_seconds % 60)
+        self.time_label.setText(f'距离下次休息: {minutes:02d}:{seconds:02d}')
 
-                # 拉伸提醒（不依赖本地计数）
-                self.show_stretch_reminder()
+        progress = int((elapsed / total_seconds) * 100)
+        self.progress_bar.setValue(progress)
 
-                # 重置计时器
-                self.start_time = datetime.now()
-                remaining_seconds = total_seconds
+        # 22:00倒计时进度条（4:30=0%，22:00=100%）
+        start_minutes = 4 * 60 + 30
+        end_minutes = 22 * 60
+        total_span = end_minutes - start_minutes
+        current_minutes = now.hour * 60 + now.minute + now.second / 60
+        if current_minutes >= end_minutes:
+            countdown_pct = 100
+        elif current_minutes <= start_minutes:
+            countdown_pct = 0
+        else:
+            countdown_pct = int(((current_minutes - start_minutes) / total_span) * 100)
+        self.countdown_bar.setValue(countdown_pct)
 
-            # 计算剩余时间
-            minutes = int(remaining_seconds // 60)
-            seconds = int(remaining_seconds % 60)
-
-            # 更新显示
-            self.time_label.setText(f'距离下次休息: {minutes:02d}:{seconds:02d}')
-
-            # 更新进度条
-            progress = int((elapsed / total_seconds) * 100)
-            self.progress_bar.setValue(progress)
-
-            # 更新22:00倒计时进度条（4:30=0%，22:00=100%）
-            start_minutes = 4 * 60 + 30   # 270, 4:30
-            end_minutes = 22 * 60          # 1320, 22:00
-            total_span = end_minutes - start_minutes  # 1050 minutes
-            current_minutes = now.hour * 60 + now.minute + now.second / 60
-            if current_minutes >= end_minutes:
-                countdown_pct = 100
-            elif current_minutes <= start_minutes:
-                countdown_pct = 0
-            else:
-                countdown_pct = int(((current_minutes - start_minutes) / total_span) * 100)
-            self.countdown_bar.setValue(countdown_pct)
-
-            # 更新电池状态
-            self.update_battery_status()
-        except Exception as e:
-            print(f'[update_display] 异常（已捕获，程序继续运行）: {e}')
+        # update_battery_status 已有自己 try/except，不需要外层再包
+        self.update_battery_status()
     
     def update_battery_status(self):
         """更新电池状态显示"""
@@ -569,66 +555,78 @@ class RestReminderWidget(QWidget):
             QTimer.singleShot(600, lambda: self.setWindowOpacity(1.0))
     
     def fetch_feishu_data(self):
-        """从飞书多维表格拉取今日工作时长和拉伸数据（单次调用，时长视图含日期+时长+拉伸三列）"""
-        try:
-            cmd = [
-                LARK_CLI, 'base', '+record-list',
-                '--base-token', FEISHU_BASE_TOKEN,
-                '--table-id', FEISHU_TABLE_ID,
-                '--view-id', FEISHU_VIEW_NAME,
-                '--limit', '30',
-                '--format', 'json'
-            ]
-            si = subprocess.STARTUPINFO()
-            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            si.wShowWindow = subprocess.SW_HIDE
-            result = subprocess.run(
-                cmd, capture_output=True,
-                timeout=15,
-                startupinfo=si,
-                creationflags=0x08000000
-            )
-            if result.returncode != 0:
+        """从飞书多维表格拉取今日工作时长和拉伸数据（异步，不阻塞主线程）"""
+        from PyQt5.QtCore import QThread, pyqtSignal
+
+        class FeishuFetchThread(QThread):
+            finished = pyqtSignal(object)  # 传回 (hours, stretch_items) 或 None
+
+            def run(self):
+                try:
+                    cmd = [
+                        LARK_CLI, 'base', '+record-list',
+                        '--base-token', FEISHU_BASE_TOKEN,
+                        '--table-id', FEISHU_TABLE_ID,
+                        '--view-id', FEISHU_VIEW_NAME,
+                        '--limit', '30',
+                        '--format', 'json'
+                    ]
+                    si = subprocess.STARTUPINFO()
+                    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    si.wShowWindow = subprocess.SW_HIDE
+                    result = subprocess.run(
+                        cmd, capture_output=True,
+                        timeout=10,
+                        startupinfo=si,
+                        creationflags=0x08000000
+                    )
+                    if result.returncode != 0:
+                        self.finished.emit(None)
+                        return
+
+                    resp = json.loads(result.stdout.decode('utf-8'))
+                    if not resp.get('ok'):
+                        self.finished.emit(None)
+                        return
+
+                    records = resp['data']['data']
+                    today_str = datetime.now().strftime('%Y-%m-%d')
+                    today_data = None
+                    for rec in reversed(records):
+                        if rec and rec[0] and str(rec[0]).startswith(today_str):
+                            today_data = rec
+                            break
+
+                    if not today_data:
+                        self.finished.emit(None)
+                        return
+
+                    hours_val = today_data[1] if len(today_data) > 1 else None
+                    hours = None
+                    if hours_val and isinstance(hours_val, list) and hours_val:
+                        match = re.search(r'(\d+)', str(hours_val[0]))
+                        hours = int(match.group(1)) if match else None
+
+                    stretch_val = today_data[2] if len(today_data) > 2 else None
+                    stretch_items = stretch_val if stretch_val and isinstance(stretch_val, list) else []
+
+                    self.finished.emit((hours, stretch_items))
+                except Exception as e:
+                    print(f'[FeishuFetchThread] 飞书数据拉取失败: {e}')
+                    self.finished.emit(None)
+
+        def on_feishu_fetched(data):
+            if data is None:
                 return
-
-            # lark-cli 输出 UTF-8，手动解码避免 Windows GBK mojibake
-            resp = json.loads(result.stdout.decode('utf-8'))
-            if not resp.get('ok'):
-                return
-
-            records = resp['data']['data']
-
-            # 时长视图固定三列：[日期, 今日工作/学习时长, 拉伸]
-            today_str = datetime.now().strftime('%Y-%m-%d')
-            today_data = None
-            for rec in reversed(records):
-                if rec and rec[0] and str(rec[0]).startswith(today_str):
-                    today_data = rec
-                    break
-
-            if not today_data:
-                return
-
-            # 解析工作时长（多选字段，值如 ["3小时"]）
-            hours_val = today_data[1] if len(today_data) > 1 else None
-            if hours_val and isinstance(hours_val, list) and hours_val:
-                match = re.search(r'(\d+)', str(hours_val[0]))
-                self.feishu_hours = int(match.group(1)) if match else None
-            else:
-                self.feishu_hours = None
-
-            # 解析拉伸（多选字段）
-            stretch_val = today_data[2] if len(today_data) > 2 else None
-            if stretch_val and isinstance(stretch_val, list):
-                self.feishu_stretch_items = stretch_val
-            else:
-                self.feishu_stretch_items = []
-
+            hours, stretch_items = data
+            self.feishu_hours = hours
+            self.feishu_stretch_items = stretch_items
             self.update_feishu_display()
             print(f'飞书数据已更新: 时长={self.feishu_hours}h, 拉伸={len(self.feishu_stretch_items)}个')
 
-        except Exception as e:
-            print(f'飞书数据拉取失败: {e}')
+        self._feishu_thread = FeishuFetchThread()
+        self._feishu_thread.finished.connect(on_feishu_fetched)
+        self._feishu_thread.start()
 
     def update_feishu_display(self):
         """仅展示飞书数据，不叠加本地计数"""
@@ -740,7 +738,6 @@ class RestReminderWidget(QWidget):
 
             # 重试前等 2 秒
             if attempt < 2:
-                import time
                 time.sleep(2)
 
         # 3 次都失败 → 用收藏夹页面的 bvid 正则兜底
@@ -751,7 +748,6 @@ class RestReminderWidget(QWidget):
                 'User-Agent': user_agents[0],
                 'Referer': 'https://www.bilibili.com',
             }, timeout=10)
-            import re
             bvids = re.findall(r'BV[a-zA-Z0-9]{10}', resp.text)
             # 去重，保持顺序
             seen = set()
@@ -815,6 +811,10 @@ class RestReminderWidget(QWidget):
                     QSystemTrayIcon.Information,
                     3000
                 )
+
+        # 等旧线程结束再启动新线程，避免信号冲突
+        if hasattr(self, '_video_thread') and self._video_thread.isRunning():
+            self._video_thread.wait(3000)
 
         self._video_thread = VideoFetchThread(self.get_bilibili_videos)
         self._video_thread.finished.connect(on_videos_fetched)
