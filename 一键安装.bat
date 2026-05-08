@@ -84,20 +84,8 @@ if "%PYTHONW_PATH%"=="" (
 REM 获取启动文件夹路径
 set STARTUP_FOLDER=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
 
-REM 创建VBS脚本来创建快捷方式
-set VBS_FILE=%TEMP%\create_shortcut_install.vbs
-echo Set oWS = WScript.CreateObject("WScript.Shell") > %VBS_FILE%
-echo sLinkFile = "%STARTUP_FOLDER%\休息提醒.lnk" >> %VBS_FILE%
-echo Set oLink = oWS.CreateShortcut(sLinkFile) >> %VBS_FILE%
-echo oLink.TargetPath = "%PYTHONW_PATH%" >> %VBS_FILE%
-echo oLink.Arguments = """%SCRIPT_PATH%"" --startup" >> %VBS_FILE%
-echo oLink.WorkingDirectory = "%CURRENT_DIR%" >> %VBS_FILE%
-echo oLink.Description = "每小时休息提醒挂件（自动启动）" >> %VBS_FILE%
-echo oLink.WindowStyle = 7 >> %VBS_FILE%
-echo oLink.Save >> %VBS_FILE%
-
-cscript //nologo %VBS_FILE%
-del %VBS_FILE%
+REM 使用PowerShell创建快捷方式（更可靠，避免VBS语法错误）
+powershell -ExecutionPolicy Bypass -Command "& { $WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('%STARTUP_FOLDER%\休息提醒.lnk'); $Shortcut.TargetPath = '%PYTHONW_PATH%'; $Shortcut.Arguments = '\"%SCRIPT_PATH%\" --startup'; $Shortcut.WorkingDirectory = '%CURRENT_DIR%'; $Shortcut.Description = '每小时休息提醒挂件（自动启动）'; $Shortcut.WindowStyle = 7; $Shortcut.Save() }"
 
 echo ✓ 开机自启动设置完成
 echo.

@@ -16,11 +16,12 @@ Write-Host "[信息] Python路径: $pythonw" -ForegroundColor Yellow
 Write-Host "[信息] 脚本路径: $scriptPath" -ForegroundColor Yellow
 Write-Host ""
 
-# 创建快捷方式
+# 创建快捷方式 - 使用 VBS 脚本启动，确保完全独立运行
+$vbsPath = Join-Path (Get-Location) "完全独立启动.vbs"
 $WshShell = New-Object -ComObject WScript.Shell
 $Shortcut = $WshShell.CreateShortcut($shortcutPath)
-$Shortcut.TargetPath = $pythonw
-$Shortcut.Arguments = "`"$scriptPath`" --startup"
+$Shortcut.TargetPath = "wscript.exe"
+$Shortcut.Arguments = "`"$vbsPath`""
 $Shortcut.WorkingDirectory = Get-Location
 $Shortcut.Description = "每小时休息提醒挂件（自动启动）"
 $Shortcut.WindowStyle = 7  # 最小化窗口

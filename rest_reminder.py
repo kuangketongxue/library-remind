@@ -14,6 +14,8 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel,
 from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtGui import QIcon, QFont
 import json
+import subprocess
+import re
 import psutil
 import os
 import tempfile
@@ -118,18 +120,41 @@ class SingleInstanceChecker:
             pass
 
 
+STRETCH_EXERCISES = [
+    "拉腿*2",
+    "鲤鱼打挺",
+    "利于后入",
+    "跪着向后",
+    "蹲着手拉手",
+    "坐地上打开双腿向前",
+    "靠墙拉双手后肱肌",
+    "跪着拉双手后肱肌",
+    "躺床上拉双手前肱肌",
+    "躺地上四肢朝天",
+]
+
+# 飞书多维表格配置
+FEISHU_BASE_TOKEN = "DcJzbLadCaGbGws2ZekchGHhnVe"
+FEISHU_TABLE_ID = "tbl9DT9qniE63BH7"
+FEISHU_VIEW_NAME = "时长"
+# lark-cli 完整路径（npm 全局安装，Python subprocess PATH 中找不到）
+LARK_CLI = os.path.join(os.environ.get('APPDATA', ''), 'npm', 'lark-cli.cmd')
+
+
 class RestReminderWidget(QWidget):
     def __init__(self, silent_start=False):
         super().__init__()
         self.interval_minutes = 60  # 每60分钟提醒一次
         self.start_time = datetime.now()
         self.video_list = []
+        self.played_today = set()  # 当天已播放的视频URL，避免重复
         self.last_charging_state = None  # 记录上次充电状态
         self.battery_warning_shown = False  # 是否已显示电池警告
         self.silent_start = silent_start  # 静默启动模式
         self.battery_notification_active = False  # 电池通知是否正在显示
-        self.study_hours_count = 0  # 学习小时计数
         self.current_date = datetime.now().date()  # 记录当前日期，用于检测日期变化
+        self.feishu_hours = None  # 飞书记录的工作时长（小时数）
+        self.feishu_stretch_items = []  # 飞书记录的拉伸动作列表
         
         self.init_ui()
         self.position_to_right()  # 定位到屏幕右侧
@@ -140,11 +165,16 @@ class RestReminderWidget(QWidget):
         """初始化UI界面"""
         self.setWindowTitle('休息提醒')
         self.widget_width = 340
-        self.widget_height = 220
+        self.widget_height = 330
         self.setGeometry(100, 100, self.widget_width, self.widget_height)
         
         # 设置窗口置顶和无边框（移除Tool标志，让窗口可以在任务栏显示）
         self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
+
+        # 设置可爱图标（任务栏+托盘通用）
+        ico_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cute_icon.ico')
+        self.app_icon = QIcon(ico_path)
+        self.setWindowIcon(self.app_icon)
         
         # 设置半透明背景
         self.setStyleSheet("""
@@ -186,6 +216,9 @@ class RestReminderWidget(QWidget):
             }
             #battery_bar_low::chunk {
                 background-color: #FF5252;
+            }
+            #countdown_bar::chunk {
+                background-color: #FF9800;
             }
         """)
         
@@ -231,13 +264,48 @@ class RestReminderWidget(QWidget):
         self.progress_bar.setTextVisible(True)
         self.progress_bar.setFormat('%p%')
         main_layout.addWidget(self.progress_bar)
-        
-        # 学习时长统计提醒
-        self.study_hours_label = QLabel('📊 已学习: 0 小时')
-        self.study_hours_label.setFont(QFont('Microsoft YaHei', 12))
-        self.study_hours_label.setAlignment(Qt.AlignCenter)
-        self.study_hours_label.setStyleSheet('color: #FFD700; font-weight: bold;')
-        main_layout.addWidget(self.study_hours_label)
+
+        # 22:00 倒计时进度条
+        self.countdown_label = QLabel('⏳ 距离22:00:')
+        self.countdown_label.setFont(QFont('Microsoft YaHei', 12))
+        self.countdown_label.setAlignment(Qt.AlignCenter)
+        main_layout.addWidget(self.countdown_label)
+
+        self.countdown_bar = QProgressBar()
+        self.countdown_bar.setObjectName('countdown_bar')
+        self.countdown_bar.setMaximum(100)
+        self.countdown_bar.setValue(0)
+        self.countdown_bar.setTextVisible(True)
+        self.countdown_bar.setFormat('%p%')
+        self.countdown_bar.setMaximumHeight(20)
+        main_layout.addWidget(self.countdown_bar)
+
+        # 学习时长进度条（14小时 = 100%）
+        self.study_progress_label = QLabel('📊 学习时长: 加载中...')
+        self.study_progress_label.setFont(QFont('Microsoft YaHei', 12))
+        self.study_progress_label.setAlignment(Qt.AlignCenter)
+        self.study_progress_label.setStyleSheet('color: #FFD700; font-weight: bold;')
+        main_layout.addWidget(self.study_progress_label)
+
+        self.study_progress_bar = QProgressBar()
+        self.study_progress_bar.setObjectName('study_bar')
+        self.study_progress_bar.setMaximum(14)  # 14小时目标
+        self.study_progress_bar.setValue(0)
+        self.study_progress_bar.setTextVisible(True)
+        self.study_progress_bar.setFormat('%v / 14 小时')
+        self.study_progress_bar.setMaximumHeight(22)
+        self.study_progress_bar.setStyleSheet("""
+            QProgressBar { border: 2px solid #555; border-radius: 5px; text-align: center; background-color: #333; font-size: 12px; }
+            QProgressBar::chunk { background-color: #FFD700; border-radius: 3px; }
+        """)
+        main_layout.addWidget(self.study_progress_bar)
+
+        # 拉伸统计
+        self.stretch_label = QLabel('🧘 拉伸: 0 个')
+        self.stretch_label.setFont(QFont('Microsoft YaHei', 12))
+        self.stretch_label.setAlignment(Qt.AlignCenter)
+        self.stretch_label.setStyleSheet('color: #4CAF50; font-weight: bold;')
+        main_layout.addWidget(self.stretch_label)
         
         # 电池状态区域
         battery_layout = QHBoxLayout()
@@ -312,8 +380,8 @@ class RestReminderWidget(QWidget):
         
         self.tray_icon.setContextMenu(tray_menu)
         
-        # 使用默认图标（实际使用时应该提供图标文件）
-        self.tray_icon.setIcon(self.style().standardIcon(self.style().SP_MessageBoxInformation))
+        # 使用可爱图标
+        self.tray_icon.setIcon(self.app_icon)
         self.tray_icon.show()
     
     def on_tray_icon_activated(self, reason):
@@ -335,51 +403,74 @@ class RestReminderWidget(QWidget):
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_display)
         self.timer.start(1000)  # 每秒更新一次
+
+        # 飞书数据定时拉取（每30秒，近实时同步）
+        self.feishu_timer = QTimer()
+        self.feishu_timer.timeout.connect(self.fetch_feishu_data)
+        QTimer.singleShot(5000, self.fetch_feishu_data)  # 启动5秒后首次拉取
+        self.feishu_timer.start(30000)  # 30秒
         
     def update_display(self):
         """更新显示内容"""
-        now = datetime.now()
-        
-        # 检查日期是否变化（过了零点）
-        if now.date() != self.current_date:
-            # 新的一天，重置学习时长统计
-            self.study_hours_count = 0
-            self.current_date = now.date()
-            self.study_hours_label.setText(f'📊 已学习: 0 小时')
-            print(f'新的一天开始，学习时长已重置: {self.current_date}')
-        
-        elapsed = (now - self.start_time).total_seconds()
-        total_seconds = self.interval_minutes * 60
-        remaining_seconds = total_seconds - elapsed
-        
-        if remaining_seconds <= 0:
-            # 时间到，打开视频
-            self.open_random_video()
-            
-            # 增加学习小时计数
-            self.study_hours_count += 1
-            self.study_hours_label.setText(f'📊 已学习: {self.study_hours_count} 小时')
-            
-            # 显示飞书时长统计提醒
-            self.show_feishu_reminder()
-            
-            # 重置计时器
-            self.start_time = datetime.now()
-            remaining_seconds = total_seconds
-        
-        # 计算剩余时间
-        minutes = int(remaining_seconds // 60)
-        seconds = int(remaining_seconds % 60)
-        
-        # 更新显示
-        self.time_label.setText(f'距离下次休息: {minutes:02d}:{seconds:02d}')
-        
-        # 更新进度条
-        progress = int((elapsed / total_seconds) * 100)
-        self.progress_bar.setValue(progress)
-        
-        # 更新电池状态
-        self.update_battery_status()
+        try:
+            now = datetime.now()
+
+            # 检查日期是否变化（过了零点）
+            if now.date() != self.current_date:
+                self.played_today = set()
+                self.feishu_hours = None
+                self.feishu_stretch_items = []
+                self.current_date = now.date()
+                self.update_feishu_display()
+                self.fetch_feishu_data()
+                print(f'新的一天，飞书数据已重置: {self.current_date}')
+
+            elapsed = (now - self.start_time).total_seconds()
+            total_seconds = self.interval_minutes * 60
+            remaining_seconds = total_seconds - elapsed
+
+            if remaining_seconds <= 0:
+                # 时间到，打开视频
+                self.open_random_video()
+
+                # 提醒去飞书更新数据
+                self.show_feishu_reminder()
+
+                # 拉伸提醒（不依赖本地计数）
+                self.show_stretch_reminder()
+
+                # 重置计时器
+                self.start_time = datetime.now()
+                remaining_seconds = total_seconds
+
+            # 计算剩余时间
+            minutes = int(remaining_seconds // 60)
+            seconds = int(remaining_seconds % 60)
+
+            # 更新显示
+            self.time_label.setText(f'距离下次休息: {minutes:02d}:{seconds:02d}')
+
+            # 更新进度条
+            progress = int((elapsed / total_seconds) * 100)
+            self.progress_bar.setValue(progress)
+
+            # 更新22:00倒计时进度条（4:30=0%，22:00=100%）
+            start_minutes = 4 * 60 + 30   # 270, 4:30
+            end_minutes = 22 * 60          # 1320, 22:00
+            total_span = end_minutes - start_minutes  # 1050 minutes
+            current_minutes = now.hour * 60 + now.minute + now.second / 60
+            if current_minutes >= end_minutes:
+                countdown_pct = 100
+            elif current_minutes <= start_minutes:
+                countdown_pct = 0
+            else:
+                countdown_pct = int(((current_minutes - start_minutes) / total_span) * 100)
+            self.countdown_bar.setValue(countdown_pct)
+
+            # 更新电池状态
+            self.update_battery_status()
+        except Exception as e:
+            print(f'[update_display] 异常（已捕获，程序继续运行）: {e}')
     
     def update_battery_status(self):
         """更新电池状态显示"""
@@ -477,96 +568,257 @@ class RestReminderWidget(QWidget):
             QTimer.singleShot(400, lambda: self.setWindowOpacity(0.5))
             QTimer.singleShot(600, lambda: self.setWindowOpacity(1.0))
     
+    def fetch_feishu_data(self):
+        """从飞书多维表格拉取今日工作时长和拉伸数据（单次调用，时长视图含日期+时长+拉伸三列）"""
+        try:
+            cmd = [
+                LARK_CLI, 'base', '+record-list',
+                '--base-token', FEISHU_BASE_TOKEN,
+                '--table-id', FEISHU_TABLE_ID,
+                '--view-id', FEISHU_VIEW_NAME,
+                '--limit', '30',
+                '--format', 'json'
+            ]
+            si = subprocess.STARTUPINFO()
+            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            si.wShowWindow = subprocess.SW_HIDE
+            result = subprocess.run(
+                cmd, capture_output=True,
+                timeout=15,
+                startupinfo=si,
+                creationflags=0x08000000
+            )
+            if result.returncode != 0:
+                return
+
+            # lark-cli 输出 UTF-8，手动解码避免 Windows GBK mojibake
+            resp = json.loads(result.stdout.decode('utf-8'))
+            if not resp.get('ok'):
+                return
+
+            records = resp['data']['data']
+
+            # 时长视图固定三列：[日期, 今日工作/学习时长, 拉伸]
+            today_str = datetime.now().strftime('%Y-%m-%d')
+            today_data = None
+            for rec in reversed(records):
+                if rec and rec[0] and str(rec[0]).startswith(today_str):
+                    today_data = rec
+                    break
+
+            if not today_data:
+                return
+
+            # 解析工作时长（多选字段，值如 ["3小时"]）
+            hours_val = today_data[1] if len(today_data) > 1 else None
+            if hours_val and isinstance(hours_val, list) and hours_val:
+                match = re.search(r'(\d+)', str(hours_val[0]))
+                self.feishu_hours = int(match.group(1)) if match else None
+            else:
+                self.feishu_hours = None
+
+            # 解析拉伸（多选字段）
+            stretch_val = today_data[2] if len(today_data) > 2 else None
+            if stretch_val and isinstance(stretch_val, list):
+                self.feishu_stretch_items = stretch_val
+            else:
+                self.feishu_stretch_items = []
+
+            self.update_feishu_display()
+            print(f'飞书数据已更新: 时长={self.feishu_hours}h, 拉伸={len(self.feishu_stretch_items)}个')
+
+        except Exception as e:
+            print(f'飞书数据拉取失败: {e}')
+
+    def update_feishu_display(self):
+        """仅展示飞书数据，不叠加本地计数"""
+        h = self.feishu_hours if self.feishu_hours is not None else 0
+
+        if self.feishu_hours is not None:
+            self.study_progress_label.setText(f'📊 学习时长: {h}h（飞书）')
+        else:
+            self.study_progress_label.setText('📊 学习时长: 飞书未记录')
+
+        self.study_progress_bar.setValue(h)
+
+        n = len(self.feishu_stretch_items)
+        self.stretch_label.setText(f'🧘 拉伸: {n} 个（飞书）')
+
     def show_feishu_reminder(self):
-        """显示飞书工作时长统计提醒"""
+        """提醒去飞书更新数据（不显示本地累加数）"""
+        h = self.feishu_hours if self.feishu_hours is not None else 0
         self.tray_icon.showMessage(
-            '📊 记录学习时长',
-            f'你已经学习了 {self.study_hours_count} 小时！\n\n'
-            '别忘了到飞书多维表格的\n'
-            '【工作时长】当天统计里加 1 小时哦~',
+            '📊 该更新飞书了',
+            f'当前飞书记录：{h} 小时\n\n'
+            '去飞书多维表格【每日追踪→时长】更新吧~',
             QSystemTrayIcon.Information,
-            8000  # 显示8秒
+            8000
         )
-        
-        # 如果窗口可见，也闪烁提醒
+
+        # 窗口闪烁提醒
         if self.isVisible():
-            # 让学习时长标签闪烁
-            original_style = self.study_hours_label.styleSheet()
+            original_style = self.study_progress_label.styleSheet()
             flash_style = 'color: #FF6B6B; font-weight: bold; background-color: rgba(255, 215, 0, 50);'
-            
-            self.study_hours_label.setStyleSheet(flash_style)
-            QTimer.singleShot(500, lambda: self.study_hours_label.setStyleSheet(original_style))
-            QTimer.singleShot(1000, lambda: self.study_hours_label.setStyleSheet(flash_style))
-            QTimer.singleShot(1500, lambda: self.study_hours_label.setStyleSheet(original_style))
-            QTimer.singleShot(2000, lambda: self.study_hours_label.setStyleSheet(flash_style))
-            QTimer.singleShot(2500, lambda: self.study_hours_label.setStyleSheet(original_style))
-        
+            self.study_progress_label.setStyleSheet(flash_style)
+            QTimer.singleShot(500, lambda: self.study_progress_label.setStyleSheet(original_style))
+            QTimer.singleShot(1000, lambda: self.study_progress_label.setStyleSheet(flash_style))
+            QTimer.singleShot(1500, lambda: self.study_progress_label.setStyleSheet(original_style))
+            QTimer.singleShot(2000, lambda: self.study_progress_label.setStyleSheet(flash_style))
+            QTimer.singleShot(2500, lambda: self.study_progress_label.setStyleSheet(original_style))
+
+    def show_stretch_reminder(self):
+        """随机推荐一个拉伸动作（计数只看飞书）"""
+        name = random.choice(STRETCH_EXERCISES)
+        n = len(self.feishu_stretch_items)
+
+        self.tray_icon.showMessage(
+            f'🧘 拉伸时间！（飞书已记录 {n} 个）',
+            f'{name}\n\n做完在飞书【拉伸】栏记一笔~',
+            QSystemTrayIcon.Information,
+            10000
+        )
+
     def get_bilibili_videos(self):
         """
-        获取B站收藏夹视频列表
-        注意：由于B站API需要认证，这里提供一个简化版本
-        实际使用时需要配置cookies或使用bilibili-api库
+        获取B站收藏夹视频列表（分页拉取全部）
+        带 3 次重试：网络抖动 / API 限流都能兜住
         """
-        # 收藏夹ID
         fid = '3648313921'
         mid = '529362421'
-        
-        try:
-            # 这是一个简化的实现，实际需要处理认证
-            url = f'https://api.bilibili.com/x/v3/fav/resource/list?media_id={fid}&pn=1&ps=20'
+
+        user_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15',
+        ]
+
+        for attempt in range(3):
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Referer': 'https://www.bilibili.com'
+                'User-Agent': user_agents[attempt % len(user_agents)],
+                'Referer': 'https://www.bilibili.com',
+                'Accept': 'application/json, text/plain, */*',
+                'Origin': 'https://www.bilibili.com',
             }
-            
-            response = requests.get(url, headers=headers, timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('code') == 0:
-                    medias = data.get('data', {}).get('medias', [])
-                    videos = []
+
+            videos = []
+            page = 1
+            page_size = 20
+
+            try:
+                while True:
+                    url = f'https://api.bilibili.com/x/v3/fav/resource/list?media_id={fid}&pn={page}&ps={page_size}'
+                    response = requests.get(url, headers=headers, timeout=10)
+                    if response.status_code != 200:
+                        break
+
+                    data = response.json()
+                    code = data.get('code')
+                    if code != 0:
+                        print(f'B站API返回错误 code={code}, msg={data.get("message")} (尝试 {attempt+1}/3)')
+                        break
+
+                    medias = data.get('data', {}).get('medias') or []
+                    if not medias:
+                        break
+
                     for media in medias:
                         bvid = media.get('bvid')
                         if bvid:
                             videos.append(f'https://www.bilibili.com/video/{bvid}')
+
+                    # 如果返回数量不足 page_size，说明是最后一页
+                    if len(medias) < page_size:
+                        break
+                    page += 1
+
+                if videos:
+                    print(f'获取到 {len(videos)} 个收藏视频（{page} 页, 第{attempt+1}次尝试）')
                     return videos
+
+            except Exception as e:
+                print(f'获取视频列表异常 (尝试 {attempt+1}/3): {e}')
+
+            # 重试前等 2 秒
+            if attempt < 2:
+                import time
+                time.sleep(2)
+
+        # 3 次都失败 → 用收藏夹页面的 bvid 正则兜底
+        print('API 3 次全部失败，尝试从收藏夹页面提取视频链接...')
+        try:
+            page_url = f'https://space.bilibili.com/{mid}/favlist?fid={fid}&ftype=create'
+            resp = requests.get(page_url, headers={
+                'User-Agent': user_agents[0],
+                'Referer': 'https://www.bilibili.com',
+            }, timeout=10)
+            import re
+            bvids = re.findall(r'BV[a-zA-Z0-9]{10}', resp.text)
+            # 去重，保持顺序
+            seen = set()
+            unique = []
+            for bv in bvids:
+                if bv not in seen:
+                    seen.add(bv)
+                    unique.append(bv)
+            if unique:
+                print(f'从页面兜底提取到 {len(unique)} 个视频')
+                return [f'https://www.bilibili.com/video/{bv}' for bv in unique]
         except Exception as e:
-            print(f'获取视频列表失败: {e}')
-        
-        # 如果API调用失败，返回收藏夹页面
-        return [f'https://space.bilibili.com/{mid}/favlist?fid={fid}&ftype=create']
+            print(f'页面兜底也失败了: {e}')
+
+        return []
     
     def open_random_video(self):
-        """打开随机视频"""
-        # 获取视频列表
-        if not self.video_list:
-            self.video_list = self.get_bilibili_videos()
-        
-        if self.video_list:
-            # 随机选择一个视频
-            video_url = random.choice(self.video_list)
-            print(f'打开视频: {video_url}')
-            
-            # 使用默认浏览器打开
-            webbrowser.open(video_url)
-            
-            # 显示通知
-            self.tray_icon.showMessage(
-                '休息时间到！',
-                '已为您打开休息视频，记得放松一下哦~',
-                QSystemTrayIcon.Information,
-                3000
-            )
-        else:
-            # 如果获取失败，直接打开收藏夹页面
-            fallback_url = 'https://space.bilibili.com/529362421/favlist?fid=3648313921&ftype=create'
-            webbrowser.open(fallback_url)
-            self.tray_icon.showMessage(
-                '休息时间到！',
-                '已为您打开收藏夹页面~',
-                QSystemTrayIcon.Information,
-                3000
-            )
+        """打开随机视频（异步获取，不阻塞主线程）"""
+        from PyQt5.QtCore import QThread, pyqtSignal
+
+        class VideoFetchThread(QThread):
+            finished = pyqtSignal(list)
+
+            def __init__(self, get_videos_fn):
+                super().__init__()
+                self._get_videos = get_videos_fn
+
+            def run(self):
+                try:
+                    videos = self._get_videos()
+                except Exception as e:
+                    print(f'[VideoFetchThread] 获取视频异常: {e}')
+                    videos = []
+                self.finished.emit(videos)
+
+        def on_videos_fetched(videos):
+            self.video_list = videos
+            if videos:
+                remaining = [v for v in videos if v not in self.played_today]
+                if not remaining:
+                    print('当天视频已全部播放过，重置记录')
+                    self.played_today = set()
+                    remaining = videos
+
+                video_url = random.choice(remaining)
+                self.played_today.add(video_url)
+                print(f'打开视频: {video_url} (今日已播 {len(self.played_today)}/{len(self.video_list)})')
+                webbrowser.open(video_url)
+                self.tray_icon.showMessage(
+                    '休息时间到！',
+                    f'已为您打开休息视频（今日第{len(self.played_today)}个），记得放松一下哦~',
+                    QSystemTrayIcon.Information,
+                    3000
+                )
+            else:
+                fallback_url = 'https://space.bilibili.com/529362421/favlist?fid=3648313921&ftype=create'
+                webbrowser.open(fallback_url)
+                self.tray_icon.showMessage(
+                    '休息时间到！',
+                    '已为您打开收藏夹页面~',
+                    QSystemTrayIcon.Information,
+                    3000
+                )
+
+        self._video_thread = VideoFetchThread(self.get_bilibili_videos)
+        self._video_thread.finished.connect(on_videos_fetched)
+        self._video_thread.start()
     
     def mousePressEvent(self, event):
         """鼠标按下事件 - 用于拖动窗口"""
@@ -596,11 +848,24 @@ class RestReminderWidget(QWidget):
     
     def quit_app(self):
         """退出应用"""
+        self.feishu_timer.stop()
         self.tray_icon.hide()
         QApplication.quit()
 
 
 def main():
+    # 全局异常钩子：防止未捕获异常杀死进程
+    def excepthook(exc_type, exc_value, exc_tb):
+        import traceback
+        print(f'[全局异常捕获] {exc_type.__name__}: {exc_value}')
+        traceback.print_exception(exc_type, exc_value, exc_tb)
+        # 不调用 sys.exit，让程序继续运行
+    sys.excepthook = excepthook
+
+    # 告诉 Windows 这是独立应用（否则任务栏用 pythonw.exe 的图标）
+    import ctypes
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('RestReminder.RestReminder.1.0')
+
     # 单实例检查
     instance_checker = SingleInstanceChecker()
     if instance_checker.is_already_running():
@@ -628,6 +893,10 @@ def main():
     
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)  # 关闭窗口不退出程序
+
+    # 设置应用程序图标（任务栏显示，用 .ico 获得多尺寸支持）
+    ico_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cute_icon.ico')
+    app.setWindowIcon(QIcon(ico_path))
     
     # 检查命令行参数，判断是否静默启动
     silent_start = '--silent' in sys.argv or '--startup' in sys.argv
