@@ -20,6 +20,7 @@ import psutil
 import os
 import tempfile
 import atexit
+import winreg
 
 
 class SingleInstanceChecker:
@@ -145,7 +146,10 @@ class RestReminderWidget(QWidget):
     def __init__(self, silent_start=False):
         super().__init__()
         self.interval_minutes = 60  # 每60分钟提醒一次
-        self.start_time = datetime.now()
+        self.start_time = None
+        self.remaining_when_paused = None
+        self.timer_state = 'idle'  # idle / running / paused
+        self._battery_tick = 0  # 每 15 次 tick 刷新一次电池
         self.video_list = []
         self.played_today = set()  # 当天已播放的视频URL，避免重复
         self.last_charging_state = None  # 记录上次充电状态
@@ -159,13 +163,14 @@ class RestReminderWidget(QWidget):
         self.init_ui()
         self.position_to_right()  # 定位到屏幕右侧
         self.init_tray()
+        self.set_autostart(True)  # 启动时自动注册开机自启动
         self.setup_timer()
         
     def init_ui(self):
         """初始化UI界面"""
         self.setWindowTitle('休息提醒')
         self.widget_width = 340
-        self.widget_height = 330
+        self.widget_height = 370
         self.setGeometry(100, 100, self.widget_width, self.widget_height)
         
         # 设置窗口置顶和无边框（移除Tool标志，让窗口可以在任务栏显示）
@@ -256,6 +261,36 @@ class RestReminderWidget(QWidget):
         self.time_label.setFont(QFont('Microsoft YaHei', 15))
         self.time_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(self.time_label)
+
+        # 按钮布局：开始 / 暂停
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(10)
+
+        self.start_btn = QPushButton('▶ 开始')
+        self.start_btn.setFont(QFont('Microsoft YaHei', 11, QFont.Bold))
+        self.start_btn.setFixedHeight(32)
+        self.start_btn.setCursor(Qt.PointingHandCursor)
+        self.start_btn.setStyleSheet("""
+            QPushButton { background-color: #4CAF50; color: white; border: none; border-radius: 6px; padding: 0 18px; }
+            QPushButton:hover { background-color: #45A049; }
+        """)
+        self.start_btn.clicked.connect(self.on_start_clicked)
+        btn_layout.addWidget(self.start_btn)
+
+        self.pause_btn = QPushButton('⏸ 暂停')
+        self.pause_btn.setFont(QFont('Microsoft YaHei', 11, QFont.Bold))
+        self.pause_btn.setFixedHeight(32)
+        self.pause_btn.setCursor(Qt.PointingHandCursor)
+        self.pause_btn.setEnabled(False)
+        self.pause_btn.setStyleSheet("""
+            QPushButton { background-color: #FF9800; color: white; border: none; border-radius: 6px; padding: 0 18px; }
+            QPushButton:hover { background-color: #E68A00; }
+            QPushButton:disabled { background-color: #666; color: #999; }
+        """)
+        self.pause_btn.clicked.connect(self.on_pause_clicked)
+        btn_layout.addWidget(self.pause_btn)
+
+        main_layout.addLayout(btn_layout)
         
         # 进度条
         self.progress_bar = QProgressBar()
@@ -351,33 +386,93 @@ class RestReminderWidget(QWidget):
         print(f"屏幕分辨率: {screen_width} x {screen_height}")
         self.move(x, y)
         
+    def _get_autostart_cmd(self):
+        """获取自动启动的命令行"""
+        script = os.path.abspath(sys.argv[0] if sys.argv[0].endswith('.py') else __file__)
+        pythonw = os.path.join(os.path.dirname(sys.executable), 'pythonw.exe')
+        if not os.path.exists(pythonw):
+            pythonw = sys.executable
+        return f'"{pythonw}" "{script}" --startup'
+
+    def is_autostart_enabled(self):
+        """检查是否已设置开机自启动（注册表）"""
+        try:
+            key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r'Software\Microsoft\Windows\CurrentVersion\Run',
+                0, winreg.KEY_READ
+            )
+            val, _ = winreg.QueryValueEx(key, 'RestReminder')
+            winreg.CloseKey(key)
+            return bool(val)
+        except (FileNotFoundError, OSError):
+            return False
+
+    def set_autostart(self, enabled):
+        """设置或取消开机自启动（注册表）"""
+        try:
+            key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r'Software\Microsoft\Windows\CurrentVersion\Run',
+                0, winreg.KEY_SET_VALUE
+            )
+            if enabled:
+                winreg.SetValueEx(key, 'RestReminder', 0, winreg.REG_SZ, self._get_autostart_cmd())
+            else:
+                try:
+                    winreg.DeleteValue(key, 'RestReminder')
+                except FileNotFoundError:
+                    pass
+            winreg.CloseKey(key)
+            return True
+        except Exception as e:
+            print(f'设置自启动失败: {e}')
+            return False
+
+    def toggle_autostart(self):
+        """切换开机自启动状态"""
+        new_state = not self.is_autostart_enabled()
+        if self.set_autostart(new_state):
+            self.autostart_action.setChecked(new_state)
+            tip = '已开启' if new_state else '已关闭'
+            self.tray_icon.showMessage('休息提醒', f'开机自启动{tip}', QSystemTrayIcon.Information, 2000)
+
     def init_tray(self):
         """初始化系统托盘"""
         self.tray_icon = QSystemTrayIcon(self)
         self.tray_icon.setToolTip('休息提醒 - 双击显示/隐藏')
-        
+
         # 双击托盘图标切换显示/隐藏
         self.tray_icon.activated.connect(self.on_tray_icon_activated)
-        
+
         # 创建托盘菜单
         tray_menu = QMenu()
-        
+
         toggle_action = QAction('显示/隐藏', self)
         toggle_action.triggered.connect(self.toggle_visibility)
         tray_menu.addAction(toggle_action)
-        
+
         tray_menu.addSeparator()
-        
+
+        # 开机自启动开关（注册表方式，零外部依赖）
+        self.autostart_action = QAction('开机自启动', self)
+        self.autostart_action.setCheckable(True)
+        self.autostart_action.setChecked(self.is_autostart_enabled())
+        self.autostart_action.triggered.connect(self.toggle_autostart)
+        tray_menu.addAction(self.autostart_action)
+
+        tray_menu.addSeparator()
+
         reset_position_action = QAction('重置位置到右侧', self)
         reset_position_action.triggered.connect(self.position_to_right)
         tray_menu.addAction(reset_position_action)
-        
+
         tray_menu.addSeparator()
-        
+
         quit_action = QAction('退出', self)
         quit_action.triggered.connect(self.quit_app)
         tray_menu.addAction(quit_action)
-        
+
         self.tray_icon.setContextMenu(tray_menu)
         
         # 使用可爱图标
@@ -410,6 +505,44 @@ class RestReminderWidget(QWidget):
         QTimer.singleShot(5000, self.fetch_feishu_data)  # 启动5秒后首次拉取
         self.feishu_timer.start(30000)  # 30秒
         
+    _BTN_CONFIG = {
+        'idle':    {'start_en': True,  'start_txt': '▶ 开始', 'pause_en': False, 'pause_txt': '⏸ 暂停'},
+        'running': {'start_en': False, 'start_txt': '▶ 开始', 'pause_en': True,  'pause_txt': '⏸ 暂停'},
+        'paused':  {'start_en': True,  'start_txt': '▶ 继续', 'pause_en': False, 'pause_txt': '⏸ 已暂停'},
+    }
+
+    def _sync_buttons(self):
+        c = self._BTN_CONFIG[self.timer_state]
+        self.start_btn.setEnabled(c['start_en'])
+        self.start_btn.setText(c['start_txt'])
+        self.pause_btn.setEnabled(c['pause_en'])
+        self.pause_btn.setText(c['pause_txt'])
+
+    def on_start_clicked(self):
+        if self.timer_state not in ('idle', 'paused'):
+            return
+        if self.timer_state == 'idle':
+            self.start_time = datetime.now()
+        else:
+            self.start_time = datetime.now() - timedelta(seconds=(self.interval_minutes * 60 - self.remaining_when_paused))
+        self.remaining_when_paused = None
+        self.timer_state = 'running'
+        self._sync_buttons()
+
+    def on_pause_clicked(self):
+        if self.timer_state != 'running':
+            return
+        remaining = self.interval_minutes * 60 - (datetime.now() - self.start_time).total_seconds()
+        self.remaining_when_paused = max(remaining, 0)
+        self.timer_state = 'paused'
+        self._sync_buttons()
+
+    def _reset_timer_to_idle(self):
+        self.timer_state = 'idle'
+        self.start_time = None
+        self.remaining_when_paused = None
+        self._sync_buttons()
+
     def update_display(self):
         """更新显示内容"""
         now = datetime.now()
@@ -424,23 +557,37 @@ class RestReminderWidget(QWidget):
             self.fetch_feishu_data()
             print(f'新的一天，飞书数据已重置: {self.current_date}')
 
-        elapsed = (now - self.start_time).total_seconds()
         total_seconds = self.interval_minutes * 60
-        remaining_seconds = total_seconds - elapsed
 
-        if remaining_seconds <= 0:
-            self.open_random_video()
-            self.show_feishu_reminder()
-            self.show_stretch_reminder()
-            self.start_time = datetime.now()
-            remaining_seconds = total_seconds
+        if self.timer_state == 'idle':
+            self.time_label.setText(f'距离下次休息: {self.interval_minutes:02d}:00')
+            self.progress_bar.setValue(0)
+        elif self.timer_state == 'running':
+            elapsed = (now - self.start_time).total_seconds()
+            remaining_seconds = total_seconds - elapsed
 
-        minutes = int(remaining_seconds // 60)
-        seconds = int(remaining_seconds % 60)
-        self.time_label.setText(f'距离下次休息: {minutes:02d}:{seconds:02d}')
+            if remaining_seconds <= 0:
+                self.open_random_video()
+                self.show_feishu_reminder()
+                self.show_stretch_reminder()
+                self._reset_timer_to_idle()
+                self.time_label.setText(f'距离下次休息: {self.interval_minutes:02d}:00')
+                self.progress_bar.setValue(100)
+                return
 
-        progress = int((elapsed / total_seconds) * 100)
-        self.progress_bar.setValue(progress)
+            minutes = int(remaining_seconds // 60)
+            seconds = int(remaining_seconds % 60)
+            self.time_label.setText(f'距离下次休息: {minutes:02d}:{seconds:02d}')
+            progress = int((elapsed / total_seconds) * 100)
+            self.progress_bar.setValue(progress)
+        elif self.timer_state == 'paused':
+            remaining = self.remaining_when_paused or 0
+            minutes = int(remaining // 60)
+            seconds = int(remaining % 60)
+            self.time_label.setText(f'⏸ 已暂停: {minutes:02d}:{seconds:02d}')
+            elapsed = total_seconds - remaining
+            progress = int((elapsed / total_seconds) * 100)
+            self.progress_bar.setValue(progress)
 
         # 22:00倒计时进度条（4:30=0%，22:00=100%）
         start_minutes = 4 * 60 + 30
@@ -455,8 +602,11 @@ class RestReminderWidget(QWidget):
             countdown_pct = int(((current_minutes - start_minutes) / total_span) * 100)
         self.countdown_bar.setValue(countdown_pct)
 
-        # update_battery_status 已有自己 try/except，不需要外层再包
-        self.update_battery_status()
+        # 电池状态每 15 秒刷新一次（ACPI 调用不必每秒跑）
+        self._battery_tick += 1
+        if self._battery_tick >= 15:
+            self._battery_tick = 0
+            self.update_battery_status()
     
     def update_battery_status(self):
         """更新电池状态显示"""
