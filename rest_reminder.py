@@ -1052,13 +1052,23 @@ def main():
     silent_start = '--silent' in sys.argv or '--startup' in sys.argv
     
     widget = RestReminderWidget(silent_start=silent_start)
-    
+
     # 静默启动模式：直接隐藏窗口，只显示托盘图标
     if silent_start:
         widget.hide()
     else:
         widget.show()
-    
+
+    # 强制任务栏图标覆盖（setWindowIcon 对任务栏不可靠，用 WM_SETICON 直接设置）
+    import ctypes
+    hwnd = int(widget.winId())
+    hicon = ctypes.windll.user32.LoadImageW(
+        0, ico_path, 1, 0, 0, 0x00000010  # IMAGE_ICON, LR_LOADFROMFILE
+    )
+    if hicon:
+        ctypes.windll.user32.SendMessageW(hwnd, 0x0080, 1, hicon)  # WM_SETICON, ICON_BIG
+        ctypes.windll.user32.SendMessageW(hwnd, 0x0080, 0, hicon)  # WM_SETICON, ICON_SMALL
+
     sys.exit(app.exec_())
 
 

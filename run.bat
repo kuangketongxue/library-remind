@@ -18,7 +18,7 @@ echo [信息] 正在后台启动休息提醒挂件...
 echo.
 
 REM 使用pythonw启动程序（无控制台窗口，独立进程）
-start "" /B pythonw rest_reminder.py
+start "" pythonw rest_reminder.py
 
 if errorlevel 1 (
     echo [错误] 程序启动失败

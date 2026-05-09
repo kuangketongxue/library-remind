@@ -8,7 +8,7 @@ echo [启动中] 正在后台启动程序...
 echo.
 
 REM 使用 start 命令启动 VBS 脚本，完全独立运行
-start "" /B wscript.exe "start.vbs"
+start "" wscript.exe "start.vbs"
 
 echo ✓ 程序已在后台启动！
 echo.
