@@ -173,8 +173,12 @@ class RestReminderWidget(QWidget):
         self.widget_height = 370
         self.setGeometry(100, 100, self.widget_width, self.widget_height)
         
-        # 设置窗口置顶和无边框（移除Tool标志，让窗口可以在任务栏显示）
-        self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
+        # 设置窗口置顶和无边框（添加Window标志确保任务栏显示）
+        # Qt.Window: 确保窗口在任务栏显示
+        # Qt.FramelessWindowHint: 无边框
+        # Qt.WindowStaysOnTopHint: 置顶
+        # Qt.WindowMinimizeButtonHint: 允许最小化（有助于任务栏显示）
+        self.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.WindowMinimizeButtonHint)
 
         # 设置可爱图标（任务栏+托盘通用）
         ico_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cute_icon.ico')
@@ -486,13 +490,16 @@ class RestReminderWidget(QWidget):
     
     def toggle_visibility(self):
         """切换窗口显示/隐藏"""
-        if self.isVisible():
-            self.hide()
-        else:
-            self.show()
-            self.activateWindow()  # 激活窗口
-            self.raise_()  # 置顶显示
-        
+        try:
+            if self.isVisible():
+                self.hide()
+            else:
+                self.show()
+                self.activateWindow()  # 激活窗口
+                self.raise_()  # 置顶显示
+        except Exception as e:
+            print(f'[toggle_visibility 异常] {type(e).__name__}: {e}')
+
     def setup_timer(self):
         """设置定时器"""
         self.timer = QTimer()
@@ -512,101 +519,119 @@ class RestReminderWidget(QWidget):
     }
 
     def _sync_buttons(self):
-        c = self._BTN_CONFIG[self.timer_state]
-        self.start_btn.setEnabled(c['start_en'])
-        self.start_btn.setText(c['start_txt'])
-        self.pause_btn.setEnabled(c['pause_en'])
-        self.pause_btn.setText(c['pause_txt'])
+        try:
+            c = self._BTN_CONFIG[self.timer_state]
+            self.start_btn.setEnabled(c['start_en'])
+            self.start_btn.setText(c['start_txt'])
+            self.pause_btn.setEnabled(c['pause_en'])
+            self.pause_btn.setText(c['pause_txt'])
+        except Exception as e:
+            print(f'[_sync_buttons 异常] {type(e).__name__}: {e}')
 
     def on_start_clicked(self):
-        if self.timer_state not in ('idle', 'paused'):
-            return
-        if self.timer_state == 'idle':
-            self.start_time = datetime.now()
-        else:
-            self.start_time = datetime.now() - timedelta(seconds=(self.interval_minutes * 60 - self.remaining_when_paused))
-        self.remaining_when_paused = None
-        self.timer_state = 'running'
-        self._sync_buttons()
+        try:
+            if self.timer_state not in ('idle', 'paused'):
+                return
+            if self.timer_state == 'idle':
+                self.start_time = datetime.now()
+            else:
+                self.start_time = datetime.now() - timedelta(seconds=(self.interval_minutes * 60 - self.remaining_when_paused))
+            self.remaining_when_paused = None
+            self.timer_state = 'running'
+            self._sync_buttons()
+        except Exception as e:
+            print(f'[on_start_clicked 异常] {type(e).__name__}: {e}')
 
     def on_pause_clicked(self):
-        if self.timer_state != 'running':
-            return
-        remaining = self.interval_minutes * 60 - (datetime.now() - self.start_time).total_seconds()
-        self.remaining_when_paused = max(remaining, 0)
-        self.timer_state = 'paused'
-        self._sync_buttons()
+        try:
+            if self.timer_state != 'running':
+                return
+            remaining = self.interval_minutes * 60 - (datetime.now() - self.start_time).total_seconds()
+            self.remaining_when_paused = max(remaining, 0)
+            self.timer_state = 'paused'
+            self._sync_buttons()
+        except Exception as e:
+            print(f'[on_pause_clicked 异常] {type(e).__name__}: {e}')
 
     def _reset_timer_to_idle(self):
-        self.timer_state = 'idle'
-        self.start_time = None
-        self.remaining_when_paused = None
-        self._sync_buttons()
+        try:
+            self.timer_state = 'idle'
+            self.start_time = None
+            self.remaining_when_paused = None
+            self._sync_buttons()
+        except Exception as e:
+            print(f'[_reset_timer_to_idle 异常] {type(e).__name__}: {e}')
 
     def update_display(self):
         """更新显示内容"""
-        now = datetime.now()
+        try:
+            now = datetime.now()
 
-        # 检查日期是否变化（过了零点）
-        if now.date() != self.current_date:
-            self.played_today = set()
-            self.feishu_hours = None
-            self.feishu_stretch_items = []
-            self.current_date = now.date()
-            self.update_feishu_display()
-            self.fetch_feishu_data()
-            print(f'新的一天，飞书数据已重置: {self.current_date}')
+            # 检查日期是否变化（过了零点）
+            if now.date() != self.current_date:
+                self.played_today = set()
+                self.feishu_hours = None
+                self.feishu_stretch_items = []
+                self.current_date = now.date()
+                self.update_feishu_display()
+                self.fetch_feishu_data()
+                print(f'新的一天，飞书数据已重置: {self.current_date}')
 
-        total_seconds = self.interval_minutes * 60
+            total_seconds = self.interval_minutes * 60
 
-        if self.timer_state == 'idle':
-            self.time_label.setText(f'距离下次休息: {self.interval_minutes:02d}:00')
-            self.progress_bar.setValue(0)
-        elif self.timer_state == 'running':
-            elapsed = (now - self.start_time).total_seconds()
-            remaining_seconds = total_seconds - elapsed
-
-            if remaining_seconds <= 0:
-                self.open_random_video()
-                self.show_feishu_reminder()
-                self.show_stretch_reminder()
-                self._reset_timer_to_idle()
+            if self.timer_state == 'idle':
                 self.time_label.setText(f'距离下次休息: {self.interval_minutes:02d}:00')
-                self.progress_bar.setValue(100)
-                return
+                self.progress_bar.setValue(0)
+            elif self.timer_state == 'running':
+                elapsed = (now - self.start_time).total_seconds()
+                remaining_seconds = total_seconds - elapsed
 
-            minutes = int(remaining_seconds // 60)
-            seconds = int(remaining_seconds % 60)
-            self.time_label.setText(f'距离下次休息: {minutes:02d}:{seconds:02d}')
-            progress = int((elapsed / total_seconds) * 100)
-            self.progress_bar.setValue(progress)
-        elif self.timer_state == 'paused':
-            remaining = self.remaining_when_paused or 0
-            minutes = int(remaining // 60)
-            seconds = int(remaining % 60)
-            self.time_label.setText(f'⏸ 已暂停: {minutes:02d}:{seconds:02d}')
-            elapsed = total_seconds - remaining
-            progress = int((elapsed / total_seconds) * 100)
-            self.progress_bar.setValue(progress)
+                if remaining_seconds <= 0:
+                    self.open_random_video()
+                    self.show_feishu_reminder()
+                    self.show_stretch_reminder()
+                    self._reset_timer_to_idle()
+                    self.time_label.setText(f'距离下次休息: {self.interval_minutes:02d}:00')
+                    self.progress_bar.setValue(100)
+                    return
 
-        # 22:00倒计时进度条（4:30=0%，22:00=100%）
-        start_minutes = 4 * 60 + 30
-        end_minutes = 22 * 60
-        total_span = end_minutes - start_minutes
-        current_minutes = now.hour * 60 + now.minute + now.second / 60
-        if current_minutes >= end_minutes:
-            countdown_pct = 100
-        elif current_minutes <= start_minutes:
-            countdown_pct = 0
-        else:
-            countdown_pct = int(((current_minutes - start_minutes) / total_span) * 100)
-        self.countdown_bar.setValue(countdown_pct)
+                minutes = int(remaining_seconds // 60)
+                seconds = int(remaining_seconds % 60)
+                self.time_label.setText(f'距离下次休息: {minutes:02d}:{seconds:02d}')
+                progress = int((elapsed / total_seconds) * 100)
+                self.progress_bar.setValue(progress)
+            elif self.timer_state == 'paused':
+                remaining = self.remaining_when_paused or 0
+                minutes = int(remaining // 60)
+                seconds = int(remaining % 60)
+                self.time_label.setText(f'⏸ 已暂停: {minutes:02d}:{seconds:02d}')
+                elapsed = total_seconds - remaining
+                progress = int((elapsed / total_seconds) * 100)
+                self.progress_bar.setValue(progress)
 
-        # 电池状态每 15 秒刷新一次（ACPI 调用不必每秒跑）
-        self._battery_tick += 1
-        if self._battery_tick >= 15:
-            self._battery_tick = 0
-            self.update_battery_status()
+            # 22:00倒计时进度条（4:30=0%，22:00=100%）
+            start_minutes = 4 * 60 + 30
+            end_minutes = 22 * 60
+            total_span = end_minutes - start_minutes
+            current_minutes = now.hour * 60 + now.minute + now.second / 60
+            if current_minutes >= end_minutes:
+                countdown_pct = 100
+            elif current_minutes <= start_minutes:
+                countdown_pct = 0
+            else:
+                countdown_pct = int(((current_minutes - start_minutes) / total_span) * 100)
+            self.countdown_bar.setValue(countdown_pct)
+
+            # 电池状态每 15 秒刷新一次（ACPI 调用不必每秒跑）
+            self._battery_tick += 1
+            if self._battery_tick >= 15:
+                self._battery_tick = 0
+                self.update_battery_status()
+        except Exception as e:
+            print(f'[update_display 异常] {type(e).__name__}: {e}')
+            import traceback
+            traceback.print_exc()
+            # 不抛出异常，防止定时器回调导致程序崩溃
     
     def update_battery_status(self):
         """更新电池状态显示"""
@@ -766,13 +791,18 @@ class RestReminderWidget(QWidget):
                     self.finished.emit(None)
 
         def on_feishu_fetched(data):
-            if data is None:
-                return
-            hours, stretch_items = data
-            self.feishu_hours = hours
-            self.feishu_stretch_items = stretch_items
-            self.update_feishu_display()
-            print(f'飞书数据已更新: 时长={self.feishu_hours}h, 拉伸={len(self.feishu_stretch_items)}个')
+            try:
+                if data is None:
+                    return
+                hours, stretch_items = data
+                self.feishu_hours = hours
+                self.feishu_stretch_items = stretch_items
+                self.update_feishu_display()
+                print(f'飞书数据已更新: 时长={self.feishu_hours}h, 拉伸={len(self.feishu_stretch_items)}个')
+            except Exception as e:
+                print(f'[fetch_feishu_data 回调异常] {type(e).__name__}: {e}')
+                import traceback
+                traceback.print_exc()
 
         self._feishu_thread = FeishuFetchThread()
         self._feishu_thread.finished.connect(on_feishu_fetched)
@@ -934,33 +964,38 @@ class RestReminderWidget(QWidget):
                 self.finished.emit(videos)
 
         def on_videos_fetched(videos):
-            self.video_list = videos
-            if videos:
-                remaining = [v for v in videos if v not in self.played_today]
-                if not remaining:
-                    print('当天视频已全部播放过，重置记录')
-                    self.played_today = set()
-                    remaining = videos
+            try:
+                self.video_list = videos
+                if videos:
+                    remaining = [v for v in videos if v not in self.played_today]
+                    if not remaining:
+                        print('当天视频已全部播放过，重置记录')
+                        self.played_today = set()
+                        remaining = videos
 
-                video_url = random.choice(remaining)
-                self.played_today.add(video_url)
-                print(f'打开视频: {video_url} (今日已播 {len(self.played_today)}/{len(self.video_list)})')
-                webbrowser.open(video_url)
-                self.tray_icon.showMessage(
-                    '休息时间到！',
-                    f'已为您打开休息视频（今日第{len(self.played_today)}个），记得放松一下哦~',
-                    QSystemTrayIcon.Information,
-                    3000
-                )
-            else:
-                fallback_url = 'https://space.bilibili.com/529362421/favlist?fid=3648313921&ftype=create'
-                webbrowser.open(fallback_url)
-                self.tray_icon.showMessage(
-                    '休息时间到！',
-                    '已为您打开收藏夹页面~',
-                    QSystemTrayIcon.Information,
-                    3000
-                )
+                    video_url = random.choice(remaining)
+                    self.played_today.add(video_url)
+                    print(f'打开视频: {video_url} (今日已播 {len(self.played_today)}/{len(self.video_list)})')
+                    webbrowser.open(video_url)
+                    self.tray_icon.showMessage(
+                        '休息时间到！',
+                        f'已为您打开休息视频（今日第{len(self.played_today)}个），记得放松一下哦~',
+                        QSystemTrayIcon.Information,
+                        3000
+                    )
+                else:
+                    fallback_url = 'https://space.bilibili.com/529362421/favlist?fid=3648313921&ftype=create'
+                    webbrowser.open(fallback_url)
+                    self.tray_icon.showMessage(
+                        '休息时间到！',
+                        '已为您打开收藏夹页面~',
+                        QSystemTrayIcon.Information,
+                        3000
+                    )
+            except Exception as e:
+                print(f'[open_random_video 回调异常] {type(e).__name__}: {e}')
+                import traceback
+                traceback.print_exc()
 
         # 等旧线程结束再启动新线程，避免信号冲突
         if hasattr(self, '_video_thread') and self._video_thread.isRunning():
@@ -972,35 +1007,47 @@ class RestReminderWidget(QWidget):
     
     def mousePressEvent(self, event):
         """鼠标按下事件 - 用于拖动窗口"""
-        if event.button() == Qt.LeftButton:
-            self.drag_position = event.globalPos() - self.frameGeometry().topLeft()
-            event.accept()
-    
+        try:
+            if event.button() == Qt.LeftButton:
+                self.drag_position = event.globalPos() - self.frameGeometry().topLeft()
+                event.accept()
+        except Exception as e:
+            print(f'[mousePressEvent 异常] {type(e).__name__}: {e}')
+
     def mouseMoveEvent(self, event):
         """鼠标移动事件 - 拖动窗口"""
-        if event.buttons() == Qt.LeftButton:
-            self.move(event.globalPos() - self.drag_position)
-            event.accept()
+        try:
+            if event.buttons() == Qt.LeftButton:
+                self.move(event.globalPos() - self.drag_position)
+                event.accept()
+        except Exception as e:
+            print(f'[mouseMoveEvent 异常] {type(e).__name__}: {e}')
     
     def closeEvent(self, event):
         """关闭事件 - 最小化到托盘而不是退出"""
-        event.ignore()
-        self.hide()
-        # 静默模式下不显示任何提示
-        if not self.silent_start and not hasattr(self, '_hide_tip_shown'):
-            self.tray_icon.showMessage(
-                '休息提醒',
-                '程序已隐藏到系统托盘\n双击托盘图标可重新显示',
-                QSystemTrayIcon.Information,
-                3000
-            )
-            self._hide_tip_shown = True
-    
+        try:
+            event.ignore()
+            self.hide()
+            # 静默模式下不显示任何提示
+            if not self.silent_start and not hasattr(self, '_hide_tip_shown'):
+                self.tray_icon.showMessage(
+                    '休息提醒',
+                    '程序已隐藏到系统托盘\n双击托盘图标可重新显示',
+                    QSystemTrayIcon.Information,
+                    3000
+                )
+                self._hide_tip_shown = True
+        except Exception as e:
+            print(f'[closeEvent 异常] {type(e).__name__}: {e}')
+
     def quit_app(self):
         """退出应用"""
-        self.feishu_timer.stop()
-        self.tray_icon.hide()
-        QApplication.quit()
+        try:
+            self.feishu_timer.stop()
+            self.tray_icon.hide()
+            QApplication.quit()
+        except Exception as e:
+            print(f'[quit_app 异常] {type(e).__name__}: {e}')
 
 
 def main():
@@ -1053,13 +1100,8 @@ def main():
     
     widget = RestReminderWidget(silent_start=silent_start)
 
-    # 静默启动模式：直接隐藏窗口，只显示托盘图标
-    if silent_start:
-        widget.hide()
-    else:
-        widget.show()
-
     # 强制任务栏图标覆盖（setWindowIcon 对任务栏不可靠，用 WM_SETICON 直接设置）
+    # 必须在窗口显示前设置，确保任务栏图标正确
     import ctypes
     hwnd = int(widget.winId())
     hicon = ctypes.windll.user32.LoadImageW(
@@ -1068,6 +1110,14 @@ def main():
     if hicon:
         ctypes.windll.user32.SendMessageW(hwnd, 0x0080, 1, hicon)  # WM_SETICON, ICON_BIG
         ctypes.windll.user32.SendMessageW(hwnd, 0x0080, 0, hicon)  # WM_SETICON, ICON_SMALL
+    else:
+        print(f'警告: 无法加载图标文件: {ico_path}，错误代码可能需要检查')
+
+    # 静默启动模式：直接隐藏窗口，只显示托盘图标
+    if silent_start:
+        widget.hide()
+    else:
+        widget.show()
 
     sys.exit(app.exec_())
 
