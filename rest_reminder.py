@@ -1,4 +1,4 @@
-"""
+﻿"""
 桌面休息提醒挂件
 每小时提醒休息，并随机打开B站收藏夹中的视频
 监控电池充电状态
@@ -601,7 +601,7 @@ class RestReminderWidget(QWidget):
                 self.raise_()
                 # 重新启动定时器
                 self.timer.start(1000)
-                self.feishu_timer.start(30000)
+                self.feishu_timer.start(1800000)
         except Exception as e:
             print(f'[toggle_visibility 异常] {type(e).__name__}: {e}')
 
@@ -615,7 +615,7 @@ class RestReminderWidget(QWidget):
         self.feishu_timer = QTimer()
         self.feishu_timer.timeout.connect(self.fetch_feishu_data)
         QTimer.singleShot(5000, self.fetch_feishu_data)  # 启动5秒后首次拉取
-        self.feishu_timer.start(30000)  # 30秒
+        self.feishu_timer.start(1800000)  # 30秒
         
     _BTN_CONFIG = {
         'idle':    {'start_en': True,  'start_txt': '▶ 开始', 'pause_en': False, 'pause_txt': '⏸ 暂停'},
