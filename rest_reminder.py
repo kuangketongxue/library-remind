@@ -9,7 +9,7 @@ import webbrowser
 import random
 import requests
 from datetime import datetime, timedelta
-from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel, 
+from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel,
                              QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox)
 from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtGui import QIcon, QFont
@@ -21,6 +21,7 @@ import os
 import tempfile
 import atexit
 import winreg
+import traceback
 
 
 class SingleInstanceChecker:
@@ -29,43 +30,43 @@ class SingleInstanceChecker:
         self.lock_file = None
         self.lock_path = os.path.join(tempfile.gettempdir(), 'rest_reminder.lock')
         self.lock_handle = None
-        
+
     def is_already_running(self):
         """检查程序是否已经在运行"""
         try:
             # 在Windows上使用文件独占锁
             import msvcrt
-            
+
             # 尝试打开或创建锁文件
             try:
                 # 以读写模式打开，如果不存在则创建
                 self.lock_handle = open(self.lock_path, 'w')
                 # 尝试获取独占锁（非阻塞）
                 msvcrt.locking(self.lock_handle.fileno(), msvcrt.LK_NBLCK, 1)
-                
+
                 # 成功获取锁，写入当前PID
                 self.lock_handle.write(str(os.getpid()))
                 self.lock_handle.flush()
-                
+
                 self.lock_file = self.lock_path
                 # 注册退出时删除锁文件
                 atexit.register(self.cleanup)
                 return False
-                
+
             except IOError:
                 # 无法获取锁，说明已有实例在运行
                 if self.lock_handle:
                     self.lock_handle.close()
                     self.lock_handle = None
                 return True
-                
+
         except ImportError:
             # 如果msvcrt不可用（非Windows），使用原来的方法
             return self._fallback_check()
         except Exception as e:
             print(f'单实例检查失败: {e}')
             return False
-    
+
     def _fallback_check(self):
         """备用检查方法（用于非Windows系统）"""
         try:
@@ -73,7 +74,7 @@ class SingleInstanceChecker:
                 try:
                     with open(self.lock_path, 'r') as f:
                         old_pid = int(f.read().strip())
-                    
+
                     if psutil.pid_exists(old_pid):
                         try:
                             proc = psutil.Process(old_pid)
@@ -82,25 +83,25 @@ class SingleInstanceChecker:
                                 return True
                         except (psutil.NoSuchProcess, psutil.AccessDenied):
                             pass
-                    
+
                     os.remove(self.lock_path)
                 except (ValueError, IOError):
                     try:
                         os.remove(self.lock_path)
                     except:
                         pass
-            
+
             with open(self.lock_path, 'w') as f:
                 f.write(str(os.getpid()))
-            
+
             self.lock_file = self.lock_path
             atexit.register(self.cleanup)
             return False
-            
+
         except Exception as e:
             print(f'备用单实例检查失败: {e}')
             return False
-    
+
     def cleanup(self):
         """清理锁文件"""
         try:
@@ -113,12 +114,100 @@ class SingleInstanceChecker:
                     pass
                 self.lock_handle.close()
                 self.lock_handle = None
-            
+
             # 删除锁文件
             if self.lock_file and os.path.exists(self.lock_file):
                 os.remove(self.lock_file)
         except:
             pass
+
+
+# ===================== Module-level Classes for Thread Safety =====================
+
+from PyQt5.QtCore import QThread, pyqtSignal
+
+
+class FeishuFetchThread(QThread):
+    """Thread for fetching data from Feishu multidimensional table"""
+    finished = pyqtSignal(object)  # 传回 (hours, stretch_items, top_3_tasks) 或 None
+
+    def __init__(self, get_videos_fn, parent=None):
+        super().__init__(parent)
+        self._get_videos = get_videos_fn
+
+    def run(self):
+        try:
+            cmd = [
+                LARK_CLI, 'base', '+record-list',
+                '--base-token', FEISHU_BASE_TOKEN,
+                '--table-id', FEISHU_TABLE_ID,
+                '--view-id', FEISHU_VIEW_NAME,
+                '--limit', '30',
+                '--format', 'json'
+            ]
+            si = subprocess.STARTUPINFO()
+            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            si.wShowWindow = subprocess.SW_HIDE
+            result = subprocess.run(
+                cmd, capture_output=True,
+                timeout=10,
+                startupinfo=si,
+                creationflags=0x08000000
+            )
+            if result.returncode != 0:
+                self.finished.emit(None)
+                return
+
+            resp = json.loads(result.stdout.decode('utf-8'))
+            if not resp.get('ok'):
+                self.finished.emit(None)
+                return
+
+            records = resp['data']['data']
+            today_str = datetime.now().strftime('%Y-%m-%d')
+            today_data = None
+            for rec in reversed(records):
+                if rec and rec[0] and str(rec[0]).startswith(today_str):
+                    today_data = rec
+                    break
+
+            if not today_data:
+                self.finished.emit(None)
+                return
+
+            hours_val = today_data[1] if len(today_data) > 1 else None
+            hours = None
+            if hours_val and isinstance(hours_val, list) and hours_val:
+                match = re.search(r'(\d+)', str(hours_val[0]))
+                hours = int(match.group(1)) if match else None
+
+            stretch_val = today_data[2] if len(today_data) > 2 else None
+            stretch_items = stretch_val if stretch_val and isinstance(stretch_val, list) else []
+
+            top_3_val = today_data[3] if len(today_data) > 3 else None
+            top_3_tasks = top_3_val if top_3_val and isinstance(top_3_val, list) else []
+
+            self.finished.emit((hours, stretch_items, top_3_tasks))
+        except Exception as e:
+            print(f'[FeishuFetchThread] 飞书数据拉取失败: {e}')
+            self.finished.emit(None)
+
+
+class VideoFetchThread(QThread):
+    """Thread for fetching video list from Bilibili"""
+    finished = pyqtSignal(list)
+
+    def __init__(self, get_videos_fn, parent=None):
+        super().__init__(parent)
+        self._get_videos = get_videos_fn
+
+    def run(self):
+        try:
+            videos = self._get_videos()
+        except Exception as e:
+            print(f'[VideoFetchThread] 获取视频异常: {e}')
+            videos = []
+        self.finished.emit(videos)
 
 
 STRETCH_EXERCISES = [
@@ -159,7 +248,9 @@ class RestReminderWidget(QWidget):
         self.current_date = datetime.now().date()  # 记录当前日期，用于检测日期变化
         self.feishu_hours = None  # 飞书记录的工作时长（小时数）
         self.feishu_stretch_items = []  # 飞书记录的拉伸动作列表
-        
+        self.feishu_top_3_tasks = []  # 飞书记录的"今天最重要的三件事"
+        self.drag_position = None  # 鼠标拖动位置，用于窗口移动
+
         self.init_ui()
         self.position_to_right()  # 定位到屏幕右侧
         self.init_tray()
@@ -344,6 +435,14 @@ class RestReminderWidget(QWidget):
         self.stretch_label.setFont(QFont('Microsoft YaHei', 12))
         self.stretch_label.setAlignment(Qt.AlignCenter)
         self.stretch_label.setStyleSheet('color: #4CAF50; font-weight: bold;')
+
+        # 今天最重要的三件事
+        self.top_tasks_label = QLabel('📌 今天最重要的事：暂无')
+        self.top_tasks_label.setFont(QFont('Microsoft YaHei', 10))
+        self.top_tasks_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self.top_tasks_label.setWordWrap(True)
+        self.top_tasks_label.setStyleSheet('color: #2196F3; padding: 5px;')
+        main_layout.addWidget(self.top_tasks_label)
         main_layout.addWidget(self.stretch_label)
         
         # 电池状态区域
@@ -493,10 +592,16 @@ class RestReminderWidget(QWidget):
         try:
             if self.isVisible():
                 self.hide()
+                # 停止定时器，防止后台继续运行导致异常
+                self.timer.stop()
+                self.feishu_timer.stop()
             else:
                 self.show()
-                self.activateWindow()  # 激活窗口
-                self.raise_()  # 置顶显示
+                self.activateWindow()
+                self.raise_()
+                # 重新启动定时器
+                self.timer.start(1000)
+                self.feishu_timer.start(30000)
         except Exception as e:
             print(f'[toggle_visibility 异常] {type(e).__name__}: {e}')
 
@@ -731,80 +836,25 @@ class RestReminderWidget(QWidget):
     
     def fetch_feishu_data(self):
         """从飞书多维表格拉取今日工作时长和拉伸数据（异步，不阻塞主线程）"""
-        from PyQt5.QtCore import QThread, pyqtSignal
-
-        class FeishuFetchThread(QThread):
-            finished = pyqtSignal(object)  # 传回 (hours, stretch_items) 或 None
-
-            def run(self):
-                try:
-                    cmd = [
-                        LARK_CLI, 'base', '+record-list',
-                        '--base-token', FEISHU_BASE_TOKEN,
-                        '--table-id', FEISHU_TABLE_ID,
-                        '--view-id', FEISHU_VIEW_NAME,
-                        '--limit', '30',
-                        '--format', 'json'
-                    ]
-                    si = subprocess.STARTUPINFO()
-                    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                    si.wShowWindow = subprocess.SW_HIDE
-                    result = subprocess.run(
-                        cmd, capture_output=True,
-                        timeout=10,
-                        startupinfo=si,
-                        creationflags=0x08000000
-                    )
-                    if result.returncode != 0:
-                        self.finished.emit(None)
-                        return
-
-                    resp = json.loads(result.stdout.decode('utf-8'))
-                    if not resp.get('ok'):
-                        self.finished.emit(None)
-                        return
-
-                    records = resp['data']['data']
-                    today_str = datetime.now().strftime('%Y-%m-%d')
-                    today_data = None
-                    for rec in reversed(records):
-                        if rec and rec[0] and str(rec[0]).startswith(today_str):
-                            today_data = rec
-                            break
-
-                    if not today_data:
-                        self.finished.emit(None)
-                        return
-
-                    hours_val = today_data[1] if len(today_data) > 1 else None
-                    hours = None
-                    if hours_val and isinstance(hours_val, list) and hours_val:
-                        match = re.search(r'(\d+)', str(hours_val[0]))
-                        hours = int(match.group(1)) if match else None
-
-                    stretch_val = today_data[2] if len(today_data) > 2 else None
-                    stretch_items = stretch_val if stretch_val and isinstance(stretch_val, list) else []
-
-                    self.finished.emit((hours, stretch_items))
-                except Exception as e:
-                    print(f'[FeishuFetchThread] 飞书数据拉取失败: {e}')
-                    self.finished.emit(None)
+        # 如果线程正在运行，等待它完成（最多3秒）
+        if hasattr(self, '_feishu_thread') and self._feishu_thread.isRunning():
+            self._feishu_thread.wait(3000)
 
         def on_feishu_fetched(data):
             try:
                 if data is None:
                     return
-                hours, stretch_items = data
+                hours, stretch_items, top_3_tasks = data
                 self.feishu_hours = hours
                 self.feishu_stretch_items = stretch_items
+                self.feishu_top_3_tasks = top_3_tasks
                 self.update_feishu_display()
                 print(f'飞书数据已更新: 时长={self.feishu_hours}h, 拉伸={len(self.feishu_stretch_items)}个')
             except Exception as e:
                 print(f'[fetch_feishu_data 回调异常] {type(e).__name__}: {e}')
-                import traceback
                 traceback.print_exc()
 
-        self._feishu_thread = FeishuFetchThread()
+        self._feishu_thread = FeishuFetchThread(self.get_bilibili_videos)
         self._feishu_thread.finished.connect(on_feishu_fetched)
         self._feishu_thread.start()
 
@@ -821,6 +871,13 @@ class RestReminderWidget(QWidget):
 
         n = len(self.feishu_stretch_items)
         self.stretch_label.setText(f'🧘 拉伸: {n} 个（飞书）')
+
+        # 更新今天最重要的三件事
+        if hasattr(self, 'feishu_top_3_tasks') and self.feishu_top_3_tasks:
+            tasks_str = ' | '.join(self.feishu_top_3_tasks[:3])
+            self.top_tasks_label.setText(f'📌 今天最重要的事：{tasks_str}')
+        else:
+            self.top_tasks_label.setText('📌 今天最重要的事：暂无')
 
     def show_feishu_reminder(self):
         """提醒去飞书更新数据（不显示本地累加数）"""
@@ -946,22 +1003,7 @@ class RestReminderWidget(QWidget):
     
     def open_random_video(self):
         """打开随机视频（异步获取，不阻塞主线程）"""
-        from PyQt5.QtCore import QThread, pyqtSignal
-
-        class VideoFetchThread(QThread):
-            finished = pyqtSignal(list)
-
-            def __init__(self, get_videos_fn):
-                super().__init__()
-                self._get_videos = get_videos_fn
-
-            def run(self):
-                try:
-                    videos = self._get_videos()
-                except Exception as e:
-                    print(f'[VideoFetchThread] 获取视频异常: {e}')
-                    videos = []
-                self.finished.emit(videos)
+        thread = VideoFetchThread(self.get_bilibili_videos)
 
         def on_videos_fetched(videos):
             try:
@@ -1028,6 +1070,9 @@ class RestReminderWidget(QWidget):
         try:
             event.ignore()
             self.hide()
+            # 停止定时器，防止后台继续运行导致异常
+            self.timer.stop()
+            self.feishu_timer.stop()
             # 静默模式下不显示任何提示
             if not self.silent_start and not hasattr(self, '_hide_tip_shown'):
                 self.tray_icon.showMessage(
@@ -1043,6 +1088,7 @@ class RestReminderWidget(QWidget):
     def quit_app(self):
         """退出应用"""
         try:
+            self.timer.stop()
             self.feishu_timer.stop()
             self.tray_icon.hide()
             QApplication.quit()
@@ -1050,76 +1096,80 @@ class RestReminderWidget(QWidget):
             print(f'[quit_app 异常] {type(e).__name__}: {e}')
 
 
+def register_autostart():
+    """注册开机自启动，写入注册表（Windows）"""
+    try:
+        reg_path = r'Software\Microsoft\Windows\CurrentVersion\Run'
+        app_name = 'RestReminder'
+        script_path = os.path.abspath(__file__)
+        pythonw = os.path.join(os.path.dirname(sys.executable), 'pythonw.exe')
+        if not os.path.exists(pythonw):
+            pythonw = sys.executable
+
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path, 0, winreg.KEY_SET_VALUE)
+        winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ,
+                          f'"{pythonw}" "{script_path}" --startup')
+        winreg.CloseKey(key)
+        return True
+    except Exception as e:
+        with open(os.path.join(os.path.dirname(__file__), 'startup_error.log'), 'a', encoding='utf-8') as f:
+            f.write(f'{datetime.now().isoformat()} 注册表写入失败: {e}\n')
+        return False
+
+
 def main():
-    # 全局异常钩子：防止未捕获异常杀死进程
+    # 在单实例检查之前先尝试注册（如果不存在或已失效）
+    single = SingleInstanceChecker()
+    if '--startup' not in sys.argv:
+        register_autostart()
+
+    if single.is_already_running():
+        print('休息提醒程序已经在运行中！')
+        if '--silent' not in sys.argv:
+            a = QApplication(sys.argv)
+            QMessageBox.warning(None, '已在运行',
+                '程序已在运行中！\n请检查系统托盘图标。')
+        sys.exit(0)
+
+    # 全局异常钩子：记录未捕获异常到日志，看门狗会检测并重启
     def excepthook(exc_type, exc_value, exc_tb):
         import traceback
-        print(f'[全局异常捕获] {exc_type.__name__}: {exc_value}')
-        traceback.print_exception(exc_type, exc_value, exc_tb)
-        # 不调用 sys.exit，让程序继续运行
+        log_dir = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(log_dir, 'crash.log'), 'a', encoding='utf-8') as f:
+            from datetime import datetime
+            f.write(f'[{datetime.now().isoformat()}] 未捕获异常: {exc_type.__name__}: {exc_value}\n')
+            traceback.print_exception(exc_type, exc_value, exc_tb, file=f)
+        # 退出，让看门狗重启
+        os._exit(1)
     sys.excepthook = excepthook
 
-    # 告诉 Windows 这是独立应用（否则任务栏用 pythonw.exe 的图标）
-    import ctypes
-    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('RestReminder.RestReminder.1.0')
+    # 强制任务栏图标覆盖
+    try:
+        import ctypes
+        ico_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cute_icon.ico')
+        app = QApplication(sys.argv)
+        app.setQuitOnLastWindowClosed(False)
+        hwnd = int(app.winId())
+        hicon = ctypes.windll.user32.LoadImageW(
+            0, ico_path, 1, 0, 0, 0x00000010)
+        if hicon:
+            ctypes.windll.user32.SendMessageW(hwnd, 0x0080, 1, hicon)
+            ctypes.windll.user32.SendMessageW(hwnd, 0x0080, 0, hicon)
 
-    # 单实例检查
-    instance_checker = SingleInstanceChecker()
-    if instance_checker.is_already_running():
-        print('休息提醒程序已经在运行中！')
-        print('如果您看到此消息但找不到程序窗口，请：')
-        print('1. 检查系统托盘（任务栏右下角）是否有程序图标')
-        print('2. 双击托盘图标可显示窗口')
-        print('3. 或者先结束已运行的进程再重新启动')
-        
-        # 检查是否是静默启动，如果不是则显示对话框
-        if '--silent' not in sys.argv and '--startup' not in sys.argv:
-            # 创建临时应用以显示消息框
-            temp_app = QApplication(sys.argv)
-            QMessageBox.warning(
-                None,
-                '程序已在运行',
-                '休息提醒程序已经在运行中！\n\n'
-                '请检查系统托盘（任务栏右下角）是否有程序图标。\n'
-                '双击托盘图标可显示窗口。\n\n'
-                '如需重新启动，请先右键托盘图标选择"退出"。',
-                QMessageBox.Ok
-            )
-        
-        sys.exit(1)
-    
-    app = QApplication(sys.argv)
-    app.setQuitOnLastWindowClosed(False)  # 关闭窗口不退出程序
+        # 静默模式判断
+        silent = '--silent' in sys.argv
+        widget = RestReminderWidget(silent_start=silent)
+        if silent:
+            widget.hide()
+        else:
+            widget.show()
 
-    # 设置应用程序图标（任务栏显示，用 .ico 获得多尺寸支持）
-    ico_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cute_icon.ico')
-    app.setWindowIcon(QIcon(ico_path))
-    
-    # 检查命令行参数，判断是否静默启动
-    silent_start = '--silent' in sys.argv or '--startup' in sys.argv
-    
-    widget = RestReminderWidget(silent_start=silent_start)
-
-    # 强制任务栏图标覆盖（setWindowIcon 对任务栏不可靠，用 WM_SETICON 直接设置）
-    # 必须在窗口显示前设置，确保任务栏图标正确
-    import ctypes
-    hwnd = int(widget.winId())
-    hicon = ctypes.windll.user32.LoadImageW(
-        0, ico_path, 1, 0, 0, 0x00000010  # IMAGE_ICON, LR_LOADFROMFILE
-    )
-    if hicon:
-        ctypes.windll.user32.SendMessageW(hwnd, 0x0080, 1, hicon)  # WM_SETICON, ICON_BIG
-        ctypes.windll.user32.SendMessageW(hwnd, 0x0080, 0, hicon)  # WM_SETICON, ICON_SMALL
-    else:
-        print(f'警告: 无法加载图标文件: {ico_path}，错误代码可能需要检查')
-
-    # 静默启动模式：直接隐藏窗口，只显示托盘图标
-    if silent_start:
-        widget.hide()
-    else:
-        widget.show()
-
-    sys.exit(app.exec_())
+        sys.exit(app.exec_())
+    except Exception as e:
+        # 兜底：记录崩溃并退出
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'crash.log'), 'a', encoding='utf-8') as f:
+            f.write(f'[{datetime.now().isoformat()}] 兜底捕获: {e}\n')
+        os._exit(1)
 
 
 if __name__ == '__main__':

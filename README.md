@@ -307,15 +307,15 @@ A: 右键点击系统托盘图标，选择"退出"
 
 ### Q: 如何设置开机自启动？
 A: 
-1. **简单方法**：双击 `一键安装.bat` 或 `create_startup.bat`
+1. **推荐方法**：双击 `一键安装.bat`（它会自动设置看门狗自启动）
 2. **Python方法**：安装依赖后运行 `python setup_autostart.py`
-3. 快捷方式会被添加到Windows启动文件夹
+3. 快捷方式会被添加到Windows启动文件夹，指向 `watchdog.py`
 
 ### Q: 开机自启动不生效？
 A: 
-1. 确保使用了 `create_startup.bat` 或正确安装了 `pywin32` 和 `winshell`
-2. 检查启动文件夹：`%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`
-3. 确认快捷方式"休息提醒.lnk"存在
+1. 确保 `一键安装.bat` 已成功运行（它使用了新的看门狗自启动机制）
+2. 检查启动文件夹：`%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup` 应存在 `休息提醒.lnk`，指向 `watchdog.py`
+3. 确认看门狗进程正在运行
 
 ### Q: 如何显示/隐藏挂件？
 A: 
