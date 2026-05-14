@@ -1,21 +1,21 @@
-﻿"""
+"""
 桌面休息提醒挂件
-每小时提醒休息，并随机打开B站收藏夹中的视频
-监控电池充电状态
+- 每小时提醒休息，并随机打开 B 站收藏夹中的视频
+- 监控电池充电状态
+- 监控电脑使用时长（每 3 小时提醒）
+- 学习时长本地计数（每次倒计时完成算 1 小时）
 """
 import sys
 import time
 import webbrowser
 import random
 import requests
+import ctypes
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel,
                              QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox)
 from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtGui import QIcon, QFont
-import json
-import subprocess
-import re
 import psutil
 import os
 import tempfile
@@ -32,49 +32,33 @@ class SingleInstanceChecker:
         self.lock_handle = None
 
     def is_already_running(self):
-        """检查程序是否已经在运行"""
         try:
-            # 在Windows上使用文件独占锁
             import msvcrt
-
-            # 尝试打开或创建锁文件
             try:
-                # 以读写模式打开，如果不存在则创建
                 self.lock_handle = open(self.lock_path, 'w')
-                # 尝试获取独占锁（非阻塞）
                 msvcrt.locking(self.lock_handle.fileno(), msvcrt.LK_NBLCK, 1)
-
-                # 成功获取锁，写入当前PID
                 self.lock_handle.write(str(os.getpid()))
                 self.lock_handle.flush()
-
                 self.lock_file = self.lock_path
-                # 注册退出时删除锁文件
                 atexit.register(self.cleanup)
                 return False
-
             except IOError:
-                # 无法获取锁，说明已有实例在运行
                 if self.lock_handle:
                     self.lock_handle.close()
                     self.lock_handle = None
                 return True
-
         except ImportError:
-            # 如果msvcrt不可用（非Windows），使用原来的方法
             return self._fallback_check()
         except Exception as e:
-            print(f'单实例检查失败: {e}')
+            print(f'单实例检查失败：{e}')
             return False
 
     def _fallback_check(self):
-        """备用检查方法（用于非Windows系统）"""
         try:
             if os.path.exists(self.lock_path):
                 try:
                     with open(self.lock_path, 'r') as f:
                         old_pid = int(f.read().strip())
-
                     if psutil.pid_exists(old_pid):
                         try:
                             proc = psutil.Process(old_pid)
@@ -83,29 +67,23 @@ class SingleInstanceChecker:
                                 return True
                         except (psutil.NoSuchProcess, psutil.AccessDenied):
                             pass
-
                     os.remove(self.lock_path)
                 except (ValueError, IOError):
                     try:
                         os.remove(self.lock_path)
                     except:
                         pass
-
             with open(self.lock_path, 'w') as f:
                 f.write(str(os.getpid()))
-
             self.lock_file = self.lock_path
             atexit.register(self.cleanup)
             return False
-
         except Exception as e:
-            print(f'备用单实例检查失败: {e}')
+            print(f'备用单实例检查失败：{e}')
             return False
 
     def cleanup(self):
-        """清理锁文件"""
         try:
-            # 释放文件锁
             if self.lock_handle:
                 try:
                     import msvcrt
@@ -114,87 +92,17 @@ class SingleInstanceChecker:
                     pass
                 self.lock_handle.close()
                 self.lock_handle = None
-
-            # 删除锁文件
             if self.lock_file and os.path.exists(self.lock_file):
                 os.remove(self.lock_file)
         except:
             pass
 
 
-# ===================== Module-level Classes for Thread Safety =====================
-
 from PyQt5.QtCore import QThread, pyqtSignal
 
 
-class FeishuFetchThread(QThread):
-    """Thread for fetching data from Feishu multidimensional table"""
-    finished = pyqtSignal(object)  # 传回 (hours, stretch_items, top_3_tasks) 或 None
-
-    def __init__(self, get_videos_fn, parent=None):
-        super().__init__(parent)
-        self._get_videos = get_videos_fn
-
-    def run(self):
-        try:
-            cmd = [
-                LARK_CLI, 'base', '+record-list',
-                '--base-token', FEISHU_BASE_TOKEN,
-                '--table-id', FEISHU_TABLE_ID,
-                '--view-id', FEISHU_VIEW_NAME,
-                '--limit', '30',
-                '--format', 'json'
-            ]
-            si = subprocess.STARTUPINFO()
-            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            si.wShowWindow = subprocess.SW_HIDE
-            result = subprocess.run(
-                cmd, capture_output=True,
-                timeout=10,
-                startupinfo=si,
-                creationflags=0x08000000
-            )
-            if result.returncode != 0:
-                self.finished.emit(None)
-                return
-
-            resp = json.loads(result.stdout.decode('utf-8'))
-            if not resp.get('ok'):
-                self.finished.emit(None)
-                return
-
-            records = resp['data']['data']
-            today_str = datetime.now().strftime('%Y-%m-%d')
-            today_data = None
-            for rec in reversed(records):
-                if rec and rec[0] and str(rec[0]).startswith(today_str):
-                    today_data = rec
-                    break
-
-            if not today_data:
-                self.finished.emit(None)
-                return
-
-            hours_val = today_data[1] if len(today_data) > 1 else None
-            hours = None
-            if hours_val and isinstance(hours_val, list) and hours_val:
-                match = re.search(r'(\d+)', str(hours_val[0]))
-                hours = int(match.group(1)) if match else None
-
-            stretch_val = today_data[2] if len(today_data) > 2 else None
-            stretch_items = stretch_val if stretch_val and isinstance(stretch_val, list) else []
-
-            top_3_val = today_data[3] if len(today_data) > 3 else None
-            top_3_tasks = top_3_val if top_3_val and isinstance(top_3_val, list) else []
-
-            self.finished.emit((hours, stretch_items, top_3_tasks))
-        except Exception as e:
-            print(f'[FeishuFetchThread] 飞书数据拉取失败: {e}')
-            self.finished.emit(None)
-
-
 class VideoFetchThread(QThread):
-    """Thread for fetching video list from Bilibili"""
+    """获取 B 站视频列表的线程"""
     finished = pyqtSignal(list)
 
     def __init__(self, get_videos_fn, parent=None):
@@ -205,78 +113,61 @@ class VideoFetchThread(QThread):
         try:
             videos = self._get_videos()
         except Exception as e:
-            print(f'[VideoFetchThread] 获取视频异常: {e}')
+            print(f'[VideoFetchThread] 获取视频异常：{e}')
             videos = []
         self.finished.emit(videos)
-
-
-STRETCH_EXERCISES = [
-    "拉腿*2",
-    "鲤鱼打挺",
-    "利于后入",
-    "跪着向后",
-    "蹲着手拉手",
-    "坐地上打开双腿向前",
-    "靠墙拉双手后肱肌",
-    "跪着拉双手后肱肌",
-    "躺床上拉双手前肱肌",
-    "躺地上四肢朝天",
-]
-
-# 飞书多维表格配置
-FEISHU_BASE_TOKEN = "DcJzbLadCaGbGws2ZekchGHhnVe"
-FEISHU_TABLE_ID = "tbl9DT9qniE63BH7"
-FEISHU_VIEW_NAME = "时长"
-# lark-cli 完整路径（npm 全局安装，Python subprocess PATH 中找不到）
-LARK_CLI = os.path.join(os.environ.get('APPDATA', ''), 'npm', 'lark-cli.cmd')
 
 
 class RestReminderWidget(QWidget):
     def __init__(self, silent_start=False):
         super().__init__()
-        self.interval_minutes = 60  # 每60分钟提醒一次
+        self.interval_minutes = 60
         self.start_time = None
         self.remaining_when_paused = None
-        self.timer_state = 'idle'  # idle / running / paused
-        self._battery_tick = 0  # 每 15 次 tick 刷新一次电池
+        self.timer_state = 'idle'
+        self._battery_tick = 0
+
+        # 视频相关
         self.video_list = []
-        self.played_today = set()  # 当天已播放的视频URL，避免重复
-        self.last_charging_state = None  # 记录上次充电状态
-        self.battery_warning_shown = False  # 是否已显示电池警告
-        self.silent_start = silent_start  # 静默启动模式
-        self.battery_notification_active = False  # 电池通知是否正在显示
-        self.current_date = datetime.now().date()  # 记录当前日期，用于检测日期变化
-        self.feishu_hours = None  # 飞书记录的工作时长（小时数）
-        self.feishu_stretch_items = []  # 飞书记录的拉伸动作列表
-        self.feishu_top_3_tasks = []  # 飞书记录的"今天最重要的三件事"
-        self.drag_position = None  # 鼠标拖动位置，用于窗口移动
+        self.played_today = set()
+
+        # 电池相关
+        self.last_charging_state = None
+        self.battery_warning_shown = False
+        self.battery_notification_active = False
+
+        # 日期检测
+        self.current_date = datetime.now().date()
+
+        # 学习时长（本地计数，每次倒计时完成 +1 小时）
+        self.study_hours_today = 0
+
+        # 电脑使用时长监控（每 3 小时提醒一次）
+        self.computer_usage_hours_today = 0
+        self.last_computer_usage_check = datetime.now()
+        self.computer_usage_reminder_given_at = None  # 记录上次提醒的时间点（小时数）
+
+        self.silent_start = silent_start
+        self.drag_position = None
 
         self.init_ui()
-        self.position_to_right()  # 定位到屏幕右侧
+        self.position_to_right()
         self.init_tray()
-        self.set_autostart(True)  # 启动时自动注册开机自启动
+        self.set_autostart(True)
         self.setup_timer()
-        
+
     def init_ui(self):
-        """初始化UI界面"""
         self.setWindowTitle('休息提醒')
         self.widget_width = 340
         self.widget_height = 370
         self.setGeometry(100, 100, self.widget_width, self.widget_height)
-        
-        # 设置窗口置顶和无边框（添加Window标志确保任务栏显示）
-        # Qt.Window: 确保窗口在任务栏显示
-        # Qt.FramelessWindowHint: 无边框
-        # Qt.WindowStaysOnTopHint: 置顶
-        # Qt.WindowMinimizeButtonHint: 允许最小化（有助于任务栏显示）
+
         self.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.WindowMinimizeButtonHint)
 
-        # 设置可爱图标（任务栏+托盘通用）
         ico_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cute_icon.ico')
         self.app_icon = QIcon(ico_path)
         self.setWindowIcon(self.app_icon)
-        
-        # 设置半透明背景
+
         self.setStyleSheet("""
             QWidget {
                 background-color: rgba(40, 40, 40, 230);
@@ -320,44 +211,43 @@ class RestReminderWidget(QWidget):
             #countdown_bar::chunk {
                 background-color: #FF9800;
             }
+            #computer_usage_bar::chunk {
+                background-color: #9C27B0;
+            }
         """)
-        
-        # 主布局
+
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(10, 5, 10, 10)
         main_layout.setSpacing(5)
-        
-        # 顶部布局：标题 + 最小化按钮
+
+        # 顶部：标题 + 最小化按钮
         top_layout = QHBoxLayout()
         top_layout.setContentsMargins(0, 0, 0, 0)
-        
-        # 标题
+
         self.title_label = QLabel('⏰ 休息提醒')
         self.title_label.setFont(QFont('Microsoft YaHei', 13, QFont.Bold))
         self.title_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         top_layout.addWidget(self.title_label)
-        
-        # 弹簧，把按钮推到右边
+
         top_layout.addStretch()
-        
-        # 最小化按钮
-        self.close_btn = QPushButton('−')  # 使用减号符号
+
+        self.close_btn = QPushButton('−')
         self.close_btn.setObjectName('closeBtn')
         self.close_btn.setFixedSize(30, 30)
         self.close_btn.setCursor(Qt.PointingHandCursor)
         self.close_btn.setToolTip('最小化到任务栏')
-        self.close_btn.clicked.connect(self.showMinimized)  # 最小化到任务栏
+        self.close_btn.clicked.connect(self.showMinimized)
         top_layout.addWidget(self.close_btn)
-        
+
         main_layout.addLayout(top_layout)
-        
+
         # 时间显示
-        self.time_label = QLabel('距离下次休息: 60:00')
+        self.time_label = QLabel('距离下次休息：60:00')
         self.time_label.setFont(QFont('Microsoft YaHei', 15))
         self.time_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(self.time_label)
 
-        # 按钮布局：开始 / 暂停
+        # 按钮：开始/暂停
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(10)
 
@@ -386,7 +276,7 @@ class RestReminderWidget(QWidget):
         btn_layout.addWidget(self.pause_btn)
 
         main_layout.addLayout(btn_layout)
-        
+
         # 进度条
         self.progress_bar = QProgressBar()
         self.progress_bar.setMaximum(100)
@@ -395,8 +285,8 @@ class RestReminderWidget(QWidget):
         self.progress_bar.setFormat('%p%')
         main_layout.addWidget(self.progress_bar)
 
-        # 22:00 倒计时进度条
-        self.countdown_label = QLabel('⏳ 距离22:00:')
+        # 22:00 倒计时
+        self.countdown_label = QLabel('⏳ 距离 22:00:')
         self.countdown_label.setFont(QFont('Microsoft YaHei', 12))
         self.countdown_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(self.countdown_label)
@@ -404,14 +294,14 @@ class RestReminderWidget(QWidget):
         self.countdown_bar = QProgressBar()
         self.countdown_bar.setObjectName('countdown_bar')
         self.countdown_bar.setMaximum(100)
-        self.countdown_bar.setValue(0)
+        self.countdown_bar.setValue(100)
         self.countdown_bar.setTextVisible(True)
-        self.countdown_bar.setFormat('%p%')
+        self.countdown_bar.setFormat('22:00')
         self.countdown_bar.setMaximumHeight(20)
         main_layout.addWidget(self.countdown_bar)
 
-        # 学习时长进度条（14小时 = 100%）
-        self.study_progress_label = QLabel('📊 学习时长: 加载中...')
+        # 学习时长进度条（14 小时=100%）
+        self.study_progress_label = QLabel('📚 学习时长：0 小时')
         self.study_progress_label.setFont(QFont('Microsoft YaHei', 12))
         self.study_progress_label.setAlignment(Qt.AlignCenter)
         self.study_progress_label.setStyleSheet('color: #FFD700; font-weight: bold;')
@@ -419,7 +309,7 @@ class RestReminderWidget(QWidget):
 
         self.study_progress_bar = QProgressBar()
         self.study_progress_bar.setObjectName('study_bar')
-        self.study_progress_bar.setMaximum(14)  # 14小时目标
+        self.study_progress_bar.setMaximum(14)
         self.study_progress_bar.setValue(0)
         self.study_progress_bar.setTextVisible(True)
         self.study_progress_bar.setFormat('%v / 14 小时')
@@ -430,32 +320,27 @@ class RestReminderWidget(QWidget):
         """)
         main_layout.addWidget(self.study_progress_bar)
 
-        # 拉伸统计
-        self.stretch_label = QLabel('🧘 拉伸: 0 个')
-        self.stretch_label.setFont(QFont('Microsoft YaHei', 12))
-        self.stretch_label.setAlignment(Qt.AlignCenter)
-        self.stretch_label.setStyleSheet('color: #4CAF50; font-weight: bold;')
+        # 电脑使用时长
+        self.computer_usage_label = QLabel('💻 今天电脑总使用：0H00min')
+        self.computer_usage_label.setFont(QFont('Microsoft YaHei', 12))
+        self.computer_usage_label.setAlignment(Qt.AlignCenter)
+        self.computer_usage_label.setStyleSheet('color: #9C27B0; font-weight: bold;')
+        main_layout.addWidget(self.computer_usage_label)
 
-        # 今天最重要的三件事
-        self.top_tasks_label = QLabel('📌 今天最重要的事：暂无')
-        self.top_tasks_label.setFont(QFont('Microsoft YaHei', 10))
-        self.top_tasks_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        self.top_tasks_label.setWordWrap(True)
-        self.top_tasks_label.setStyleSheet('color: #2196F3; padding: 5px;')
-        main_layout.addWidget(self.top_tasks_label)
-        main_layout.addWidget(self.stretch_label)
-        
-        # 电池状态区域
-        battery_layout = QHBoxLayout()
-        
-        # 电池图标和状态文字
+        self.computer_usage_bar = QProgressBar()
+        self.computer_usage_bar.setObjectName('computer_usage_bar')
+        self.computer_usage_bar.setMaximum(100)  # 100% = 3 小时（倒计时：100%→0%）
+        self.computer_usage_bar.setValue(100)
+        self.computer_usage_bar.setTextVisible(True)
+        self.computer_usage_bar.setFormat('3H00min')
+        self.computer_usage_bar.setMaximumHeight(20)
+        main_layout.addWidget(self.computer_usage_bar)
+
+        # 电池状态
         self.battery_label = QLabel('🔋 检测中...')
         self.battery_label.setFont(QFont('Microsoft YaHei', 12))
-        battery_layout.addWidget(self.battery_label)
-        
-        main_layout.addLayout(battery_layout)
-        
-        # 电池电量进度条
+        main_layout.addWidget(self.battery_label)
+
         self.battery_bar = QProgressBar()
         self.battery_bar.setObjectName('battery_bar')
         self.battery_bar.setMaximum(100)
@@ -464,33 +349,28 @@ class RestReminderWidget(QWidget):
         self.battery_bar.setFormat('%p%')
         self.battery_bar.setMaximumHeight(20)
         main_layout.addWidget(self.battery_bar)
-        
+
         self.setLayout(main_layout)
-    
+
     def position_to_right(self):
-        """将窗口定位到屏幕右侧中间"""
         screen = QApplication.desktop().screenGeometry()
         screen_width = screen.width()
         screen_height = screen.height()
-        
-        # 检查是否有--center参数，如果有则居中显示
+
         if '--center' in sys.argv:
-            # 居中显示
             x = (screen_width - self.widget_width) // 2
             y = (screen_height - self.widget_height) // 2
-            print(f"窗口居中显示: ({x}, {y})")
+            print(f"窗口居中显示：({x}, {y})")
         else:
-            # 计算位置：屏幕右侧，垂直居中，留出一些边距
-            margin = 10  # 距离屏幕边缘的距离
+            margin = 10
             x = screen_width - self.widget_width - margin
             y = (screen_height - self.widget_height) // 2
-            print(f"窗口右侧显示: ({x}, {y})")
-        
-        print(f"屏幕分辨率: {screen_width} x {screen_height}")
+            print(f"窗口右侧显示：({x}, {y})")
+
+        print(f"屏幕分辨率：{screen_width} x {screen_height}")
         self.move(x, y)
-        
+
     def _get_autostart_cmd(self):
-        """获取自动启动的命令行"""
         script = os.path.abspath(sys.argv[0] if sys.argv[0].endswith('.py') else __file__)
         pythonw = os.path.join(os.path.dirname(sys.executable), 'pythonw.exe')
         if not os.path.exists(pythonw):
@@ -498,13 +378,8 @@ class RestReminderWidget(QWidget):
         return f'"{pythonw}" "{script}" --startup'
 
     def is_autostart_enabled(self):
-        """检查是否已设置开机自启动（注册表）"""
         try:
-            key = winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER,
-                r'Software\Microsoft\Windows\CurrentVersion\Run',
-                0, winreg.KEY_READ
-            )
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Run', 0, winreg.KEY_READ)
             val, _ = winreg.QueryValueEx(key, 'RestReminder')
             winreg.CloseKey(key)
             return bool(val)
@@ -512,13 +387,8 @@ class RestReminderWidget(QWidget):
             return False
 
     def set_autostart(self, enabled):
-        """设置或取消开机自启动（注册表）"""
         try:
-            key = winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER,
-                r'Software\Microsoft\Windows\CurrentVersion\Run',
-                0, winreg.KEY_SET_VALUE
-            )
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Run', 0, winreg.KEY_SET_VALUE)
             if enabled:
                 winreg.SetValueEx(key, 'RestReminder', 0, winreg.REG_SZ, self._get_autostart_cmd())
             else:
@@ -529,11 +399,10 @@ class RestReminderWidget(QWidget):
             winreg.CloseKey(key)
             return True
         except Exception as e:
-            print(f'设置自启动失败: {e}')
+            print(f'设置自启动失败：{e}')
             return False
 
     def toggle_autostart(self):
-        """切换开机自启动状态"""
         new_state = not self.is_autostart_enabled()
         if self.set_autostart(new_state):
             self.autostart_action.setChecked(new_state)
@@ -541,14 +410,10 @@ class RestReminderWidget(QWidget):
             self.tray_icon.showMessage('休息提醒', f'开机自启动{tip}', QSystemTrayIcon.Information, 2000)
 
     def init_tray(self):
-        """初始化系统托盘"""
         self.tray_icon = QSystemTrayIcon(self)
         self.tray_icon.setToolTip('休息提醒 - 双击显示/隐藏')
-
-        # 双击托盘图标切换显示/隐藏
         self.tray_icon.activated.connect(self.on_tray_icon_activated)
 
-        # 创建托盘菜单
         tray_menu = QMenu()
 
         toggle_action = QAction('显示/隐藏', self)
@@ -557,7 +422,6 @@ class RestReminderWidget(QWidget):
 
         tray_menu.addSeparator()
 
-        # 开机自启动开关（注册表方式，零外部依赖）
         self.autostart_action = QAction('开机自启动', self)
         self.autostart_action.setCheckable(True)
         self.autostart_action.setChecked(self.is_autostart_enabled())
@@ -577,46 +441,31 @@ class RestReminderWidget(QWidget):
         tray_menu.addAction(quit_action)
 
         self.tray_icon.setContextMenu(tray_menu)
-        
-        # 使用可爱图标
         self.tray_icon.setIcon(self.app_icon)
         self.tray_icon.show()
-    
+
     def on_tray_icon_activated(self, reason):
-        """托盘图标激活事件"""
         if reason == QSystemTrayIcon.DoubleClick:
             self.toggle_visibility()
-    
+
     def toggle_visibility(self):
-        """切换窗口显示/隐藏"""
         try:
             if self.isVisible():
                 self.hide()
-                # 停止定时器，防止后台继续运行导致异常
                 self.timer.stop()
-                self.feishu_timer.stop()
             else:
                 self.show()
                 self.activateWindow()
                 self.raise_()
-                # 重新启动定时器
                 self.timer.start(1000)
-                self.feishu_timer.start(1800000)
         except Exception as e:
             print(f'[toggle_visibility 异常] {type(e).__name__}: {e}')
 
     def setup_timer(self):
-        """设置定时器"""
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_display)
-        self.timer.start(1000)  # 每秒更新一次
+        self.timer.start(1000)
 
-        # 飞书数据定时拉取（每30秒，近实时同步）
-        self.feishu_timer = QTimer()
-        self.feishu_timer.timeout.connect(self.fetch_feishu_data)
-        QTimer.singleShot(5000, self.fetch_feishu_data)  # 启动5秒后首次拉取
-        self.feishu_timer.start(1800000)  # 30秒
-        
     _BTN_CONFIG = {
         'idle':    {'start_en': True,  'start_txt': '▶ 开始', 'pause_en': False, 'pause_txt': '⏸ 暂停'},
         'running': {'start_en': False, 'start_txt': '▶ 开始', 'pause_en': True,  'pause_txt': '⏸ 暂停'},
@@ -668,256 +517,224 @@ class RestReminderWidget(QWidget):
             print(f'[_reset_timer_to_idle 异常] {type(e).__name__}: {e}')
 
     def update_display(self):
-        """更新显示内容"""
         try:
             now = datetime.now()
 
-            # 检查日期是否变化（过了零点）
+            # 检查日期变化
             if now.date() != self.current_date:
                 self.played_today = set()
-                self.feishu_hours = None
-                self.feishu_stretch_items = []
+                self.study_hours_today = 0
+                self.computer_usage_hours_today = 0
+                self.computer_usage_reminder_given_at = None
                 self.current_date = now.date()
-                self.update_feishu_display()
-                self.fetch_feishu_data()
-                print(f'新的一天，飞书数据已重置: {self.current_date}')
+                self.update_study_display()
+                self.update_computer_usage_display()
+                print(f'新的一天，数据已重置：{self.current_date}')
 
             total_seconds = self.interval_minutes * 60
 
             if self.timer_state == 'idle':
-                self.time_label.setText(f'距离下次休息: {self.interval_minutes:02d}:00')
+                self.time_label.setText(f'距离下次休息：{self.interval_minutes:02d}:00')
                 self.progress_bar.setValue(0)
             elif self.timer_state == 'running':
                 elapsed = (now - self.start_time).total_seconds()
                 remaining_seconds = total_seconds - elapsed
 
                 if remaining_seconds <= 0:
+                    # 倒计时完成，学习时长 +1 小时
+                    self.study_hours_today += 1
+                    self.update_study_display()
+
                     self.open_random_video()
-                    self.show_feishu_reminder()
-                    self.show_stretch_reminder()
-                    self._reset_timer_to_idle()
-                    self.time_label.setText(f'距离下次休息: {self.interval_minutes:02d}:00')
-                    self.progress_bar.setValue(100)
+                    # 自动重启计时器
+                    self.start_time = datetime.now()
+                    self.timer_state = 'running'
+                    self._sync_buttons()
+                    self.time_label.setText(f'距离下次休息：{self.interval_minutes:02d}:00')
+                    self.progress_bar.setValue(0)
                     return
 
                 minutes = int(remaining_seconds // 60)
                 seconds = int(remaining_seconds % 60)
-                self.time_label.setText(f'距离下次休息: {minutes:02d}:{seconds:02d}')
+                self.time_label.setText(f'距离下次休息：{minutes:02d}:{seconds:02d}')
                 progress = int((elapsed / total_seconds) * 100)
                 self.progress_bar.setValue(progress)
             elif self.timer_state == 'paused':
                 remaining = self.remaining_when_paused or 0
                 minutes = int(remaining // 60)
                 seconds = int(remaining % 60)
-                self.time_label.setText(f'⏸ 已暂停: {minutes:02d}:{seconds:02d}')
+                self.time_label.setText(f'⏸ 已暂停：{minutes:02d}:{seconds:02d}')
                 elapsed = total_seconds - remaining
                 progress = int((elapsed / total_seconds) * 100)
                 self.progress_bar.setValue(progress)
 
-            # 22:00倒计时进度条（4:30=0%，22:00=100%）
+            # 22:00 倒计时（倒计时：100%→0%）
             start_minutes = 4 * 60 + 30
             end_minutes = 22 * 60
             total_span = end_minutes - start_minutes
             current_minutes = now.hour * 60 + now.minute + now.second / 60
             if current_minutes >= end_minutes:
-                countdown_pct = 100
-            elif current_minutes <= start_minutes:
                 countdown_pct = 0
+                self.countdown_bar.setFormat('0')
+            elif current_minutes <= start_minutes:
+                countdown_pct = 100
+                remaining_h = int((end_minutes - current_minutes) / 60)
+                remaining_m = int(end_minutes - current_minutes) % 60
+                self.countdown_bar.setFormat(f'{remaining_h}H{remaining_m}min')
             else:
-                countdown_pct = int(((current_minutes - start_minutes) / total_span) * 100)
+                countdown_pct = int(((end_minutes - current_minutes) / total_span) * 100)
+                remaining_h = int((end_minutes - current_minutes) / 60)
+                remaining_m = int(end_minutes - current_minutes) % 60
+                self.countdown_bar.setFormat(f'{remaining_h}H{remaining_m}min')
             self.countdown_bar.setValue(countdown_pct)
 
-            # 电池状态每 15 秒刷新一次（ACPI 调用不必每秒跑）
+            # 电池状态每 15 秒刷新
             self._battery_tick += 1
             if self._battery_tick >= 15:
                 self._battery_tick = 0
                 self.update_battery_status()
+
+            # 电脑使用时长每秒累加
+            self.update_computer_usage(now)
+
         except Exception as e:
             print(f'[update_display 异常] {type(e).__name__}: {e}')
-            import traceback
             traceback.print_exc()
-            # 不抛出异常，防止定时器回调导致程序崩溃
-    
+
+    def update_study_display(self):
+        """更新学习时长显示"""
+        h = self.study_hours_today
+        self.study_progress_label.setText(f'📚 学习时长：{h}小时')
+        self.study_progress_bar.setValue(h)
+
+    def update_computer_usage(self, now):
+        """更新电脑使用时长（倒计时模式：3 小时→0）"""
+        # 每秒增加使用时长
+        self.computer_usage_hours_today += 1 / 3600  # 每秒增加 1/3600 小时
+
+        # 计算当前 3 小时周期内的已用时长（取模循环）
+        cycle_usage = self.computer_usage_hours_today % 3
+
+        # 更新标签：显示今天总使用时长（XXHXXmin 格式）
+        total_h = int(self.computer_usage_hours_today)
+        total_m = int((self.computer_usage_hours_today - total_h) * 60)
+        self.computer_usage_label.setText(f'💻 今天电脑总使用：{total_h}H{total_m:02d}min')
+
+        # 进度条倒计时：100%→0%（3 小时内）
+        usage_pct = int((cycle_usage / 3) * 100)
+        countdown_pct = 100 - usage_pct
+        remaining_min = 3 - cycle_usage
+        remaining_h = int(remaining_min)
+        remaining_m = int((remaining_min - remaining_h) * 60)
+        self.computer_usage_bar.setFormat(f'{remaining_h}H{remaining_m:02d}min')
+        self.computer_usage_bar.setValue(countdown_pct)
+
+        # 每 3 小时提醒一次（取整除判断）
+        current_cycle = int(self.computer_usage_hours_today / 3)
+        last_cycle = int((self.computer_usage_hours_today - 1/3600) / 3) if self.computer_usage_hours_today >= 1/3600 else 0
+
+        if current_cycle > last_cycle or (current_cycle > 0 and self.computer_usage_reminder_given_at != current_cycle):
+            self.show_computer_usage_reminder()
+            self.computer_usage_reminder_given_at = current_cycle
+
+    def show_computer_usage_reminder(self):
+        """电脑使用 3 小时后提醒，打开护眼视频"""
+        video_url = 'https://www.bilibili.com/video/BV14Y4y1N7PW/?spm_id_from=333.1387.favlist.content.click'
+        webbrowser.open(video_url)
+        self.tray_icon.showMessage(
+            '💻 电脑使用时间过长',
+            '已经连续使用 3 小时了，看看护眼视频休息一下眼睛吧~',
+            QSystemTrayIcon.Information,
+            5000
+        )
+
+    def update_computer_usage_display(self):
+        """更新电脑使用时长显示（XXHXXmin 格式）"""
+        total_h = int(self.computer_usage_hours_today)
+        total_m = int((self.computer_usage_hours_today - total_h) * 60)
+        self.computer_usage_label.setText(f'💻 今天电脑总使用：{total_h}H{total_m:02d}min')
+
+        # 进度条倒计时
+        cycle_usage = self.computer_usage_hours_today % 3
+        usage_pct = int((cycle_usage / 3) * 100)
+        countdown_pct = 100 - usage_pct
+        remaining_min = 3 - cycle_usage
+        remaining_h = int(remaining_min)
+        remaining_m = int((remaining_min - remaining_h) * 60)
+        self.computer_usage_bar.setFormat(f'{remaining_h}H{remaining_m:02d}min')
+        self.computer_usage_bar.setValue(countdown_pct)
+
     def update_battery_status(self):
-        """更新电池状态显示"""
         try:
             battery = psutil.sensors_battery()
-            
+
             if battery is None:
-                # 没有电池（台式机）
                 self.battery_label.setText('🖥️ 台式机（无电池）')
                 self.battery_bar.setValue(100)
                 self.battery_bar.setObjectName('battery_bar')
                 self.battery_bar.setStyleSheet('')
                 return
-            
-            # 获取电池信息
+
             percent = battery.percent
             plugged = battery.power_plugged
-            
-            # 更新电池电量进度条
+
             self.battery_bar.setValue(int(percent))
-            
-            # 根据电量设置进度条颜色
+
             if percent <= 20:
                 self.battery_bar.setObjectName('battery_bar_low')
-                self.battery_bar.setStyleSheet("""
-                    QProgressBar::chunk {
-                        background-color: #FF5252;
-                    }
-                """)
+                self.battery_bar.setStyleSheet("QProgressBar::chunk { background-color: #FF5252; }")
             else:
                 self.battery_bar.setObjectName('battery_bar')
-                self.battery_bar.setStyleSheet("""
-                    QProgressBar::chunk {
-                        background-color: #4CAF50;
-                    }
-                """)
-            
-            # 更新状态文字
+                self.battery_bar.setStyleSheet("QProgressBar::chunk { background-color: #4CAF50; }")
+
             if plugged:
                 if percent >= 100:
-                    icon = '🔌'
-                    status = '已充满'
+                    icon, status = '🔌', '已充满'
                 else:
-                    icon = '⚡'
-                    status = '充电中'
+                    icon, status = '⚡', '充电中'
                 self.battery_label.setText(f'{icon} {status}')
-                
-                # 重新充电后，关闭之前的断电警告，并重置警告状态
+
                 if self.battery_notification_active:
-                    # 隐藏通知（通过显示一个空通知来"关闭"之前的通知）
                     self.tray_icon.showMessage('', '', QSystemTrayIcon.NoIcon, 1)
                     self.battery_notification_active = False
-                
-                # 重置警告状态，允许下次断电时再次提醒
                 self.battery_warning_shown = False
             else:
                 icon = '🔋'
                 if percent <= 20:
-                    status = '电量低'
-                    icon = '🪫'
+                    status, icon = '电量低', '🪫'
                 elif percent <= 50:
                     status = '电量中'
                 else:
                     status = '使用电池'
                 self.battery_label.setText(f'{icon} {status}')
-                
-                # 检测充电状态变化：从充电变为未充电
+
                 if self.last_charging_state is True and not plugged:
-                    # 只在第一次断电时显示警告
                     if not self.battery_warning_shown:
                         self.show_battery_warning(percent)
                         self.battery_warning_shown = True
                         self.battery_notification_active = True
-            
-            # 记录当前充电状态
+
             self.last_charging_state = plugged
-            
+
         except Exception as e:
             self.battery_label.setText('❌ 电池状态获取失败')
-            print(f'获取电池状态失败: {e}')
-    
+            print(f'获取电池状态失败：{e}')
+
     def show_battery_warning(self, percent):
-        """显示电池警告（只显示一次）"""
         self.tray_icon.showMessage(
             '⚠️ 电源已断开',
-            f'检测到电脑未在充电！\n当前电量: {percent}%\n建议连接电源以保持最佳性能。',
+            f'检测到电脑未在充电！\n当前电量：{percent}%\n建议连接电源以保持最佳性能。',
             QSystemTrayIcon.Warning,
             5000
         )
-        
-        # 窗口闪烁提醒（如果窗口可见）
         if self.isVisible():
             self.setWindowOpacity(0.5)
             QTimer.singleShot(200, lambda: self.setWindowOpacity(1.0))
             QTimer.singleShot(400, lambda: self.setWindowOpacity(0.5))
             QTimer.singleShot(600, lambda: self.setWindowOpacity(1.0))
-    
-    def fetch_feishu_data(self):
-        """从飞书多维表格拉取今日工作时长和拉伸数据（异步，不阻塞主线程）"""
-        # 如果线程正在运行，等待它完成（最多3秒）
-        if hasattr(self, '_feishu_thread') and self._feishu_thread.isRunning():
-            self._feishu_thread.wait(3000)
-
-        def on_feishu_fetched(data):
-            try:
-                if data is None:
-                    return
-                hours, stretch_items, top_3_tasks = data
-                self.feishu_hours = hours
-                self.feishu_stretch_items = stretch_items
-                self.feishu_top_3_tasks = top_3_tasks
-                self.update_feishu_display()
-                print(f'飞书数据已更新: 时长={self.feishu_hours}h, 拉伸={len(self.feishu_stretch_items)}个')
-            except Exception as e:
-                print(f'[fetch_feishu_data 回调异常] {type(e).__name__}: {e}')
-                traceback.print_exc()
-
-        self._feishu_thread = FeishuFetchThread(self.get_bilibili_videos)
-        self._feishu_thread.finished.connect(on_feishu_fetched)
-        self._feishu_thread.start()
-
-    def update_feishu_display(self):
-        """仅展示飞书数据，不叠加本地计数"""
-        h = self.feishu_hours if self.feishu_hours is not None else 0
-
-        if self.feishu_hours is not None:
-            self.study_progress_label.setText(f'📊 学习时长: {h}h（飞书）')
-        else:
-            self.study_progress_label.setText('📊 学习时长: 飞书未记录')
-
-        self.study_progress_bar.setValue(h)
-
-        n = len(self.feishu_stretch_items)
-        self.stretch_label.setText(f'🧘 拉伸: {n} 个（飞书）')
-
-        # 更新今天最重要的三件事
-        if hasattr(self, 'feishu_top_3_tasks') and self.feishu_top_3_tasks:
-            tasks_str = ' | '.join(self.feishu_top_3_tasks[:3])
-            self.top_tasks_label.setText(f'📌 今天最重要的事：{tasks_str}')
-        else:
-            self.top_tasks_label.setText('📌 今天最重要的事：暂无')
-
-    def show_feishu_reminder(self):
-        """提醒去飞书更新数据（不显示本地累加数）"""
-        h = self.feishu_hours if self.feishu_hours is not None else 0
-        self.tray_icon.showMessage(
-            '📊 该更新飞书了',
-            f'当前飞书记录：{h} 小时\n\n'
-            '去飞书多维表格【每日追踪→时长】更新吧~',
-            QSystemTrayIcon.Information,
-            8000
-        )
-
-        # 窗口闪烁提醒
-        if self.isVisible():
-            original_style = self.study_progress_label.styleSheet()
-            flash_style = 'color: #FF6B6B; font-weight: bold; background-color: rgba(255, 215, 0, 50);'
-            self.study_progress_label.setStyleSheet(flash_style)
-            QTimer.singleShot(500, lambda: self.study_progress_label.setStyleSheet(original_style))
-            QTimer.singleShot(1000, lambda: self.study_progress_label.setStyleSheet(flash_style))
-            QTimer.singleShot(1500, lambda: self.study_progress_label.setStyleSheet(original_style))
-            QTimer.singleShot(2000, lambda: self.study_progress_label.setStyleSheet(flash_style))
-            QTimer.singleShot(2500, lambda: self.study_progress_label.setStyleSheet(original_style))
-
-    def show_stretch_reminder(self):
-        """随机推荐一个拉伸动作（计数只看飞书）"""
-        name = random.choice(STRETCH_EXERCISES)
-        n = len(self.feishu_stretch_items)
-
-        self.tray_icon.showMessage(
-            f'🧘 拉伸时间！（飞书已记录 {n} 个）',
-            f'{name}\n\n做完在飞书【拉伸】栏记一笔~',
-            QSystemTrayIcon.Information,
-            10000
-        )
 
     def get_bilibili_videos(self):
-        """
-        获取B站收藏夹视频列表（分页拉取全部）
-        带 3 次重试：网络抖动 / API 限流都能兜住
-        """
+        """获取 B 站收藏夹视频列表（带重试）"""
         fid = '3648313921'
         mid = '529362421'
 
@@ -949,7 +766,7 @@ class RestReminderWidget(QWidget):
                     data = response.json()
                     code = data.get('code')
                     if code != 0:
-                        print(f'B站API返回错误 code={code}, msg={data.get("message")} (尝试 {attempt+1}/3)')
+                        print(f'B 站 API 返回错误 code={code}, msg={data.get("message")} (尝试 {attempt+1}/3)')
                         break
 
                     medias = data.get('data', {}).get('medias') or []
@@ -961,32 +778,27 @@ class RestReminderWidget(QWidget):
                         if bvid:
                             videos.append(f'https://www.bilibili.com/video/{bvid}')
 
-                    # 如果返回数量不足 page_size，说明是最后一页
                     if len(medias) < page_size:
                         break
                     page += 1
 
                 if videos:
-                    print(f'获取到 {len(videos)} 个收藏视频（{page} 页, 第{attempt+1}次尝试）')
+                    print(f'获取到 {len(videos)} 个收藏视频（{page} 页，第{attempt+1}次尝试）')
                     return videos
 
             except Exception as e:
                 print(f'获取视频列表异常 (尝试 {attempt+1}/3): {e}')
 
-            # 重试前等 2 秒
             if attempt < 2:
                 time.sleep(2)
 
-        # 3 次都失败 → 用收藏夹页面的 bvid 正则兜底
+        # 兜底方案
         print('API 3 次全部失败，尝试从收藏夹页面提取视频链接...')
         try:
             page_url = f'https://space.bilibili.com/{mid}/favlist?fid={fid}&ftype=create'
-            resp = requests.get(page_url, headers={
-                'User-Agent': user_agents[0],
-                'Referer': 'https://www.bilibili.com',
-            }, timeout=10)
+            resp = requests.get(page_url, headers={'User-Agent': user_agents[0], 'Referer': 'https://www.bilibili.com'}, timeout=10)
+            import re
             bvids = re.findall(r'BV[a-zA-Z0-9]{10}', resp.text)
-            # 去重，保持顺序
             seen = set()
             unique = []
             for bv in bvids:
@@ -997,12 +809,12 @@ class RestReminderWidget(QWidget):
                 print(f'从页面兜底提取到 {len(unique)} 个视频')
                 return [f'https://www.bilibili.com/video/{bv}' for bv in unique]
         except Exception as e:
-            print(f'页面兜底也失败了: {e}')
+            print(f'页面兜底也失败了：{e}')
 
         return []
-    
+
     def open_random_video(self):
-        """打开随机视频（异步获取，不阻塞主线程）"""
+        """打开随机视频"""
         thread = VideoFetchThread(self.get_bilibili_videos)
 
         def on_videos_fetched(videos):
@@ -1017,7 +829,7 @@ class RestReminderWidget(QWidget):
 
                     video_url = random.choice(remaining)
                     self.played_today.add(video_url)
-                    print(f'打开视频: {video_url} (今日已播 {len(self.played_today)}/{len(self.video_list)})')
+                    print(f'打开视频：{video_url} (今日已播 {len(self.played_today)}/{len(self.video_list)})')
                     webbrowser.open(video_url)
                     self.tray_icon.showMessage(
                         '休息时间到！',
@@ -1028,27 +840,19 @@ class RestReminderWidget(QWidget):
                 else:
                     fallback_url = 'https://space.bilibili.com/529362421/favlist?fid=3648313921&ftype=create'
                     webbrowser.open(fallback_url)
-                    self.tray_icon.showMessage(
-                        '休息时间到！',
-                        '已为您打开收藏夹页面~',
-                        QSystemTrayIcon.Information,
-                        3000
-                    )
+                    self.tray_icon.showMessage('休息时间到！', '已为您打开收藏夹页面~', QSystemTrayIcon.Information, 3000)
             except Exception as e:
                 print(f'[open_random_video 回调异常] {type(e).__name__}: {e}')
-                import traceback
                 traceback.print_exc()
 
-        # 等旧线程结束再启动新线程，避免信号冲突
         if hasattr(self, '_video_thread') and self._video_thread.isRunning():
             self._video_thread.wait(3000)
 
         self._video_thread = VideoFetchThread(self.get_bilibili_videos)
         self._video_thread.finished.connect(on_videos_fetched)
         self._video_thread.start()
-    
+
     def mousePressEvent(self, event):
-        """鼠标按下事件 - 用于拖动窗口"""
         try:
             if event.button() == Qt.LeftButton:
                 self.drag_position = event.globalPos() - self.frameGeometry().topLeft()
@@ -1057,119 +861,83 @@ class RestReminderWidget(QWidget):
             print(f'[mousePressEvent 异常] {type(e).__name__}: {e}')
 
     def mouseMoveEvent(self, event):
-        """鼠标移动事件 - 拖动窗口"""
         try:
             if event.buttons() == Qt.LeftButton:
                 self.move(event.globalPos() - self.drag_position)
                 event.accept()
         except Exception as e:
             print(f'[mouseMoveEvent 异常] {type(e).__name__}: {e}')
-    
+
     def closeEvent(self, event):
-        """关闭事件 - 最小化到托盘而不是退出"""
         try:
             event.ignore()
             self.hide()
-            # 停止定时器，防止后台继续运行导致异常
             self.timer.stop()
-            self.feishu_timer.stop()
-            # 静默模式下不显示任何提示
             if not self.silent_start and not hasattr(self, '_hide_tip_shown'):
-                self.tray_icon.showMessage(
-                    '休息提醒',
-                    '程序已隐藏到系统托盘\n双击托盘图标可重新显示',
-                    QSystemTrayIcon.Information,
-                    3000
-                )
+                self.tray_icon.showMessage('休息提醒', '程序已隐藏到系统托盘\n双击托盘图标可重新显示', QSystemTrayIcon.Information, 3000)
                 self._hide_tip_shown = True
         except Exception as e:
             print(f'[closeEvent 异常] {type(e).__name__}: {e}')
 
     def quit_app(self):
-        """退出应用"""
         try:
             self.timer.stop()
-            self.feishu_timer.stop()
             self.tray_icon.hide()
             QApplication.quit()
         except Exception as e:
             print(f'[quit_app 异常] {type(e).__name__}: {e}')
 
 
-def register_autostart():
-    """注册开机自启动，写入注册表（Windows）"""
-    try:
-        reg_path = r'Software\Microsoft\Windows\CurrentVersion\Run'
-        app_name = 'RestReminder'
-        script_path = os.path.abspath(__file__)
-        pythonw = os.path.join(os.path.dirname(sys.executable), 'pythonw.exe')
-        if not os.path.exists(pythonw):
-            pythonw = sys.executable
-
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path, 0, winreg.KEY_SET_VALUE)
-        winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ,
-                          f'"{pythonw}" "{script_path}" --startup')
-        winreg.CloseKey(key)
-        return True
-    except Exception as e:
-        with open(os.path.join(os.path.dirname(__file__), 'startup_error.log'), 'a', encoding='utf-8') as f:
-            f.write(f'{datetime.now().isoformat()} 注册表写入失败: {e}\n')
-        return False
-
-
 def main():
-    # 在单实例检查之前先尝试注册（如果不存在或已失效）
     single = SingleInstanceChecker()
-    if '--startup' not in sys.argv:
-        register_autostart()
 
     if single.is_already_running():
         print('休息提醒程序已经在运行中！')
         if '--silent' not in sys.argv:
             a = QApplication(sys.argv)
-            QMessageBox.warning(None, '已在运行',
-                '程序已在运行中！\n请检查系统托盘图标。')
+            QMessageBox.warning(None, '已在运行', '程序已在运行中！\n请检查系统托盘图标。')
         sys.exit(0)
 
-    # 全局异常钩子：记录未捕获异常到日志，看门狗会检测并重启
     def excepthook(exc_type, exc_value, exc_tb):
         import traceback
         log_dir = os.path.dirname(os.path.abspath(__file__))
         with open(os.path.join(log_dir, 'crash.log'), 'a', encoding='utf-8') as f:
             from datetime import datetime
-            f.write(f'[{datetime.now().isoformat()}] 未捕获异常: {exc_type.__name__}: {exc_value}\n')
+            f.write(f'[{datetime.now().isoformat()}] 未捕获异常：{exc_type.__name__}: {exc_value}\n')
             traceback.print_exception(exc_type, exc_value, exc_tb, file=f)
-        # 退出，让看门狗重启
         os._exit(1)
     sys.excepthook = excepthook
 
-    # 强制任务栏图标覆盖
     try:
-        import ctypes
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
+
+    app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
+
+    silent = '--silent' in sys.argv
+    widget = RestReminderWidget(silent_start=silent)
+    if silent:
+        widget.hide()
+    else:
+        widget.show()
+
+    try:
         ico_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cute_icon.ico')
-        app = QApplication(sys.argv)
-        app.setQuitOnLastWindowClosed(False)
-        hwnd = int(app.winId())
-        hicon = ctypes.windll.user32.LoadImageW(
-            0, ico_path, 1, 0, 0, 0x00000010)
+        hicon = ctypes.windll.user32.LoadImageW(0, ico_path, 1, 0, 0, 0x00000010)
         if hicon:
-            ctypes.windll.user32.SendMessageW(hwnd, 0x0080, 1, hicon)
-            ctypes.windll.user32.SendMessageW(hwnd, 0x0080, 0, hicon)
-
-        # 静默模式判断
-        silent = '--silent' in sys.argv
-        widget = RestReminderWidget(silent_start=silent)
-        if silent:
-            widget.hide()
-        else:
-            widget.show()
-
-        sys.exit(app.exec_())
+            hwnd = int(widget.winId())
+            WM_SETICON = 0x0080
+            ICON_SMALL = 0
+            ICON_BIG = 1
+            hicon_ptr = ctypes.c_void_p(hicon)
+            ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, hicon_ptr)
+            ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, hicon_ptr)
     except Exception as e:
-        # 兜底：记录崩溃并退出
-        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'crash.log'), 'a', encoding='utf-8') as f:
-            f.write(f'[{datetime.now().isoformat()}] 兜底捕获: {e}\n')
-        os._exit(1)
+        print(f'WM_SETICON error: {e}')
+
+    sys.exit(app.exec_())
 
 
 if __name__ == '__main__':

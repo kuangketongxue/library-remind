@@ -25,7 +25,7 @@ requirements.txt        — 依赖：PyQt5, requests, psutil
 | 窗口尺寸 | `init_ui()` 内 `widget_width/widget_height` | 340×370 |
 | 倒计时范围 | `update_display()` 内 `start_minutes/end_minutes` | 4:30~22:00 |
 | 学习目标时长 | `study_progress_bar.setMaximum` | 14（14 小时） |
-| 飞书轮询间隔 | `setup_timer()` 内 `self.feishu_timer.start` | 30000ms（30 秒） |
+| 飞书轮询间隔 | `setup_timer()` 内 `self.feishu_timer.start` | 1800000ms（30 分钟） |
 | 飞书 base token | 顶部 `FEISHU_BASE_TOKEN` | DcJzbLadCaGbGws2ZekchGHhnVe |
 | 飞书表 ID | 顶部 `FEISHU_TABLE_ID` | tbl9DT9qniE63BH7 |
 | 飞书视图名 | 顶部 `FEISHU_VIEW_NAME` | 时长 |
