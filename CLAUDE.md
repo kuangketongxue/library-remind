@@ -1,8 +1,7 @@
 # 休息提醒 — CLAUDE.md
 
 ## 项目概述
-PyQt5 桌面挂件：手动开始 60 分钟计时 + 暂停/继续 + 休息时自动打开 B 站视频 + 电池监控。
-看门狗守护：watchdog.py 监控主进程，崩溃自动重启，开机自启动指向看门狗。
+PyQt5 桌面挂件：60 分钟计时（自动循环）+ 暂停/继续 + 每小时随机打开 B 站收藏夹视频 + 每 3 小时打开护眼视频 + 电池监控 +22:00 倒计时。看门狗守护：watchdog.py 监控主进程，崩溃自动重启，开机自启动指向看门狗。
 
 ## 技术栈
 Python 3.7+ / PyQt5 / requests / psutil
@@ -19,18 +18,20 @@ requirements.txt        — 依赖：PyQt5, requests, psutil
 ## 关键配置位置
 | 配置 | 位置 | 默认值 |
 |------|------|--------|
-| 提醒间隔 | `self.interval_minutes` | 60 分钟 |
+| 提醒间隔 | `self.interval_minutes` | 60 分钟（自动循环） |
 | 收藏夹 ID | `get_bilibili_videos()` 内 `fid` | 3648313921 |
 | 用户 ID | `get_bilibili_videos()` 内 `mid` | 529362421 |
+| 护眼视频 URL | `show_computer_usage_reminder()` | BV14Y4y1N7PW |
+| 电脑使用周期 | `update_computer_usage()` | 每 3 小时循环提醒 |
 | 窗口尺寸 | `init_ui()` 内 `widget_width/widget_height` | 340×370 |
-| 倒计时范围 | `update_display()` 内 `start_minutes/end_minutes` | 4:30~22:00 |
+| 倒计时范围 | `update_display()` 内 `start_minutes/end_minutes` | 4:30~22:00（倒计时模式） |
 | 学习目标时长 | `study_progress_bar.setMaximum` | 14（14 小时） |
 | 飞书轮询间隔 | `setup_timer()` 内 `self.feishu_timer.start` | 1800000ms（30 分钟） |
 | 飞书 base token | 顶部 `FEISHU_BASE_TOKEN` | DcJzbLadCaGbGws2ZekchGHhnVe |
 | 飞书表 ID | 顶部 `FEISHU_TABLE_ID` | tbl9DT9qniE63BH7 |
 | 飞书视图名 | 顶部 `FEISHU_VIEW_NAME` | 时长 |
 | 电池轮询间隔 | `update_display()` 内 `_battery_tick` 计数器 | 每 15 秒 |
-| 计时器状态机 | `self.timer_state` | idle → running → paused |
+| 计时器状态机 | `self.timer_state` | idle → running → paused → auto-restart |
 
 ## 运行和验证
 ```bash
