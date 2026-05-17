@@ -39,13 +39,90 @@ def open_url(url):
         return True
     except Exception as e:
         print(f'[open_url] 使用 ShellExecuteW 失败: {e}')
-        # 降级到 webbrowser
         try:
             import webbrowser
             return webbrowser.open(url)
         except Exception as e2:
             print(f'[open_url] 使用 webbrowser 也失败: {e2}')
             return False
+
+
+class AudioDeviceDetector:
+    """音频设备检测器 - 检测麦克风/扬声器是否可用"""
+    def __init__(self):
+        self._known_devices = {}
+        self._check_interval = 300
+        self._check_counter = 0
+        self._on_device_failed = None
+        self._device_failure_reported = set()
+
+    def set_failure_callback(self, callback):
+        """设置设备故障回调"""
+        self._on_device_failed = callback
+
+    def check_devices(self):
+        """检测音频设备状态"""
+        try:
+            import subprocess
+            result = subprocess.run(
+                ['powershell', '-Command',
+                 'Get-WmiObject -Class Win32_SoundDevice | Select-Object Name, Status | ConvertTo-Json'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+
+            if result.returncode != 0:
+                return None
+
+            import json
+            output = result.stdout.strip()
+
+            if not output or output == '':
+                return None
+
+            try:
+                devices = json.loads(output)
+                if isinstance(devices, dict):
+                    devices = [devices]
+
+                for device in devices:
+                    name = device.get('Name', 'Unknown')
+                    status = device.get('Status', 'Unknown')
+
+                    prev_status = self._known_devices.get(name)
+
+                    if name not in self._known_devices:
+                        self._known_devices[name] = status
+                        print(f'[AudioDeviceDetector] 发现设备: {name}, 状态: {status}')
+
+                    if status != 'OK' and name not in self._device_failure_reported:
+                        self._device_failure_reported.add(name)
+                        print(f'[AudioDeviceDetector] 设备故障: {name}, 状态: {status}')
+                        if self._on_device_failed:
+                            self._on_device_failed(name)
+                        return False
+
+                    self._known_devices[name] = status
+
+                return True
+
+            except json.JSONDecodeError:
+                return None
+
+        except subprocess.TimeoutExpired:
+            return None
+        except Exception as e:
+            print(f'[AudioDeviceDetector] 检测失败: {e}')
+            return None
+
+    def tick(self):
+        """定时检测（每次调用计数，达到间隔才检测）"""
+        self._check_counter += 1
+        if self._check_counter >= self._check_interval:
+            self._check_counter = 0
+            return self.check_devices()
+        return None
 
 
 # 飞书配置
@@ -74,13 +151,13 @@ class FeishuDailyTracker:
             else:
                 self.state = {
                     'current_date': datetime.now().date().isoformat(),
-                    'crash_count_today': 0,
+                    'device_failure_count_today': 0,
                     'last_recorded_date': None
                 }
         except Exception:
             self.state = {
                 'current_date': datetime.now().date().isoformat(),
-                'crash_count_today': 0,
+                'device_failure_count_today': 0,
                 'last_recorded_date': None
             }
 
@@ -104,28 +181,26 @@ class FeishuDailyTracker:
             return True
         return False
 
-    def record_crash(self):
-        """记录崩溃"""
-        self.state['crash_count_today'] = self.state.get('crash_count_today', 0) + 1
+    def record_device_failure(self):
+        """记录音频设备故障"""
+        self.state['device_failure_count_today'] = self.state.get('device_failure_count_today', 0) + 1
         self._save_state()
 
-    def get_crash_count_today(self):
-        """获取今天的崩溃次数"""
-        return self.state.get('crash_count_today', 0)
+    def get_device_failure_count_today(self):
+        """获取今天设备故障次数"""
+        return self.state.get('device_failure_count_today', 0)
 
     def sync_to_feishu(self, study_hours, computer_usage_hours):
         """同步数据到飞书（暂存本地记录，用户手动配置飞书后可扩展）"""
-        # 记录到本地文件，便于调试
         record = {
             'date': datetime.now().date().isoformat(),
             'study_hours': study_hours,
             'computer_usage_hours': computer_usage_hours,
-            'crash_count': self.get_crash_count_today(),
+            'device_failure_count': self.get_device_failure_count_today(),
             'failure_rate': self._calculate_failure_rate(computer_usage_hours),
             'recorded_at': datetime.now().isoformat()
         }
 
-        # 保存到本地记录文件
         records_file = os.path.join(self.data_dir, 'daily_records.json')
         try:
             records = []
@@ -133,7 +208,6 @@ class FeishuDailyTracker:
                 with open(records_file, 'r', encoding='utf-8') as f:
                     records = json.load(f)
 
-            # 更新或添加今天的记录
             updated = False
             for i, r in enumerate(records):
                 if r.get('date') == record['date']:
@@ -150,15 +224,11 @@ class FeishuDailyTracker:
         except Exception as e:
             print(f'[FeishuDailyTracker] 记录本地数据失败: {e}')
 
-        # TODO: 连接飞书多维表格 API 进行同步
-        # 需要用户配置飞书应用凭证，或者使用 lark-cli 工具
-        # 目前先保存到本地文件
-
     def _calculate_failure_rate(self, computer_usage_hours):
-        """计算故障率（每小时崩溃次数）"""
+        """计算故障率（每小时设备故障次数）"""
         if computer_usage_hours < 0.1:
             return 0.0
-        return self.get_crash_count_today() / computer_usage_hours
+        return self.get_device_failure_count_today() / computer_usage_hours
 
 
 class SingleInstanceChecker:
@@ -289,7 +359,11 @@ class RestReminderWidget(QWidget):
 
         # 飞书每日数据追踪器
         self.feishu_tracker = FeishuDailyTracker()
-        self._data_sync_tick = 0  # 数据同步计数器（每 5 分钟同步一次）
+        self._data_sync_tick = 0
+
+        # 音频设备检测器
+        self.audio_detector = AudioDeviceDetector()
+        self.audio_detector.set_failure_callback(self._on_audio_device_failed)
 
         self.silent_start = silent_start
         self.drag_position = None
@@ -496,7 +570,7 @@ class RestReminderWidget(QWidget):
         main_layout.addWidget(self.battery_bar)
 
         # 故障率显示
-        self.failure_rate_label = QLabel('🔧 故障率：0 次/小时')
+        self.failure_rate_label = QLabel('🔊 设备故障：0 次')
         self.failure_rate_label.setFont(QFont('Microsoft YaHei', 11))
         self.failure_rate_label.setAlignment(Qt.AlignCenter)
         self.failure_rate_label.setStyleSheet('color: #888888;')
@@ -856,6 +930,9 @@ class RestReminderWidget(QWidget):
             # --- 电脑使用时长累加与提醒 ---
             self.update_computer_usage(now)
 
+            # --- 音频设备检测（每5分钟检测一次） ---
+            self.audio_detector.tick()
+
         except Exception as e:
             print(f'[update_display 异常] {type(e).__name__}: {e}')
             traceback.print_exc()
@@ -924,12 +1001,23 @@ class RestReminderWidget(QWidget):
         self.computer_usage_bar.setFormat(f'{remaining_h}H{remaining_m:02d}min')
         self.computer_usage_bar.setValue(countdown_pct)
 
+    def _on_audio_device_failed(self, device_name):
+        """音频设备故障回调"""
+        print(f'[音频设备] 检测到设备故障: {device_name}')
+        self.feishu_tracker.record_device_failure()
+        self.update_failure_rate_display()
+        self.tray_icon.showMessage(
+            '🔊 音频设备故障',
+            f'检测到设备异常：{device_name}\n请检查设备连接',
+            QSystemTrayIcon.Warning,
+            5000
+        )
+
     def update_failure_rate_display(self):
-        """更新故障率显示"""
+        """更新设备故障显示"""
         try:
-            crash_count = self.feishu_tracker.get_crash_count_today()
-            failure_rate = self.feishu_tracker._calculate_failure_rate(self.computer_usage_hours_today)
-            self.failure_rate_label.setText(f'🔧 故障率：{failure_rate:.2f} 次/小时 (崩溃 {crash_count} 次)')
+            failure_count = self.feishu_tracker.get_device_failure_count_today()
+            self.failure_rate_label.setText(f'🔊 设备故障：{failure_count} 次')
         except Exception as e:
             print(f'[update_failure_rate_display 异常] {e}')
 
