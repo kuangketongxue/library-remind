@@ -15,8 +15,8 @@ import json
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel,
                              QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox)
-from PyQt5.QtCore import QTimer, Qt
-from PyQt5.QtGui import QIcon, QFont, QCursor
+from PyQt5.QtCore import QTimer, Qt, QPoint
+from PyQt5.QtGui import QIcon, QFont, QCursor, QPainter, QColor, QBrush, QPen
 import psutil
 import os
 import tempfile
@@ -45,6 +45,72 @@ def open_url(url):
         except Exception as e2:
             print(f'[open_url] 使用 webbrowser 也失败: {e2}')
             return False
+
+
+class FloatingBall(QWidget):
+    """小浮球，点击显示/隐藏主窗口"""
+    def __init__(self, main_window):
+        super().__init__()
+        self.main_window = main_window
+        self.dragging = False
+        self.drag_position = None
+        
+        self.setWindowFlags(
+            Qt.WindowStaysOnTopHint | 
+            Qt.FramelessWindowHint | 
+            Qt.Tool
+        )
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setFixedSize(60, 60)
+        
+        # 初始位置：屏幕右侧中间
+        screen = QApplication.primaryScreen()
+        if screen:
+            screen_geom = screen.geometry()
+            self.move(screen_geom.width() - 80, screen_geom.height() // 2 - 30)
+        
+        self.show()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        # 绘制圆形背景
+        color = QColor(120, 140, 87)  # 绿色，与按钮颜色一致
+        painter.setBrush(QBrush(color))
+        painter.setPen(QPen(Qt.NoPen))
+        painter.drawEllipse(0, 0, 60, 60)
+        
+        # 绘制图标文字
+        painter.setPen(QColor(250, 249, 245))
+        painter.setFont(QFont('Arial', 20, QFont.Bold))
+        painter.drawText(self.rect(), Qt.AlignCenter, '⏰')
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.dragging = True
+            self.drag_position = event.globalPos() - self.frameGeometry().topLeft()
+
+    def mouseMoveEvent(self, event):
+        if self.dragging and self.drag_position is not None:
+            self.move(event.globalPos() - self.drag_position)
+
+    def mouseReleaseEvent(self, event):
+        self.dragging = False
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            # 先处理拖拽
+            self.dragging = True
+            self.drag_position = event.globalPos() - self.frameGeometry().topLeft()
+            # 然后切换主窗口显示
+            if self.main_window.isVisible():
+                self.main_window.hide()
+            else:
+                self.main_window.show()
+                self.main_window.activateWindow()
+                self.main_window.raise_()
+        super().mousePressEvent(event)
 
 
 class AudioDeviceDetector:
@@ -342,11 +408,13 @@ class RestReminderWidget(QWidget):
         self.drag_position = None
 
         self.init_ui()
-        self.position_to_right()
         self.init_tray()
-        self.setup_edge_watcher()
         self.set_autostart(True)
         self.setup_timer()
+        # 创建小浮球
+        self.floating_ball = FloatingBall(self)
+        # 启动时隐藏主窗口，只显示浮球
+        self.hide()
 
     def init_ui(self):
         self.setWindowTitle('休息提醒')
@@ -425,12 +493,12 @@ class RestReminderWidget(QWidget):
 
         top_layout.addStretch()
 
-        self.close_btn = QPushButton('−')
+        self.close_btn = QPushButton('×')
         self.close_btn.setObjectName('closeBtn')
         self.close_btn.setFixedSize(30, 30)
         self.close_btn.setCursor(Qt.PointingHandCursor)
-        self.close_btn.setToolTip('隐藏到桌面右侧边缘')
-        self.close_btn.clicked.connect(self.hide_to_edge)
+        self.close_btn.setToolTip('隐藏窗口')
+        self.close_btn.clicked.connect(self.hide)
         top_layout.addWidget(self.close_btn)
 
         main_layout.addLayout(top_layout)
@@ -740,13 +808,13 @@ class RestReminderWidget(QWidget):
         self._edge_watch_timer = QTimer()
         self._edge_watch_timer.timeout.connect(self._check_mouse_at_edge)
         self._edge_watch_timer.start(100)  # 每100ms检测一次
+        self._hide_delay_timer = QTimer()
+        self._hide_delay_timer.setSingleShot(True)
+        self._hide_delay_timer.timeout.connect(self.hide_to_edge)
 
     def _check_mouse_at_edge(self):
-        """检测鼠标是否在右侧边缘触发区域"""
-        if not self._is_hidden_to_edge:
-            return
+        """检测鼠标位置，自动显示/隐藏"""
         try:
-            # 获取鼠标位置
             cursor_pos = QCursor.pos()
             screen = QApplication.primaryScreen()
             if not screen:
@@ -754,9 +822,30 @@ class RestReminderWidget(QWidget):
             screen_geometry = screen.geometry()
             trigger_zone = 50  # 触发区域宽度（像素）
 
-            # 检查鼠标是否在右侧边缘触发区域
-            if cursor_pos.x() >= screen_geometry.width() - trigger_zone:
-                self.show_from_edge()
+            if self._is_hidden_to_edge:
+                # 窗口隐藏时：检测鼠标在右侧边缘就显示
+                if cursor_pos.x() >= screen_geometry.width() - trigger_zone:
+                    self.show_from_edge()
+            else:
+                # 窗口显示时：检测鼠标不在窗口区域就延迟隐藏
+                # 获取窗口区域
+                window_rect = self.geometry()
+                # 添加一点额外空间，防止鼠标稍微离开就立即隐藏
+                hover_zone = QRect(
+                    window_rect.x() - 20,
+                    window_rect.y() - 20,
+                    window_rect.width() + 40,
+                    window_rect.height() + 40
+                )
+                
+                if not hover_zone.contains(cursor_pos):
+                    # 鼠标不在窗口区域，延迟隐藏
+                    if not self._hide_delay_timer.isActive():
+                        self._hide_delay_timer.start(500)  # 500ms延迟
+                else:
+                    # 鼠标在窗口区域，取消隐藏
+                    if self._hide_delay_timer.isActive():
+                        self._hide_delay_timer.stop()
         except Exception as e:
             print(f'[_check_mouse_at_edge 异常] {type(e).__name__}: {e}')
 
