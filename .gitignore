@@ -39,3 +39,30 @@ desktop.ini
 
 # Logs
 *.log
+crash.log
+
+# 本地数据文件
+daily_records.json
+daily_tracker_state.json
+
+# 临时文件
+*.cmd
+!一键安装.bat
+!卸载.bat
+!run.bat
+temp_*
+
+# Vendor 依赖（使用 pip 安装）
+vendor/
+
+# 本地配置
+*.local
+*.env
+.env.*
+
+# 飞书 CLI 临时文件
+lark-cli.bat
+LARK_CLI使用说明.md
+
+# 完全独立启动文件
+完全独立启动.vbs

@@ -48,14 +48,14 @@ REM ========================================
 REM 步骤2: 安装依赖
 REM ========================================
 echo [2/4] 安装依赖包...
-echo 正在安装 PyQt5, requests, psutil...
+echo 正在安装 PyQt5, requests, psutil 到项目本地目录...
 echo.
 python -m pip install --upgrade pip >nul 2>&1
-python -m pip install -r %~dp0requirements.txt
+python -m pip install --upgrade --target "%~dp0vendor" -r "%~dp0requirements.txt"
 if errorlevel 1 (
     echo.
     echo ✗ 依赖安装失败
-    echo 请检查网络连接或手动运行: pip install -r requirements.txt
+    echo 请检查网络连接或手动运行: python -m pip install --upgrade --target "%~dp0vendor" -r "%~dp0requirements.txt"
     echo.
     pause
     exit /b 1
@@ -69,14 +69,20 @@ REM ========================================
 echo [3/4] 设置开机自启动...
 
 set CURRENT_DIR=%~dp0
+set PYTHONW_EXE=pythonw
+for /f "delims=" %%P in ('where pythonw 2^>nul') do (
+    set "PYTHONW_EXE=%%P"
+    goto :found_pythonw
+)
+:found_pythonw
 
 REM 使用PowerShell创建快捷方式到Startup文件夹（更可靠）
 set STARTUP_FOLDER=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
 powershell -ExecutionPolicy Bypass -Command "^&
     `$WshShell = New-Object -ComObject WScript.Shell;^n
     `$Shortcut = `$WshShell.CreateShortcut('%STARTUP_FOLDER%\\休息提醒.lnk');^n
-    `$Shortcut.TargetPath = '"%~dp0watchdog.py"';^n
-    `$Shortcut.Arguments = '';^n
+    `$Shortcut.TargetPath = '%PYTHONW_EXE%';^n
+    `$Shortcut.Arguments = '\"%~dp0watchdog.py\" --startup';^n
     `$Shortcut.WorkingDirectory = '%CURRENT_DIR%';^n
     `$Shortcut.Description = '每小时休息提醒挂件（自动启动）';^n
     `$Shortcut.WindowStyle = 7;^n

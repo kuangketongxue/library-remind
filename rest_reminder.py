@@ -4,13 +4,14 @@
 - 监控电池充电状态
 - 监控电脑使用时长（每 3 小时提醒）
 - 学习时长本地计数（每次倒计时完成算 1 小时）
+- 飞书每日数据记录：电脑使用时长、学习时长、电脑故障率
 """
 import sys
 import time
-import webbrowser
 import random
 import requests
 import ctypes
+import json
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel,
                              QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox)
@@ -22,6 +23,142 @@ import tempfile
 import atexit
 import winreg
 import traceback
+
+
+def open_url(url):
+    """使用 Windows API 打开 URL，避免弹出命令窗口"""
+    try:
+        ctypes.windll.shell32.ShellExecuteW(
+            None,
+            'open',
+            url,
+            None,
+            None,
+            1  # SW_SHOWNORMAL
+        )
+        return True
+    except Exception as e:
+        print(f'[open_url] 使用 ShellExecuteW 失败: {e}')
+        # 降级到 webbrowser
+        try:
+            import webbrowser
+            return webbrowser.open(url)
+        except Exception as e2:
+            print(f'[open_url] 使用 webbrowser 也失败: {e2}')
+            return False
+
+
+# 飞书配置
+FEISHU_WIKI_TOKEN = 'NO0IwcUKFis5L2kOyMDcHOd1nId'  # 飞书知识库 token
+FEISHU_BASE_TOKEN = 'DcJzbLadCaGbGws2ZekchGHhnVe'  # 飞书多维表格 token
+FEISHU_TABLE_ID = 'tbl9DT9qniE63BH7'  # 【新】每日追踪 表的 ID
+FEISHU_TABLE_NAME = '每日追踪'
+
+
+class FeishuDailyTracker:
+    """飞书每日数据追踪器"""
+    def __init__(self, data_dir=None):
+        if data_dir is None:
+            data_dir = os.path.dirname(os.path.abspath(__file__))
+        self.data_dir = data_dir
+        self.state_file = os.path.join(data_dir, 'daily_tracker_state.json')
+        self.crash_log_file = os.path.join(data_dir, 'crash.log')
+        self._load_state()
+
+    def _load_state(self):
+        """加载状态"""
+        try:
+            if os.path.exists(self.state_file):
+                with open(self.state_file, 'r', encoding='utf-8') as f:
+                    self.state = json.load(f)
+            else:
+                self.state = {
+                    'current_date': datetime.now().date().isoformat(),
+                    'crash_count_today': 0,
+                    'last_recorded_date': None
+                }
+        except Exception:
+            self.state = {
+                'current_date': datetime.now().date().isoformat(),
+                'crash_count_today': 0,
+                'last_recorded_date': None
+            }
+
+    def _save_state(self):
+        """保存状态"""
+        try:
+            with open(self.state_file, 'w', encoding='utf-8') as f:
+                json.dump(self.state, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f'[FeishuDailyTracker] 保存状态失败: {e}')
+
+    def check_date_change(self):
+        """检查日期变化，返回 True 如果是新的一天"""
+        today = datetime.now().date().isoformat()
+        if self.state['current_date'] != today:
+            # 新的一天
+            self.state['last_recorded_date'] = self.state['current_date']
+            self.state['current_date'] = today
+            self.state['crash_count_today'] = 0
+            self._save_state()
+            return True
+        return False
+
+    def record_crash(self):
+        """记录崩溃"""
+        self.state['crash_count_today'] = self.state.get('crash_count_today', 0) + 1
+        self._save_state()
+
+    def get_crash_count_today(self):
+        """获取今天的崩溃次数"""
+        return self.state.get('crash_count_today', 0)
+
+    def sync_to_feishu(self, study_hours, computer_usage_hours):
+        """同步数据到飞书（暂存本地记录，用户手动配置飞书后可扩展）"""
+        # 记录到本地文件，便于调试
+        record = {
+            'date': datetime.now().date().isoformat(),
+            'study_hours': study_hours,
+            'computer_usage_hours': computer_usage_hours,
+            'crash_count': self.get_crash_count_today(),
+            'failure_rate': self._calculate_failure_rate(computer_usage_hours),
+            'recorded_at': datetime.now().isoformat()
+        }
+
+        # 保存到本地记录文件
+        records_file = os.path.join(self.data_dir, 'daily_records.json')
+        try:
+            records = []
+            if os.path.exists(records_file):
+                with open(records_file, 'r', encoding='utf-8') as f:
+                    records = json.load(f)
+
+            # 更新或添加今天的记录
+            updated = False
+            for i, r in enumerate(records):
+                if r.get('date') == record['date']:
+                    records[i] = record
+                    updated = True
+                    break
+            if not updated:
+                records.append(record)
+
+            with open(records_file, 'w', encoding='utf-8') as f:
+                json.dump(records, f, ensure_ascii=False, indent=2)
+
+            print(f'[FeishuDailyTracker] 数据已记录到本地: {record}')
+        except Exception as e:
+            print(f'[FeishuDailyTracker] 记录本地数据失败: {e}')
+
+        # TODO: 连接飞书多维表格 API 进行同步
+        # 需要用户配置飞书应用凭证，或者使用 lark-cli 工具
+        # 目前先保存到本地文件
+
+    def _calculate_failure_rate(self, computer_usage_hours):
+        """计算故障率（每小时崩溃次数）"""
+        if computer_usage_hours < 0.1:
+            return 0.0
+        return self.get_crash_count_today() / computer_usage_hours
 
 
 class SingleInstanceChecker:
@@ -139,13 +276,20 @@ class RestReminderWidget(QWidget):
         # 日期检测
         self.current_date = datetime.now().date()
 
-        # 学习时长（本地计数，每次倒计时完成 +1 小时）
+        # 学习时长（本地计数，每次倒计时完成算 1 小时）
         self.study_hours_today = 0
 
         # 电脑使用时长监控（每 3 小时提醒一次）
         self.computer_usage_hours_today = 0
         self.last_computer_usage_check = datetime.now()
         self.computer_usage_reminder_given_at = None  # 记录上次提醒的时间点（小时数）
+
+        # 天气刷新计数器（每 30 分钟）
+        self._weather_tick = 0
+
+        # 飞书每日数据追踪器
+        self.feishu_tracker = FeishuDailyTracker()
+        self._data_sync_tick = 0  # 数据同步计数器（每 5 分钟同步一次）
 
         self.silent_start = silent_start
         self.drag_position = None
@@ -159,7 +303,7 @@ class RestReminderWidget(QWidget):
     def init_ui(self):
         self.setWindowTitle('休息提醒')
         self.widget_width = 340
-        self.widget_height = 370
+        self.widget_height = 410  # 增加高度以容纳故障率显示
         self.setGeometry(100, 100, self.widget_width, self.widget_height)
 
         self.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.WindowMinimizeButtonHint)
@@ -350,6 +494,13 @@ class RestReminderWidget(QWidget):
         self.battery_bar.setMaximumHeight(20)
         main_layout.addWidget(self.battery_bar)
 
+        # 故障率显示
+        self.failure_rate_label = QLabel('🔧 故障率：0 次/小时')
+        self.failure_rate_label.setFont(QFont('Microsoft YaHei', 11))
+        self.failure_rate_label.setAlignment(Qt.AlignCenter)
+        self.failure_rate_label.setStyleSheet('color: #888888;')
+        main_layout.addWidget(self.failure_rate_label)
+
         self.setLayout(main_layout)
 
     def position_to_right(self):
@@ -516,12 +667,79 @@ class RestReminderWidget(QWidget):
         except Exception as e:
             print(f'[_reset_timer_to_idle 异常] {type(e).__name__}: {e}')
 
+    def _handle_idle(self):
+        """处理空闲状态 - 显示默认时间"""
+        self.time_label.setText(f'距离下次休息：{self.interval_minutes:02d}:00')
+        self.progress_bar.setValue(0)
+
+    def _handle_running(self, now):
+        """处理运行状态 - 倒计时"""
+        elapsed = (now - self.start_time).total_seconds()
+        total_seconds = self.interval_minutes * 60
+        remaining = max(total_seconds - elapsed, 0)
+
+        # 更新显示
+        mins = int(remaining // 60)
+        secs = int(remaining % 60)
+        self.time_label.setText(f'距离下次休息：{mins:02d}:{secs:02d}')
+
+        # 更新进度条
+        progress = int((elapsed / total_seconds) * 100)
+        self.progress_bar.setValue(min(progress, 100))
+
+        # 倒计时结束
+        if remaining <= 0:
+            self.open_random_video()
+            self.study_hours_today += 1
+            self.update_study_display()
+            self._reset_timer_to_idle()
+
+    def _handle_paused(self, now):
+        """处理暂停状态 - 显示暂停时间"""
+        mins = int(self.remaining_when_paused // 60)
+        secs = int(self.remaining_when_paused % 60)
+        self.time_label.setText(f'⏸ 已暂停：{mins:02d}:{secs:02d}')
+
+    def _update_countdown(self, now):
+        """更新22:00倒计时"""
+        target_time = now.replace(hour=22, minute=0, second=0, microsecond=0)
+        if now >= target_time:
+            # 如果已经过了22:00，显示明天22:00
+            target_time = target_time + timedelta(days=1)
+
+        diff = target_time - now
+        total_seconds = diff.total_seconds()
+        hours = int(total_seconds // 3600)
+        minutes = int((total_seconds % 3600) // 60)
+
+        self.countdown_label.setText(f'⏳ 距离 22:00 还有：{hours}小时{minutes}分钟')
+
+        # 进度条从0点(0%)到22:00(100%)
+        midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        if now.hour >= 22:
+            midnight = midnight + timedelta(days=1)
+        seconds_since_midnight = (now - midnight).total_seconds()
+        progress = int((seconds_since_midnight / (22 * 3600)) * 100)
+        self.countdown_bar.setValue(min(progress, 100))
+
+    def fetch_weather(self):
+        """获取天气信息（占位方法）"""
+        # 天气功能暂未实现，直接返回
+        pass
+
     def update_display(self):
         try:
             now = datetime.now()
 
-            # 检查日期变化
+            # --- 日期变化重置 ---
             if now.date() != self.current_date:
+                # 先同步昨天的数据到飞书
+                if self.current_date:
+                    self.feishu_tracker.sync_to_feishu(
+                        self.study_hours_today,
+                        self.computer_usage_hours_today
+                    )
+                # 重置数据
                 self.played_today = set()
                 self.study_hours_today = 0
                 self.computer_usage_hours_today = 0
@@ -529,77 +747,51 @@ class RestReminderWidget(QWidget):
                 self.current_date = now.date()
                 self.update_study_display()
                 self.update_computer_usage_display()
-                print(f'新的一天，数据已重置：{self.current_date}')
+                # 通知追踪器日期变化
+                self.feishu_tracker.check_date_change()
+                print(f'新的一天，数据已重置: {self.current_date}')
 
-            total_seconds = self.interval_minutes * 60
-
+            # --- 状态机路由 ---
             if self.timer_state == 'idle':
-                self.time_label.setText(f'距离下次休息：{self.interval_minutes:02d}:00')
-                self.progress_bar.setValue(0)
+                self._handle_idle()
             elif self.timer_state == 'running':
-                elapsed = (now - self.start_time).total_seconds()
-                remaining_seconds = total_seconds - elapsed
-
-                if remaining_seconds <= 0:
-                    # 倒计时完成，学习时长 +1 小时
-                    self.study_hours_today += 1
-                    self.update_study_display()
-
-                    self.open_random_video()
-                    # 自动重启计时器
-                    self.start_time = datetime.now()
-                    self.timer_state = 'running'
-                    self._sync_buttons()
-                    self.time_label.setText(f'距离下次休息：{self.interval_minutes:02d}:00')
-                    self.progress_bar.setValue(0)
-                    return
-
-                minutes = int(remaining_seconds // 60)
-                seconds = int(remaining_seconds % 60)
-                self.time_label.setText(f'距离下次休息：{minutes:02d}:{seconds:02d}')
-                progress = int((elapsed / total_seconds) * 100)
-                self.progress_bar.setValue(progress)
+                self._handle_running(now)
             elif self.timer_state == 'paused':
-                remaining = self.remaining_when_paused or 0
-                minutes = int(remaining // 60)
-                seconds = int(remaining % 60)
-                self.time_label.setText(f'⏸ 已暂停：{minutes:02d}:{seconds:02d}')
-                elapsed = total_seconds - remaining
-                progress = int((elapsed / total_seconds) * 100)
-                self.progress_bar.setValue(progress)
+                self._handle_paused(now)
 
-            # 22:00 倒计时（倒计时：100%→0%）
-            start_minutes = 4 * 60 + 30
-            end_minutes = 22 * 60
-            total_span = end_minutes - start_minutes
-            current_minutes = now.hour * 60 + now.minute + now.second / 60
-            if current_minutes >= end_minutes:
-                countdown_pct = 0
-                self.countdown_bar.setFormat('0')
-            elif current_minutes <= start_minutes:
-                countdown_pct = 100
-                remaining_h = int((end_minutes - current_minutes) / 60)
-                remaining_m = int(end_minutes - current_minutes) % 60
-                self.countdown_bar.setFormat(f'{remaining_h}H{remaining_m}min')
-            else:
-                countdown_pct = int(((end_minutes - current_minutes) / total_span) * 100)
-                remaining_h = int((end_minutes - current_minutes) / 60)
-                remaining_m = int(end_minutes - current_minutes) % 60
-                self.countdown_bar.setFormat(f'{remaining_h}H{remaining_m}min')
-            self.countdown_bar.setValue(countdown_pct)
+            # --- 22:00 倒计时（统一更新，避免重复请求） ---
+            self._update_countdown(now)
 
-            # 电池状态每 15 秒刷新
+            # --- 每 15 秒电池检测（合并窗口，避免 30/15 冲突） ---
             self._battery_tick += 1
             if self._battery_tick >= 15:
                 self._battery_tick = 0
                 self.update_battery_status()
 
-            # 电脑使用时长每秒累加
+            # --- 每 30 分钟天气刷新（与电池合并判断） ---
+            self._weather_tick += 1
+            if self._weather_tick >= 1800:
+                self._weather_tick = 0
+                self.fetch_weather()
+
+            # --- 每 5 分钟同步数据到飞书 ---
+            self._data_sync_tick += 1
+            if self._data_sync_tick >= 300:
+                self._data_sync_tick = 0
+                self.feishu_tracker.sync_to_feishu(
+                    self.study_hours_today,
+                    self.computer_usage_hours_today
+                )
+                # 更新故障率显示
+                self.update_failure_rate_display()
+
+            # --- 电脑使用时长累加与提醒 ---
             self.update_computer_usage(now)
 
         except Exception as e:
             print(f'[update_display 异常] {type(e).__name__}: {e}')
             traceback.print_exc()
+
 
     def update_study_display(self):
         """更新学习时长显示"""
@@ -640,7 +832,7 @@ class RestReminderWidget(QWidget):
     def show_computer_usage_reminder(self):
         """电脑使用 3 小时后提醒，打开护眼视频"""
         video_url = 'https://www.bilibili.com/video/BV14Y4y1N7PW/?spm_id_from=333.1387.favlist.content.click'
-        webbrowser.open(video_url)
+        open_url(video_url)
         self.tray_icon.showMessage(
             '💻 电脑使用时间过长',
             '已经连续使用 3 小时了，看看护眼视频休息一下眼睛吧~',
@@ -663,6 +855,15 @@ class RestReminderWidget(QWidget):
         remaining_m = int((remaining_min - remaining_h) * 60)
         self.computer_usage_bar.setFormat(f'{remaining_h}H{remaining_m:02d}min')
         self.computer_usage_bar.setValue(countdown_pct)
+
+    def update_failure_rate_display(self):
+        """更新故障率显示"""
+        try:
+            crash_count = self.feishu_tracker.get_crash_count_today()
+            failure_rate = self.feishu_tracker._calculate_failure_rate(self.computer_usage_hours_today)
+            self.failure_rate_label.setText(f'🔧 故障率：{failure_rate:.2f} 次/小时 (崩溃 {crash_count} 次)')
+        except Exception as e:
+            print(f'[update_failure_rate_display 异常] {e}')
 
     def update_battery_status(self):
         try:
@@ -830,7 +1031,7 @@ class RestReminderWidget(QWidget):
                     video_url = random.choice(remaining)
                     self.played_today.add(video_url)
                     print(f'打开视频：{video_url} (今日已播 {len(self.played_today)}/{len(self.video_list)})')
-                    webbrowser.open(video_url)
+                    open_url(video_url)
                     self.tray_icon.showMessage(
                         '休息时间到！',
                         f'已为您打开休息视频（今日第{len(self.played_today)}个），记得放松一下哦~',
@@ -839,7 +1040,7 @@ class RestReminderWidget(QWidget):
                     )
                 else:
                     fallback_url = 'https://space.bilibili.com/529362421/favlist?fid=3648313921&ftype=create'
-                    webbrowser.open(fallback_url)
+                    open_url(fallback_url)
                     self.tray_icon.showMessage('休息时间到！', '已为您打开收藏夹页面~', QSystemTrayIcon.Information, 3000)
             except Exception as e:
                 print(f'[open_random_video 回调异常] {type(e).__name__}: {e}')
@@ -898,6 +1099,9 @@ def main():
             QMessageBox.warning(None, '已在运行', '程序已在运行中！\n请检查系统托盘图标。')
         sys.exit(0)
 
+    # 先创建一个临时的追踪器实例，用于记录早期崩溃
+    early_tracker = FeishuDailyTracker()
+
     def excepthook(exc_type, exc_value, exc_tb):
         import traceback
         log_dir = os.path.dirname(os.path.abspath(__file__))
@@ -905,6 +1109,11 @@ def main():
             from datetime import datetime
             f.write(f'[{datetime.now().isoformat()}] 未捕获异常：{exc_type.__name__}: {exc_value}\n')
             traceback.print_exception(exc_type, exc_value, exc_tb, file=f)
+        # 记录崩溃到飞书追踪器
+        try:
+            early_tracker.record_crash()
+        except:
+            pass
         os._exit(1)
     sys.excepthook = excepthook
 
@@ -922,6 +1131,22 @@ def main():
         widget.hide()
     else:
         widget.show()
+
+    # 更新异常处理器，使用 widget 的追踪器
+    def widget_excepthook(exc_type, exc_value, exc_tb):
+        import traceback
+        log_dir = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(log_dir, 'crash.log'), 'a', encoding='utf-8') as f:
+            from datetime import datetime
+            f.write(f'[{datetime.now().isoformat()}] 未捕获异常：{exc_type.__name__}: {exc_value}\n')
+            traceback.print_exception(exc_type, exc_value, exc_tb, file=f)
+        # 记录崩溃到飞书追踪器
+        try:
+            widget.feishu_tracker.record_crash()
+        except:
+            pass
+        os._exit(1)
+    sys.excepthook = widget_excepthook
 
     try:
         ico_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cute_icon.ico')
