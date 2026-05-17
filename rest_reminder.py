@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel,
                              QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox)
 from PyQt5.QtCore import QTimer, Qt
-from PyQt5.QtGui import QIcon, QFont
+from PyQt5.QtGui import QIcon, QFont, QCursor
 import psutil
 import os
 import tempfile
@@ -297,6 +297,7 @@ class RestReminderWidget(QWidget):
         self.init_ui()
         self.position_to_right()
         self.init_tray()
+        self.setup_edge_watcher()
         self.set_autostart(True)
         self.setup_timer()
 
@@ -379,8 +380,8 @@ class RestReminderWidget(QWidget):
         self.close_btn.setObjectName('closeBtn')
         self.close_btn.setFixedSize(30, 30)
         self.close_btn.setCursor(Qt.PointingHandCursor)
-        self.close_btn.setToolTip('最小化到任务栏')
-        self.close_btn.clicked.connect(self.showMinimized)
+        self.close_btn.setToolTip('隐藏到桌面右侧边缘')
+        self.close_btn.clicked.connect(self.hide_to_edge)
         top_layout.addWidget(self.close_btn)
 
         main_layout.addLayout(top_layout)
@@ -611,6 +612,73 @@ class RestReminderWidget(QWidget):
                 self.timer.start(1000)
         except Exception as e:
             print(f'[toggle_visibility 异常] {type(e).__name__}: {e}')
+
+    def hide_to_edge(self):
+        """隐藏窗口到桌面右侧边缘"""
+        try:
+            screen = QApplication.primaryScreen()
+            if screen:
+                screen_geometry = screen.geometry()
+                # 隐藏到右侧边缘，只露出一个小边（约5像素）
+                edge_width = 5
+                x = screen_geometry.width() - edge_width
+                y = (screen_geometry.height() - self.height()) // 2
+                self.move(x, y)
+                self.hide()
+                self.timer.stop()
+                self._is_hidden_to_edge = True
+                print(f"已隐藏到右侧边缘，位置：({x}, {y})")
+        except Exception as e:
+            print(f'[hide_to_edge 异常] {type(e).__name__}: {e}')
+
+    def show_from_edge(self):
+        """从右侧边缘显示窗口"""
+        try:
+            screen = QApplication.primaryScreen()
+            if screen:
+                screen_geometry = screen.geometry()
+                # 恢复到右侧位置（保留之前的位置记忆或居中）
+                if hasattr(self, '_last_x') and hasattr(self, '_last_y'):
+                    x = self._last_x
+                    y = self._last_y
+                else:
+                    x = screen_geometry.width() - self.width()
+                    y = (screen_geometry.height() - self.height()) // 2
+                self.move(x, y)
+                self.show()
+                self.activateWindow()
+                self.raise_()
+                self.timer.start(1000)
+                self._is_hidden_to_edge = False
+                print(f"已从边缘恢复，位置：({x}, {y})")
+        except Exception as e:
+            print(f'[show_from_edge 异常] {type(e).__name__}: {e}')
+
+    def setup_edge_watcher(self):
+        """设置边缘检测鼠标监视器"""
+        self._is_hidden_to_edge = False
+        self._edge_watch_timer = QTimer()
+        self._edge_watch_timer.timeout.connect(self._check_mouse_at_edge)
+        self._edge_watch_timer.start(100)  # 每100ms检测一次
+
+    def _check_mouse_at_edge(self):
+        """检测鼠标是否在右侧边缘触发区域"""
+        if not self._is_hidden_to_edge:
+            return
+        try:
+            # 获取鼠标位置
+            cursor_pos = QCursor.pos()
+            screen = QApplication.primaryScreen()
+            if not screen:
+                return
+            screen_geometry = screen.geometry()
+            trigger_zone = 50  # 触发区域宽度（像素）
+
+            # 检查鼠标是否在右侧边缘触发区域
+            if cursor_pos.x() >= screen_geometry.width() - trigger_zone:
+                self.show_from_edge()
+        except Exception as e:
+            print(f'[_check_mouse_at_edge 异常] {type(e).__name__}: {e}')
 
     def setup_timer(self):
         self.timer = QTimer()
@@ -1072,11 +1140,7 @@ class RestReminderWidget(QWidget):
     def closeEvent(self, event):
         try:
             event.ignore()
-            self.hide()
-            self.timer.stop()
-            if not self.silent_start and not hasattr(self, '_hide_tip_shown'):
-                self.tray_icon.showMessage('休息提醒', '程序已隐藏到系统托盘\n双击托盘图标可重新显示', QSystemTrayIcon.Information, 3000)
-                self._hide_tip_shown = True
+            self.hide_to_edge()
         except Exception as e:
             print(f'[closeEvent 异常] {type(e).__name__}: {e}')
 
