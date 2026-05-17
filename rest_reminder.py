@@ -714,13 +714,13 @@ class RestReminderWidget(QWidget):
 
         self.countdown_label.setText(f'⏳ 距离 22:00 还有：{hours}小时{minutes}分钟')
 
-        # 进度条从0点(0%)到22:00(100%)
+        # 进度条从0点(100%)到22:00(0%)倒计时模式
         midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
         if now.hour >= 22:
             midnight = midnight + timedelta(days=1)
         seconds_since_midnight = (now - midnight).total_seconds()
-        progress = int((seconds_since_midnight / (22 * 3600)) * 100)
-        self.countdown_bar.setValue(min(progress, 100))
+        progress = 100 - int((seconds_since_midnight / (22 * 3600)) * 100)
+        self.countdown_bar.setValue(max(progress, 0))
 
     def fetch_weather(self):
         """获取天气信息（占位方法）"""
