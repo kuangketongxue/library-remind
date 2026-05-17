@@ -61,59 +61,32 @@ class AudioDeviceDetector:
         self._on_device_failed = callback
 
     def check_devices(self):
-        """检测音频设备状态"""
+        """检测音频设备状态（简化版）"""
         try:
             import subprocess
             result = subprocess.run(
                 ['powershell', '-Command',
-                 'Get-WmiObject -Class Win32_SoundDevice | Select-Object Name, Status | ConvertTo-Json'],
+                 'Get-WmiObject -Class Win32_SoundDevice | Select-Object Name, Status'],
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=3
             )
 
             if result.returncode != 0:
                 return None
 
-            import json
             output = result.stdout.strip()
 
-            if not output or output == '':
-                return None
-
-            try:
-                devices = json.loads(output)
-                if isinstance(devices, dict):
-                    devices = [devices]
-
-                for device in devices:
-                    name = device.get('Name', 'Unknown')
-                    status = device.get('Status', 'Unknown')
-
-                    prev_status = self._known_devices.get(name)
-
-                    if name not in self._known_devices:
-                        self._known_devices[name] = status
-                        print(f'[AudioDeviceDetector] 发现设备: {name}, 状态: {status}')
-
-                    if status != 'OK' and name not in self._device_failure_reported:
-                        self._device_failure_reported.add(name)
-                        print(f'[AudioDeviceDetector] 设备故障: {name}, 状态: {status}')
-                        if self._on_device_failed:
-                            self._on_device_failed(name)
-                        return False
-
-                    self._known_devices[name] = status
-
+            # 简单检查：如果输出中没有 "OK" 或者为空，可能有问题
+            if output and 'OK' in output:
+                # 打印发现的设备
+                print(f'[AudioDeviceDetector] 音频设备状态正常')
                 return True
 
-            except json.JSONDecodeError:
-                return None
-
-        except subprocess.TimeoutExpired:
             return None
+
         except Exception as e:
-            print(f'[AudioDeviceDetector] 检测失败: {e}')
+            print(f'[AudioDeviceDetector] 检测跳过: {e}')
             return None
 
     def tick(self):
@@ -389,63 +362,65 @@ class RestReminderWidget(QWidget):
 
         self.setStyleSheet("""
             QWidget {
-                background-color: rgba(40, 40, 40, 230);
-                border-radius: 10px;
-                color: white;
+                background-color: #141413;
+                border-radius: 16px;
+                color: #faf9f5;
             }
             QLabel {
-                color: white;
+                color: #faf9f5;
                 font-size: 15px;
             }
             QPushButton#closeBtn {
                 background-color: transparent;
-                color: #CCCCCC;
+                color: #b0aea5;
                 border: none;
-                font-size: 20px;
+                font-size: 22px;
                 font-weight: bold;
                 padding: 0px;
                 margin: 0px;
             }
             QPushButton#closeBtn:hover {
-                color: #FFFFFF;
-                background-color: rgba(255, 255, 255, 30);
+                color: #faf9f5;
+                background-color: rgba(255, 255, 255, 15);
             }
             QProgressBar {
-                border: 2px solid #555;
-                border-radius: 5px;
+                border: 2px solid #3a3a38;
+                border-radius: 8px;
                 text-align: center;
-                background-color: #333;
-                font-size: 14px;
+                background-color: #2a2a28;
+                font-size: 13px;
+                font-weight: 500;
             }
             QProgressBar::chunk {
-                background-color: #00AFF0;
-                border-radius: 3px;
+                background-color: #d97757;
+                border-radius: 6px;
             }
             #battery_bar::chunk {
-                background-color: #4CAF50;
+                background-color: #788c57;
             }
             #battery_bar_low::chunk {
-                background-color: #FF5252;
+                background-color: #d95757;
             }
             #countdown_bar::chunk {
-                background-color: #FF9800;
+                background-color: #6a9bcc;
             }
             #computer_usage_bar::chunk {
-                background-color: #9C27B0;
+                background-color: #9b6acc;
             }
         """)
 
         main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(10, 5, 10, 10)
-        main_layout.setSpacing(5)
+        main_layout.setContentsMargins(16, 12, 16, 16)
+        main_layout.setSpacing(6)
 
         # 顶部：标题 + 最小化按钮
         top_layout = QHBoxLayout()
         top_layout.setContentsMargins(0, 0, 0, 0)
 
         self.title_label = QLabel('⏰ 休息提醒')
-        self.title_label.setFont(QFont('Microsoft YaHei', 13, QFont.Bold))
+        self.title_label.setFont(QFont('Poppins, Microsoft YaHei, Arial', 14, QFont.Bold))
         self.title_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.title_label.setStyleSheet('color: #faf9f5;')
         top_layout.addWidget(self.title_label)
 
         top_layout.addStretch()
@@ -462,8 +437,9 @@ class RestReminderWidget(QWidget):
 
         # 时间显示
         self.time_label = QLabel('距离下次休息：60:00')
-        self.time_label.setFont(QFont('Microsoft YaHei', 15))
+        self.time_label.setFont(QFont('Poppins, Microsoft YaHei, Arial', 16, QFont.Bold))
         self.time_label.setAlignment(Qt.AlignCenter)
+        self.time_label.setStyleSheet('color: #d97757; padding: 5px 0;')
         main_layout.addWidget(self.time_label)
 
         # 按钮：开始/暂停
@@ -471,25 +447,46 @@ class RestReminderWidget(QWidget):
         btn_layout.setSpacing(10)
 
         self.start_btn = QPushButton('▶ 开始')
-        self.start_btn.setFont(QFont('Microsoft YaHei', 11, QFont.Bold))
-        self.start_btn.setFixedHeight(32)
+        self.start_btn.setFont(QFont('Poppins, Microsoft YaHei, Arial', 11, QFont.Bold))
+        self.start_btn.setFixedHeight(36)
         self.start_btn.setCursor(Qt.PointingHandCursor)
         self.start_btn.setStyleSheet("""
-            QPushButton { background-color: #4CAF50; color: white; border: none; border-radius: 6px; padding: 0 18px; }
-            QPushButton:hover { background-color: #45A049; }
+            QPushButton { 
+                background-color: #788c57; 
+                color: #faf9f5; 
+                border: none; 
+                border-radius: 8px; 
+                padding: 0 20px;
+                font-weight: 600;
+            }
+            QPushButton:hover { 
+                background-color: #8a9d66; 
+            }
         """)
         self.start_btn.clicked.connect(self.on_start_clicked)
         btn_layout.addWidget(self.start_btn)
 
         self.pause_btn = QPushButton('⏸ 暂停')
-        self.pause_btn.setFont(QFont('Microsoft YaHei', 11, QFont.Bold))
-        self.pause_btn.setFixedHeight(32)
+        self.pause_btn.setFont(QFont('Poppins, Microsoft YaHei, Arial', 11, QFont.Bold))
+        self.pause_btn.setFixedHeight(36)
         self.pause_btn.setCursor(Qt.PointingHandCursor)
         self.pause_btn.setEnabled(False)
         self.pause_btn.setStyleSheet("""
-            QPushButton { background-color: #FF9800; color: white; border: none; border-radius: 6px; padding: 0 18px; }
-            QPushButton:hover { background-color: #E68A00; }
-            QPushButton:disabled { background-color: #666; color: #999; }
+            QPushButton { 
+                background-color: #d97757; 
+                color: #faf9f5; 
+                border: none; 
+                border-radius: 8px; 
+                padding: 0 20px;
+                font-weight: 600;
+            }
+            QPushButton:hover { 
+                background-color: #e68a66; 
+            }
+            QPushButton:disabled { 
+                background-color: #3a3a38; 
+                color: #b0aea5; 
+            }
         """)
         self.pause_btn.clicked.connect(self.on_pause_clicked)
         btn_layout.addWidget(self.pause_btn)
@@ -506,8 +503,9 @@ class RestReminderWidget(QWidget):
 
         # 22:00 倒计时
         self.countdown_label = QLabel('⏳ 距离 22:00:')
-        self.countdown_label.setFont(QFont('Microsoft YaHei', 12))
+        self.countdown_label.setFont(QFont('Poppins, Microsoft YaHei, Arial', 12))
         self.countdown_label.setAlignment(Qt.AlignCenter)
+        self.countdown_label.setStyleSheet('color: #6a9bcc; font-weight: 600; padding-top: 8px;')
         main_layout.addWidget(self.countdown_label)
 
         self.countdown_bar = QProgressBar()
@@ -516,14 +514,14 @@ class RestReminderWidget(QWidget):
         self.countdown_bar.setValue(100)
         self.countdown_bar.setTextVisible(True)
         self.countdown_bar.setFormat('22:00')
-        self.countdown_bar.setMaximumHeight(20)
+        self.countdown_bar.setMaximumHeight(24)
         main_layout.addWidget(self.countdown_bar)
 
         # 学习时长进度条（14 小时=100%）
         self.study_progress_label = QLabel('📚 学习时长：0 小时')
-        self.study_progress_label.setFont(QFont('Microsoft YaHei', 12))
+        self.study_progress_label.setFont(QFont('Poppins, Microsoft YaHei, Arial', 12))
         self.study_progress_label.setAlignment(Qt.AlignCenter)
-        self.study_progress_label.setStyleSheet('color: #FFD700; font-weight: bold;')
+        self.study_progress_label.setStyleSheet('color: #d97757; font-weight: 600; padding-top: 8px;')
         main_layout.addWidget(self.study_progress_label)
 
         self.study_progress_bar = QProgressBar()
@@ -532,18 +530,18 @@ class RestReminderWidget(QWidget):
         self.study_progress_bar.setValue(0)
         self.study_progress_bar.setTextVisible(True)
         self.study_progress_bar.setFormat('%v / 14 小时')
-        self.study_progress_bar.setMaximumHeight(22)
+        self.study_progress_bar.setMaximumHeight(24)
         self.study_progress_bar.setStyleSheet("""
-            QProgressBar { border: 2px solid #555; border-radius: 5px; text-align: center; background-color: #333; font-size: 12px; }
-            QProgressBar::chunk { background-color: #FFD700; border-radius: 3px; }
+            QProgressBar { border: 2px solid #3a3a38; border-radius: 8px; text-align: center; background-color: #2a2a28; font-size: 13px; font-weight: 500; }
+            QProgressBar::chunk { background-color: #d97757; border-radius: 6px; }
         """)
         main_layout.addWidget(self.study_progress_bar)
 
         # 电脑使用时长
         self.computer_usage_label = QLabel('💻 今天电脑总使用：0H00min')
-        self.computer_usage_label.setFont(QFont('Microsoft YaHei', 12))
+        self.computer_usage_label.setFont(QFont('Poppins, Microsoft YaHei, Arial', 12))
         self.computer_usage_label.setAlignment(Qt.AlignCenter)
-        self.computer_usage_label.setStyleSheet('color: #9C27B0; font-weight: bold;')
+        self.computer_usage_label.setStyleSheet('color: #9b6acc; font-weight: 600; padding-top: 8px;')
         main_layout.addWidget(self.computer_usage_label)
 
         self.computer_usage_bar = QProgressBar()
@@ -552,12 +550,14 @@ class RestReminderWidget(QWidget):
         self.computer_usage_bar.setValue(100)
         self.computer_usage_bar.setTextVisible(True)
         self.computer_usage_bar.setFormat('3H00min')
-        self.computer_usage_bar.setMaximumHeight(20)
+        self.computer_usage_bar.setMaximumHeight(24)
         main_layout.addWidget(self.computer_usage_bar)
 
         # 电池状态
         self.battery_label = QLabel('🔋 检测中...')
-        self.battery_label.setFont(QFont('Microsoft YaHei', 12))
+        self.battery_label.setFont(QFont('Poppins, Microsoft YaHei, Arial', 12))
+        self.battery_label.setAlignment(Qt.AlignCenter)
+        self.battery_label.setStyleSheet('color: #788c57; font-weight: 600; padding-top: 8px;')
         main_layout.addWidget(self.battery_label)
 
         self.battery_bar = QProgressBar()
@@ -566,14 +566,14 @@ class RestReminderWidget(QWidget):
         self.battery_bar.setValue(0)
         self.battery_bar.setTextVisible(True)
         self.battery_bar.setFormat('%p%')
-        self.battery_bar.setMaximumHeight(20)
+        self.battery_bar.setMaximumHeight(24)
         main_layout.addWidget(self.battery_bar)
 
         # 故障率显示
         self.failure_rate_label = QLabel('🔊 设备故障：0 次')
-        self.failure_rate_label.setFont(QFont('Microsoft YaHei', 11))
+        self.failure_rate_label.setFont(QFont('Poppins, Microsoft YaHei, Arial', 11))
         self.failure_rate_label.setAlignment(Qt.AlignCenter)
-        self.failure_rate_label.setStyleSheet('color: #888888;')
+        self.failure_rate_label.setStyleSheet('color: #b0aea5; font-weight: 500; padding-top: 5px;')
         main_layout.addWidget(self.failure_rate_label)
 
         self.setLayout(main_layout)
@@ -690,6 +690,10 @@ class RestReminderWidget(QWidget):
     def hide_to_edge(self):
         """隐藏窗口到桌面右侧边缘"""
         try:
+            # 保存当前位置
+            self._last_x = self.x()
+            self._last_y = self.y()
+            
             screen = QApplication.primaryScreen()
             if screen:
                 screen_geometry = screen.geometry()
@@ -698,10 +702,12 @@ class RestReminderWidget(QWidget):
                 x = screen_geometry.width() - edge_width
                 y = (screen_geometry.height() - self.height()) // 2
                 self.move(x, y)
-                self.hide()
                 self.timer.stop()
                 self._is_hidden_to_edge = True
                 print(f"已隐藏到右侧边缘，位置：({x}, {y})")
+                # 确保窗口在最上层
+                self.activateWindow()
+                self.raise_()
         except Exception as e:
             print(f'[hide_to_edge 异常] {type(e).__name__}: {e}')
 
@@ -710,12 +716,12 @@ class RestReminderWidget(QWidget):
         try:
             screen = QApplication.primaryScreen()
             if screen:
-                screen_geometry = screen.geometry()
-                # 恢复到右侧位置（保留之前的位置记忆或居中）
+                # 恢复到之前的位置
                 if hasattr(self, '_last_x') and hasattr(self, '_last_y'):
                     x = self._last_x
                     y = self._last_y
                 else:
+                    screen_geometry = screen.geometry()
                     x = screen_geometry.width() - self.width()
                     y = (screen_geometry.height() - self.height()) // 2
                 self.move(x, y)
@@ -1039,10 +1045,10 @@ class RestReminderWidget(QWidget):
 
             if percent <= 20:
                 self.battery_bar.setObjectName('battery_bar_low')
-                self.battery_bar.setStyleSheet("QProgressBar::chunk { background-color: #FF5252; }")
+                self.battery_bar.setStyleSheet("QProgressBar::chunk { background-color: #d95757; }")
             else:
                 self.battery_bar.setObjectName('battery_bar')
-                self.battery_bar.setStyleSheet("QProgressBar::chunk { background-color: #4CAF50; }")
+                self.battery_bar.setStyleSheet("QProgressBar::chunk { background-color: #788c57; }")
 
             if plugged:
                 if percent >= 100:
