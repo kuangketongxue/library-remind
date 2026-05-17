@@ -54,6 +54,7 @@ class FloatingBall(QWidget):
         self.main_window = main_window
         self.dragging = False
         self.drag_position = None
+        self.click_time = None
         
         self.setWindowFlags(
             Qt.WindowStaysOnTopHint | 
@@ -90,27 +91,24 @@ class FloatingBall(QWidget):
         if event.button() == Qt.LeftButton:
             self.dragging = True
             self.drag_position = event.globalPos() - self.frameGeometry().topLeft()
+            self.click_time = datetime.now()
 
     def mouseMoveEvent(self, event):
         if self.dragging and self.drag_position is not None:
             self.move(event.globalPos() - self.drag_position)
 
     def mouseReleaseEvent(self, event):
-        self.dragging = False
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            # 先处理拖拽
-            self.dragging = True
-            self.drag_position = event.globalPos() - self.frameGeometry().topLeft()
-            # 然后切换主窗口显示
-            if self.main_window.isVisible():
-                self.main_window.hide()
-            else:
-                self.main_window.show()
-                self.main_window.activateWindow()
-                self.main_window.raise_()
-        super().mousePressEvent(event)
+        if event.button() == Qt.LeftButton and self.dragging:
+            self.dragging = False
+            # 如果拖动距离很小，认为是点击
+            delta = (datetime.now() - self.click_time).total_seconds()
+            if delta < 0.3:
+                if self.main_window.isVisible():
+                    self.main_window.hide()
+                else:
+                    self.main_window.show()
+                    self.main_window.activateWindow()
+                    self.main_window.raise_()
 
 
 class AudioDeviceDetector:
@@ -413,8 +411,13 @@ class RestReminderWidget(QWidget):
         self.setup_timer()
         # 创建小浮球
         self.floating_ball = FloatingBall(self)
-        # 启动时隐藏主窗口，只显示浮球
-        self.hide()
+        # 启动时先显示主窗口看看效果
+        self.show()
+        # 移到屏幕右侧
+        screen = QApplication.primaryScreen()
+        if screen:
+            screen_geom = screen.geometry()
+            self.move(screen_geom.width() - 400, screen_geom.height() // 2 - 200)
 
     def init_ui(self):
         self.setWindowTitle('休息提醒')
