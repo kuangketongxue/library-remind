@@ -167,6 +167,9 @@ FEISHU_WIKI_TOKEN = 'NO0IwcUKFis5L2kOyMDcHOd1nId'  # 飞书知识库 token
 FEISHU_BASE_TOKEN = 'DcJzbLadCaGbGws2ZekchGHhnVe'  # 飞书多维表格 token
 FEISHU_TABLE_ID = 'tbl9DT9qniE63BH7'  # 【新】每日追踪 表的 ID
 FEISHU_TABLE_NAME = '每日追踪'
+# lark-cli 路径配置
+LARK_CLI_NODE_PATH = r"C:\Program Files\nodejs\node.exe"
+LARK_CLI_PATH = r"C:\Users\binlo\AppData\Roaming\npm\node_modules\@larksuite\cli\scripts\run.js"
 
 
 class FeishuDailyTracker:
@@ -189,13 +192,15 @@ class FeishuDailyTracker:
                 self.state = {
                     'current_date': datetime.now().date().isoformat(),
                     'device_failure_count_today': 0,
-                    'last_recorded_date': None
+                    'last_recorded_date': None,
+                    'last_synced_to_feishu_date': None  # 新增：记录最后同步到飞书的日期
                 }
         except Exception:
             self.state = {
                 'current_date': datetime.now().date().isoformat(),
                 'device_failure_count_today': 0,
-                'last_recorded_date': None
+                'last_recorded_date': None,
+                'last_synced_to_feishu_date': None
             }
 
     def _save_state(self):
@@ -227,17 +232,100 @@ class FeishuDailyTracker:
         """获取今天设备故障次数"""
         return self.state.get('device_failure_count_today', 0)
 
-    def sync_to_feishu(self, study_hours, computer_usage_hours):
-        """同步数据到飞书（暂存本地记录，用户手动配置飞书后可扩展）"""
+    def _sync_to_feishu_via_cli(self, record):
+        """通过 lark-cli 同步数据到飞书多维表格"""
+        try:
+            if not os.path.exists(LARK_CLI_NODE_PATH) or not os.path.exists(LARK_CLI_PATH):
+                print(f'[FeishuDailyTracker] lark-cli 未找到，跳过飞书同步')
+                return False
+
+            # 先查询是否已存在该日期的记录
+            date_str = record['date']
+            query_cmd = [
+                LARK_CLI_NODE_PATH, LARK_CLI_PATH,
+                "base", "+record-list",
+                "--base-token", FEISHU_BASE_TOKEN,
+                "--table-id", FEISHU_TABLE_ID,
+                "--filter", f'日期 = "{date_str}"',
+                "--as", "user"
+            ]
+
+            import subprocess
+            result = subprocess.run(query_cmd, capture_output=True, text=True, encoding='utf-8', timeout=30)
+            
+            existing_record_id = None
+            if result.returncode == 0 and result.stdout:
+                try:
+                    output_json = json.loads(result.stdout)
+                    if output_json.get('data', {}).get('items'):
+                        existing_record_id = output_json['data']['items'][0].get('record_id')
+                except:
+                    pass
+
+            # 准备记录数据
+            fields = {
+                "日期": date_str,
+                "学习时长": round(record['study_hours'], 1),
+                "电脑使用时长": round(record['computer_usage_hours'], 1),
+                "电脑故障率": round(record['failure_rate'], 2),
+                "崩溃次数": record.get('crash_count', 0),
+                "设备故障次数": record.get('device_failure_count', 0)
+            }
+
+            if existing_record_id:
+                # 更新现有记录
+                cmd = [
+                    LARK_CLI_NODE_PATH, LARK_CLI_PATH,
+                    "base", "+record-update",
+                    "--base-token", FEISHU_BASE_TOKEN,
+                    "--table-id", FEISHU_TABLE_ID,
+                    "--record-id", existing_record_id,
+                    "--json", json.dumps({"fields": fields}, ensure_ascii=False),
+                    "--as", "user"
+                ]
+                action = "更新"
+            else:
+                # 创建新记录
+                cmd = [
+                    LARK_CLI_NODE_PATH, LARK_CLI_PATH,
+                    "base", "+record-create",
+                    "--base-token", FEISHU_BASE_TOKEN,
+                    "--table-id", FEISHU_TABLE_ID,
+                    "--json", json.dumps({"fields": fields}, ensure_ascii=False),
+                    "--as", "user"
+                ]
+                action = "创建"
+
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', timeout=30)
+            
+            if result.returncode == 0:
+                print(f'[FeishuDailyTracker] 飞书{action}成功: {date_str}')
+                self.state['last_synced_to_feishu_date'] = date_str
+                self._save_state()
+                return True
+            else:
+                print(f'[FeishuDailyTracker] 飞书{action}失败: {result.stderr}')
+                return False
+
+        except Exception as e:
+            print(f'[FeishuDailyTracker] 飞书同步异常: {e}')
+            import traceback
+            traceback.print_exc()
+            return False
+
+    def sync_to_feishu(self, study_hours, computer_usage_hours, force_sync=False):
+        """同步数据到飞书"""
         record = {
             'date': datetime.now().date().isoformat(),
             'study_hours': study_hours,
             'computer_usage_hours': computer_usage_hours,
             'device_failure_count': self.get_device_failure_count_today(),
+            'crash_count': self.state.get('crash_count_today', 0),
             'failure_rate': self._calculate_failure_rate(computer_usage_hours),
             'recorded_at': datetime.now().isoformat()
         }
 
+        # 先保存到本地
         records_file = os.path.join(self.data_dir, 'daily_records.json')
         try:
             records = []
@@ -261,11 +349,19 @@ class FeishuDailyTracker:
         except Exception as e:
             print(f'[FeishuDailyTracker] 记录本地数据失败: {e}')
 
+        # 同步到飞书
+        self._sync_to_feishu_via_cli(record)
+
     def _calculate_failure_rate(self, computer_usage_hours):
         """计算故障率（每小时设备故障次数）"""
         if computer_usage_hours < 0.1:
             return 0.0
         return self.get_device_failure_count_today() / computer_usage_hours
+
+    def record_crash(self):
+        """记录崩溃（保持向后兼容）"""
+        self.state['crash_count_today'] = self.state.get('crash_count_today', 0) + 1
+        self._save_state()
 
 
 class SingleInstanceChecker:
@@ -397,6 +493,7 @@ class RestReminderWidget(QWidget):
         # 飞书每日数据追踪器
         self.feishu_tracker = FeishuDailyTracker()
         self._data_sync_tick = 0
+        self._last_sync_at_22 = False  # 记录今天是否已经在22点同步过
 
         # 音频设备检测器
         self.audio_detector = AudioDeviceDetector()
@@ -985,11 +1082,27 @@ class RestReminderWidget(QWidget):
                 self.computer_usage_hours_today = 0
                 self.computer_usage_reminder_given_at = None
                 self.current_date = now.date()
+                self._last_sync_at_22 = False  # 新的一天，重置同步标记
                 self.update_study_display()
                 self.update_computer_usage_display()
                 # 通知追踪器日期变化
                 self.feishu_tracker.check_date_change()
                 print(f'新的一天，数据已重置: {self.current_date}')
+
+            # --- 22 点自动同步数据到飞书 ---
+            if now.hour == 22 and not self._last_sync_at_22:
+                print(f'[22点自动同步] 正在同步数据到飞书...')
+                self.feishu_tracker.sync_to_feishu(
+                    self.study_hours_today,
+                    self.computer_usage_hours_today
+                )
+                self._last_sync_at_22 = True
+                self.tray_icon.showMessage(
+                    '📊 数据已同步',
+                    '今日数据已自动同步到飞书多维表格',
+                    QSystemTrayIcon.Information,
+                    3000
+                )
 
             # --- 状态机路由 ---
             if self.timer_state == 'idle':
