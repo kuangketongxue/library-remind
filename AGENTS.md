@@ -1,7 +1,7 @@
 # 休息提醒 — AGENTS.md
 
 ## 项目概述
-PyQt5 桌面挂件：60 分钟计时（自动循环）+ 暂停/继续 + 每小时随机打开 B 站收藏夹视频 + 每 3 小时打开护眼视频 + 电池监控 +22:00 倒计时。侧边栏悬浮窗：点击×隐藏，鼠标滑到右侧边缘呼出。看门狗守护：watchdog.py 监控主进程，崩溃自动重启，开机自启动指向看门狗。
+PyQt5 桌面挂件：60 分钟计时（自动循环）+ 暂停/继续 + 每小时随机打开 B 站收藏夹视频 + 每 3 小时打开护眼视频 + 电池监控 +22:00 倒计时。绿色小浮球：点击显示/隐藏主窗口，可拖动。看门狗守护：watchdog.py 监控主进程，崩溃自动重启，开机自启动指向看门狗。
 
 ## 技术栈
 Python 3.7+ / PyQt5 / requests / psutil
@@ -27,8 +27,10 @@ requirements.txt        — 依赖：PyQt5, requests, psutil
 | 倒计时范围 | `update_display()` 内 `start_minutes/end_minutes` | 4:30~22:00（倒计时模式） |
 | 学习目标时长 | `study_progress_bar.setMaximum` | 14（14 小时） |
 | 电池轮询间隔 | `update_display()` 内 `_battery_tick` 计数器 | 每 15 秒 |
+| 飞书同步（实时） | `FeishuSync` (L:115) | 学习每 +1h → 飞书 / 电脑每 +3h → 飞书 |
+| 飞书 base token | 顶部 `FEISHU_BASE_TOKEN` | DcJzbLadCaGbGws2ZekchGHhnVe |
+| 飞书表 ID | 顶部 `FEISHU_TABLE_ID` | tbl9DT9qniE63BH7 |
 | 计时器状态机 | `self.timer_state` | idle → running → paused → auto-restart |
-| 侧边栏触发区 | `setup_mouse_watcher()` 内 `trigger_zone` | 右侧 50 像素 |
 
 ## 运行和验证
 ```bash
@@ -56,6 +58,4 @@ taskkill /F /IM pythonw.exe
 
 ## 文档
 - README.md — 用户文档（功能、安装、FAQ）
-- 使用说明_完整版.txt — 详细操作指南
-- 修复说明.md — 历史修复记录
-- 后台运行说明.md — 启动方式详解
+- 版本记录.md — 更新日志
