@@ -4,7 +4,6 @@
 - 监控电池充电状态
 - 监控电脑使用时长（每 3 小时提醒）
 - 学习时长本地计数（每次倒计时完成算 1 小时）
-- 每天22点自动把今天学习时长和使用电脑时长记录到飞书表格
 """
 import sys
 import time
@@ -12,16 +11,15 @@ import random
 import requests
 import ctypes
 import json
-import subprocess
 import os
+import subprocess
+import tempfile
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel,
                              QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox)
 from PyQt5.QtCore import QTimer, Qt, QPoint
 from PyQt5.QtGui import QIcon, QFont, QCursor, QPainter, QColor, QBrush, QPen
 import psutil
-import os
-import tempfile
 import atexit
 import winreg
 import traceback
@@ -113,505 +111,188 @@ class FloatingBall(QWidget):
                     self.main_window.raise_()
 
 
-# 飞书表格配置 - 用于每天22点自动记录学习时长和电脑使用时长
-# 配置来源：从 wiki 页面 https://my.feishu.cn/wiki/HA0FwBw52i3LWxk9kYscq7E9nFF 获取
-FEISHU_BASE_TOKEN = 'OgmgbdX8JaVB3WshSVFcF0hDn2c'  # 飞书多维表格 token（从wiki获取）
-FEISHU_TABLE_ID = 'tbl3h08zGDkwVoqE'  # 工作时长表的 ID
-FEISHU_VIEW_ID = ''  # 视图ID（空表示不使用视图）
-FEISHU_APP_ID = 'cli_a9144a1b57f85cd6'  # 飞书应用ID
-FEISHU_APP_SECRET = 'z3SmodRLgO7AlSzD2c51HdbxtVAZHDFB'  # 飞书应用Secret
+# 飞书多维表格配置
+FEISHU_BASE_TOKEN = 'DcJzbLadCaGbGws2ZekchGHhnVe'
+FEISHU_TABLE_ID = 'tbl9DT9qniE63BH7'
 
 
-class FeishuRecordSync:
-    """飞书记录同步器 - 使用飞书开放API将数据写入表格"""
+class FeishuSync:
+    """通过 lark-cli 将学习/电脑使用时长同步到飞书多维表格"""
 
-    _access_token = None
-    _token_expire_time = 0
+    _record_id = None
+    _current_date = None
 
     @classmethod
-    def _get_access_token(cls):
-        """获取飞书访问令牌"""
-        print(f'[FeishuRecordSync] 正在获取access_token...')
-        now = time.time()
-        if cls._access_token and now < cls._token_expire_time - 60:
-            print(f'[FeishuRecordSync] 使用缓存的access_token')
-            return cls._access_token
+    def _get_cache_path(cls):
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), '.feishu_cache.json')
 
+    @classmethod
+    def _load_cache(cls):
+        path = cls._get_cache_path()
+        if not os.path.exists(path):
+            return {}
         try:
-            url = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal/"
-            headers = {'Content-Type': 'application/json; charset=utf-8'}
-            data = {
-                "app_id": FEISHU_APP_ID,
-                "app_secret": FEISHU_APP_SECRET
-            }
-            print(f'[FeishuRecordSync] 请求URL: {url}')
-            print(f'[FeishuRecordSync] 使用APP_ID: {FEISHU_APP_ID[:10]}...')
-            response = requests.post(url, headers=headers, json=data, timeout=10)
-            print(f'[FeishuRecordSync] 响应状态码: {response.status_code}')
-            if response.status_code == 200:
-                result = response.json()
-                print(f'[FeishuRecordSync] 响应内容: {result}')
-                if result.get('code') == 0:
-                    cls._access_token = result['tenant_access_token']
-                    cls._token_expire_time = now + result.get('expire', 7200)
-                    print(f'[FeishuRecordSync] 获取access_token成功')
-                    return cls._access_token
-                else:
-                    print(f'[FeishuRecordSync] 获取access_token失败，code={result.get("code")}, msg={result.get("msg")}')
-            else:
-                print(f'[FeishuRecordSync] HTTP请求失败: {response.text}')
+            with open(path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            return {}
+
+    @classmethod
+    def _save_cache(cls, date, record_id):
+        with open(cls._get_cache_path(), 'w', encoding='utf-8') as f:
+            json.dump({'date': date, 'record_id': record_id}, f, ensure_ascii=False)
+
+    @classmethod
+    def _call_lark(cls, args, data=None):
+        """调用 lark-cli，返回解析后的 JSON"""
+        cmd = 'lark-cli ' + ' '.join(args)
+        tmp = None
+        if data:
+            tmp = '.feishu_tmp.json'
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False)
+            cmd += ' --json "@' + tmp + '"'
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=30,
+                shell=True, encoding='utf-8',
+                cwd=os.path.dirname(os.path.abspath(__file__))
+            )
+            if result.returncode != 0:
+                print(f'[FeishuSync] lark-cli 返回码 {result.returncode}')
+                print(f'[FeishuSync] 执行命令: {cmd[:200]}')
+            return json.loads(result.stdout) if result.stdout.strip() else {}
         except Exception as e:
-            print(f'[FeishuRecordSync] 获取access_token异常: {e}')
-            import traceback
-            traceback.print_exc()
+            print(f'[FeishuSync] lark-cli 调用失败: {e}')
+            return {}
+        finally:
+            if tmp and os.path.exists(tmp):
+                os.unlink(tmp)
+
+    @classmethod
+    def _find_today_record(cls):
+        """查询今天是否已有记录，返回 record_id 或 None"""
+        today = datetime.now().date().isoformat()
+        resp = cls._call_lark([
+            'base', '+record-list',
+            '--base-token', FEISHU_BASE_TOKEN,
+            '--table-id', FEISHU_TABLE_ID,
+            '--as', 'user',
+            '--limit', '200',
+            '--format', 'json'
+        ])
+        if not resp.get('ok'):
+            return None
+
+        records = resp.get('data', {}).get('data', [])
+        fields = resp.get('data', {}).get('fields', [])
+        rids = resp.get('data', {}).get('record_id_list', [])
+
+        # 找到"日期"字段的索引
+        try:
+            date_idx = fields.index('日期')
+        except ValueError:
+            return None
+
+        for i, rec in enumerate(records):
+            if i >= len(rids):
+                break
+            date_val = rec[date_idx] if date_idx < len(rec) else None
+            if date_val is None:
+                continue
+            if isinstance(date_val, (int, float)):
+                dt = datetime.fromtimestamp(date_val / 1000)
+                date_str = dt.strftime('%Y-%m-%d')
+            elif isinstance(date_val, str):
+                date_str = date_val[:10]
+            else:
+                continue
+            if date_str == today:
+                rid = rids[i]
+                print(f'[FeishuSync] 找到今天的已有记录: {rid}')
+                return rid
+
+        print(f'[FeishuSync] 未找到今天的记录，将创建新记录')
         return None
 
     @classmethod
-    def sync_record(cls, study_hours, computer_usage_hours, crash_count=0):
-        """
-        同步记录到飞书表格
+    def _ensure_record(cls):
+        """确保今天的记录存在，返回 record_id"""
+        today = datetime.now().date().isoformat()
 
-        Args:
-            study_hours: 学习时长（小时）
-            computer_usage_hours: 电脑使用时长（小时）
-            crash_count: 崩溃次数
-        """
-        try:
-            access_token = cls._get_access_token()
-            if not access_token:
-                print('[FeishuRecordSync] 无法获取access_token，跳过同步')
-                # 保存到本地文件作为备选
-                cls._save_local_record(study_hours, computer_usage_hours, crash_count)
-                return False
+        # 内存缓存命中
+        if cls._record_id and cls._current_date == today:
+            return cls._record_id
 
-            # 转换为 Unix 时间戳（毫秒）
-            today_date = datetime.now().date()
-            today_timestamp = int(datetime.combine(today_date, datetime.min.time()).timestamp() * 1000)
+        # 本地缓存命中
+        cache = cls._load_cache()
+        if cache.get('date') == today and cache.get('record_id'):
+            cls._record_id = cache['record_id']
+            cls._current_date = today
+            return cls._record_id
 
-            # 准备记录数据
-            record_data = {
-                "fields": {
-                    "日期": today_timestamp,
-                    "学习时长（H）": round(study_hours, 1),
-                    "电脑使用时长（H）": round(computer_usage_hours, 1),
-                    
-                    "崩溃次数": crash_count
-                }
-            }
+        # 查询飞书
+        record_id = cls._find_today_record()
+        if record_id:
+            cls._record_id = record_id
+            cls._current_date = today
+            cls._save_cache(today, record_id)
+            return record_id
 
-            # 查询今天是否已有记录
-            url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{FEISHU_BASE_TOKEN}/tables/{FEISHU_TABLE_ID}/records"
-            headers = {
-                'Authorization': f'Bearer {access_token}',
-                'Content-Type': 'application/json; charset=utf-8'
-            }
+        # 创建新记录
+        resp = cls._call_lark([
+            'base', '+record-upsert',
+            '--base-token', FEISHU_BASE_TOKEN,
+            '--table-id', FEISHU_TABLE_ID,
+            '--as', 'user'
+        ], {'日期': today, '学习时长（H）': 0, '电脑使用时长（H）': 0})
+        if resp.get('ok'):
+            rid = resp['data']['record']['record_id_list'][0]
+            cls._record_id = rid
+            cls._current_date = today
+            cls._save_cache(today, rid)
+            return rid
+        return None
 
-            existing_record_id = None
-            response = requests.get(url, headers=headers, timeout=10)
-
-            if response.status_code == 200:
-                result = response.json()
-                if result.get('code') == 0:
-                    items = result.get('data', {}).get('items', [])
-                    print(f'[FeishuRecordSync] 找到 {len(items)} 条记录')
-                    # 查找今天的记录
-                    for item in items:
-                        fields = item.get('fields', {})
-                        record_date = fields.get('日期')
-                        if record_date:
-                            # 日期可能是时间戳
-                            if isinstance(record_date, int):
-                                ts_date = datetime.fromtimestamp(record_date / 1000).strftime('%Y-%m-%d')
-                            else:
-                                ts_date = str(record_date)[:10]
-                            if ts_date == today_date.isoformat():
-                                existing_record_id = item.get('record_id')
-                                print(f'[FeishuRecordSync] 找到今天的已有记录: {existing_record_id}')
-                                break
-            else:
-                print(f'[FeishuRecordSync] 查询记录失败，状态码: {response.status_code}')
-
-            # 更新或创建记录
-            if existing_record_id:
-                # 更新已有记录（使用批量更新接口）
-                update_url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{FEISHU_BASE_TOKEN}/tables/{FEISHU_TABLE_ID}/records/batch_update"
-                update_data = {
-                    "records": [{
-                        "record_id": existing_record_id,
-                        "fields": record_data["fields"]
-                    }]
-                }
-                response = requests.post(update_url, headers=headers, json=update_data, timeout=10)
-                action = "更新"
-            else:
-                # 创建新记录
-                create_url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{FEISHU_BASE_TOKEN}/tables/{FEISHU_TABLE_ID}/records"
-                response = requests.post(create_url, headers=headers, json=record_data, timeout=10)
-                action = "创建"
-
-            if response.status_code == 200:
-                result = response.json()
-                if result.get('code') == 0:
-                    print(f'[FeishuRecordSync] 飞书{action}成功: {today_date.isoformat()} - 学习{study_hours}h, 电脑使用{computer_usage_hours}h')
-                    # 保存到本地备份
-                    cls._save_local_record(study_hours, computer_usage_hours, crash_count)
-                    return True
-                else:
-                    print(f'[FeishuRecordSync] 飞书{action}失败: {result.get("msg")}')
-            else:
-                print(f'[FeishuRecordSync] 飞书{action}失败，状态码: {response.status_code}, 响应: {response.text[:200]}')
-
-            # 失败时保存到本地
-            cls._save_local_record(study_hours, computer_usage_hours, crash_count)
+    @classmethod
+    def _update_field(cls, field_name, new_value):
+        """更新指定字段的值"""
+        record_id = cls._ensure_record()
+        if not record_id:
+            print(f'[FeishuSync] 无法获取记录，跳过更新 {field_name}')
             return False
 
-        except Exception as e:
-            print(f'[FeishuRecordSync] 同步异常: {e}')
-            import traceback
-            traceback.print_exc()
-            # 保存到本地备份
-            cls._save_local_record(study_hours, computer_usage_hours, crash_count)
+        resp = cls._call_lark([
+            'base', '+record-upsert',
+            '--base-token', FEISHU_BASE_TOKEN,
+            '--table-id', FEISHU_TABLE_ID,
+            '--record-id', record_id,
+            '--as', 'user'
+        ], {field_name: round(new_value, 1)})
+        if resp.get('ok'):
+            print(f'[FeishuSync] 更新成功: {field_name} = {round(new_value, 1)}')
+            return True
+        else:
+            print(f'[FeishuSync] 更新失败: {resp}')
             return False
 
     @classmethod
-    def _save_local_record(cls, study_hours, computer_usage_hours, crash_count):
-        """保存记录到本地文件（网络失败时的备选方案）"""
-        try:
-            today = datetime.now().date().isoformat()
-            record_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'daily_sync_records.json')
-
-            records = []
-            if os.path.exists(record_file):
-                with open(record_file, 'r', encoding='utf-8') as f:
-                    records = json.load(f)
-
-            # 移除同日期的旧记录
-            records = [r for r in records if r.get('date') != today]
-
-            # 添加新记录
-            new_record = {
-                'date': today,
-                'study_hours': round(study_hours, 1),
-                'computer_usage_hours': round(computer_usage_hours, 1),
-                'crash_count': crash_count,
-                'recorded_at': datetime.now().isoformat(),
-                'synced': False  # 标记为未同步
-            }
-            records.append(new_record)
-
-            with open(record_file, 'w', encoding='utf-8') as f:
-                json.dump(records, f, ensure_ascii=False, indent=2)
-
-            print(f'[FeishuRecordSync] 记录已保存到本地: {new_record}')
-        except Exception as e:
-            print(f'[FeishuRecordSync] 保存本地记录失败: {e}')
-
+    def increment_study_hour(cls, total_hours):
+        """学习满 1 小时，更新飞书中的学习时长"""
+        print(f'[FeishuSync] 记录学习时长: {total_hours}h')
+        return cls._update_field('学习时长（H）', total_hours)
 
     @classmethod
-    def increment_study_hour(cls):
-        """
-        学习 1 小时完成后，在飞书表格中增加 1 小时学习时长
-        """
-        print(f'[FeishuRecordSync.increment_study_hour] ====== 开始记录学习时长 ======')
-        try:
-            access_token = cls._get_access_token()
-            if not access_token:
-                print('[FeishuRecordSync.increment_study_hour] 无法获取 access_token，跳过同步')
-                return False
-
-            today_date = datetime.now().date()
-            today = today_date.isoformat()
-            today_timestamp = int(datetime.combine(today_date, datetime.min.time()).timestamp() * 1000)
-            print(f'[FeishuRecordSync.increment_study_hour] 今天日期: {today}')
-
-            # 先查询今天是否已有记录
-            url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{FEISHU_BASE_TOKEN}/tables/{FEISHU_TABLE_ID}/records"
-            print(f'[FeishuRecordSync.increment_study_hour] 查询URL: {url}')
-            headers = {
-                'Authorization': f'Bearer {access_token}',
-                'Content-Type': 'application/json; charset=utf-8'
-            }
-
-            existing_record_id = None
-            current_study_hours = 0
-
-            # 获取所有记录并查找今天的
-            print(f'[FeishuRecordSync.increment_study_hour] 正在查询已有记录...')
-            response = requests.get(url, headers=headers, timeout=10)
-            print(f'[FeishuRecordSync.increment_study_hour] 查询响应状态码: {response.status_code}')
-
-            if response.status_code == 200:
-                result = response.json()
-                print(f'[FeishuRecordSync.increment_study_hour] 查询响应内容: {result}')
-                if result.get('code') == 0:
-                    items = result.get('data', {}).get('items', [])
-                    print(f'[FeishuRecordSync.increment_study_hour] 找到 {len(items)} 条记录')
-                    # 查找今天的记录
-                    for item in items:
-                        fields = item.get('fields', {})
-                        record_date = fields.get('日期')
-                        print(f'[FeishuRecordSync.increment_study_hour] 检查记录: 日期={record_date}, 学习时长={fields.get("学习时长（H）")}')
-                        if record_date:
-                            # 日期可能是时间戳或字符串格式
-                            if isinstance(record_date, int):
-                                # 时间戳转换为日期字符串
-                                ts_date = datetime.fromtimestamp(record_date / 1000).strftime('%Y-%m-%d')
-                            else:
-                                ts_date = str(record_date)[:10]
-                            if ts_date == today:
-                                existing_record_id = item.get('record_id')
-                                current_study_hours = fields.get("学习时长（H）", 0) or 0
-                                print(f'[FeishuRecordSync.increment_study_hour] 找到已有记录，当前学习时长：{current_study_hours}h')
-                                break
-
-            # 计算新的学习时长
-            new_study_hours = current_study_hours + 1
-            print(f'[FeishuRecordSync.increment_study_hour] 新学习时长：{new_study_hours}h')
-
-            # 准备更新数据（只更新学习时长）
-            record_data = {
-                "fields": {
-                    "学习时长（H）": round(new_study_hours, 1)
-                }
-            }
-            print(f'[FeishuRecordSync.increment_study_hour] 准备记录数据: {record_data}')
-
-            # 更新或创建记录
-            if existing_record_id:
-                update_url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{FEISHU_BASE_TOKEN}/tables/{FEISHU_TABLE_ID}/records/{existing_record_id}"
-                print(f'[FeishuRecordSync.increment_study_hour] 更新URL: {update_url}')
-                response = requests.patch(update_url, headers=headers, json=record_data, timeout=10)
-                action = "更新"
-            else:
-                create_url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{FEISHU_BASE_TOKEN}/tables/{FEISHU_TABLE_ID}/records"
-                print(f'[FeishuRecordSync.increment_study_hour] 创建URL: {create_url}')
-                record_data["fields"]["日期"] = today_timestamp
-                response = requests.post(create_url, headers=headers, json=record_data, timeout=10)
-                action = "创建"
-
-            print(f'[FeishuRecordSync.increment_study_hour] {action}响应状态码: {response.status_code}')
-            if response.status_code == 200:
-                result = response.json()
-                print(f'[FeishuRecordSync.increment_study_hour] {action}响应内容: {result}')
-                if result.get('code') == 0:
-                    print(f'[FeishuRecordSync.increment_study_hour] 飞书{action}成功：{today} - 学习时长 +1 → {new_study_hours}h')
-                    return True
-                else:
-                    print(f'[FeishuRecordSync.increment_study_hour] 飞书{action}失败：{result.get("msg")}')
-            else:
-                print(f'[FeishuRecordSync.increment_study_hour] 飞书{action}失败，状态码：{response.status_code}，响应: {response.text}')
-
-            return False
-
-        except Exception as e:
-            print(f'[FeishuRecordSync.increment_study_hour] 异常：{e}')
-            traceback.print_exc()
-            return False
+    def increment_computer_hour(cls, total_hours):
+        """电脑使用满 3 小时，更新飞书中的电脑使用时长"""
+        print(f'[FeishuSync] 记录电脑使用时长: {total_hours}h')
+        return cls._update_field('电脑使用时长（H）', total_hours)
 
     @classmethod
-    def increment_computer_hour(cls):
-        """
-        电脑使用每满 3 小时后，在飞书表格中增加 1 小时电脑使用时长
-        """
-        print(f'[FeishuRecordSync.increment_computer_hour] ====== 开始记录电脑使用时长 ======')
-        try:
-            access_token = cls._get_access_token()
-            if not access_token:
-                print('[FeishuRecordSync.increment_computer_hour] 无法获取 access_token，跳过同步')
-                return False
-
-            today_date = datetime.now().date()
-            today = today_date.isoformat()
-            today_timestamp = int(datetime.combine(today_date, datetime.min.time()).timestamp() * 1000)
-            print(f'[FeishuRecordSync.increment_computer_hour] 今天日期: {today}')
-
-            # 先查询今天是否已有记录
-            url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{FEISHU_BASE_TOKEN}/tables/{FEISHU_TABLE_ID}/records"
-            print(f'[FeishuRecordSync.increment_computer_hour] 查询URL: {url}')
-            headers = {
-                'Authorization': f'Bearer {access_token}',
-                'Content-Type': 'application/json; charset=utf-8'
-            }
-
-            existing_record_id = None
-            current_computer_hours = 0
-
-            # 获取所有记录并查找今天的
-            print(f'[FeishuRecordSync.increment_computer_hour] 正在查询已有记录...')
-            response = requests.get(url, headers=headers, timeout=10)
-            print(f'[FeishuRecordSync.increment_computer_hour] 查询响应状态码: {response.status_code}')
-
-            if response.status_code == 200:
-                result = response.json()
-                print(f'[FeishuRecordSync.increment_computer_hour] 查询响应内容: {result}')
-                if result.get('code') == 0:
-                    items = result.get('data', {}).get('items', [])
-                    print(f'[FeishuRecordSync.increment_computer_hour] 找到 {len(items)} 条记录')
-                    # 查找今天的记录
-                    for item in items:
-                        fields = item.get('fields', {})
-                        record_date = fields.get('日期')
-                        print(f'[FeishuRecordSync.increment_computer_hour] 检查记录: 日期={record_date}, 电脑使用时长={fields.get("电脑使用时长（H）")}')
-                        if record_date:
-                            # 日期可能是时间戳或字符串格式
-                            if isinstance(record_date, int):
-                                ts_date = datetime.fromtimestamp(record_date / 1000).strftime('%Y-%m-%d')
-                            else:
-                                ts_date = str(record_date)[:10]
-                            if ts_date == today:
-                                existing_record_id = item.get('record_id')
-                                current_computer_hours = fields.get("电脑使用时长（H）", 0) or 0
-                                print(f'[FeishuRecordSync.increment_computer_hour] 找到已有记录，当前电脑使用时长：{current_computer_hours}h')
-                                break
-
-            # 计算新的电脑使用时长
-            new_computer_hours = current_computer_hours + 1
-            print(f'[FeishuRecordSync.increment_computer_hour] 新电脑使用时长：{new_computer_hours}h')
-
-            # 准备更新数据（只更新电脑使用时长）
-            record_data = {
-                "fields": {
-                    "电脑使用时长（H）": round(new_computer_hours, 1)
-                }
-            }
-            print(f'[FeishuRecordSync.increment_computer_hour] 准备记录数据: {record_data}')
-
-            # 更新或创建记录
-            if existing_record_id:
-                update_url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{FEISHU_BASE_TOKEN}/tables/{FEISHU_TABLE_ID}/records/{existing_record_id}"
-                print(f'[FeishuRecordSync.increment_computer_hour] 更新URL: {update_url}')
-                response = requests.patch(update_url, headers=headers, json=record_data, timeout=10)
-                action = "更新"
-            else:
-                create_url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{FEISHU_BASE_TOKEN}/tables/{FEISHU_TABLE_ID}/records"
-                print(f'[FeishuRecordSync.increment_computer_hour] 创建URL: {create_url}')
-                record_data["fields"]["日期"] = today_timestamp
-                response = requests.post(create_url, headers=headers, json=record_data, timeout=10)
-                action = "创建"
-
-            print(f'[FeishuRecordSync.increment_computer_hour] {action}响应状态码: {response.status_code}')
-            if response.status_code == 200:
-                result = response.json()
-                print(f'[FeishuRecordSync.increment_computer_hour] {action}响应内容: {result}')
-                if result.get('code') == 0:
-                    print(f'[FeishuRecordSync.increment_computer_hour] 飞书{action}成功：{today} - 电脑使用时长 +1 → {new_computer_hours}h')
-                    return True
-                else:
-                    print(f'[FeishuRecordSync.increment_computer_hour] 飞书{action}失败：{result.get("msg")}')
-            else:
-                print(f'[FeishuRecordSync.increment_computer_hour] 飞书{action}失败，状态码：{response.status_code}，响应: {response.text}')
-
-            return False
-
-        except Exception as e:
-            print(f'[FeishuRecordSync.increment_computer_hour] 异常：{e}')
-            traceback.print_exc()
-            return False
-
-
-    @classmethod
-    def sync_pending_records(cls):
-        """同步之前未同步的本地记录"""
-        try:
-            record_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'daily_sync_records.json')
-            if not os.path.exists(record_file):
-                return
-
-            with open(record_file, 'r', encoding='utf-8') as f:
-                records = json.load(f)
-
-            pending = [r for r in records if not r.get('synced', True)]
-            if not pending:
-                return
-
-            print(f'[FeishuRecordSync] 发现{len(pending)}条未同步记录，开始同步...')
-
-            for record in pending:
-                success = cls.sync_record(
-                    record['study_hours'],
-                    record['computer_usage_hours'],
-                    record.get('crash_count', 0)
-                )
-
-                if success:
-                    record['synced'] = True
-
-            # 保存更新后的记录
-            with open(record_file, 'w', encoding='utf-8') as f:
-                json.dump(records, f, ensure_ascii=False, indent=2)
-
-            print(f'[FeishuRecordSync] 未同步记录处理完成')
-
-        except Exception as e:
-            print(f'[FeishuRecordSync] 同步未处理记录失败: {e}')
-
-
-
-    @classmethod
-    def _sync_via_lark_cli(cls, study_hours, computer_usage_hours):
-        """
-        通过 lark-cli 同步记录到飞书表格
-        这需要用户先通过 lark-cli auth login 授权
-        """
-        try:
-            today = datetime.now().date().isoformat()
-
-            # 准备 JSON 数据
-            record_data = {
-                "日期": today,
-                "学习时长": round(study_hours, 1),
-                "电脑使用时长 (H)": round(computer_usage_hours, 1),
-                "崩溃次数": 0
-            }
-
-            # 保存 JSON 到临时文件
-            temp_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.feishu_record.json')
-            with open(temp_file, 'w', encoding='utf-8') as f:
-                json.dump(record_data, f, ensure_ascii=False)
-
-            # 构建 lark-cli 命令
-            cmd = [
-                'lark-cli', 'base', '+record-upsert',
-                '--base-token', FEISHU_BASE_TOKEN,
-                '--table-id', FEISHU_TABLE_ID,
-                '--json', '@' + temp_file,
-                '--as', 'user'
-            ]
-
-            print(f'[FeishuRecordSync] 执行命令：{" ".join(cmd)}')
-
-            # 执行命令
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-
-            # 清理临时文件
-            if os.path.exists(temp_file):
-                os.remove(temp_file)
-
-            # 检查结果
-            if result.returncode == 0:
-                print(f'[FeishuRecordSync] lark-cli 成功：{result.stdout[:200]}')
-                return True
-            else:
-                error_msg = result.stderr[:500] if result.stderr else result.stdout[:500]
-                print(f'[FeishuRecordSync] lark-cli 失败：{error_msg}')
-                return False
-
-        except subprocess.TimeoutExpired:
-            print('[FeishuRecordSync] lark-cli 命令超时')
-            return False
-        except FileNotFoundError:
-            print('[FeishuRecordSync] 找不到 lark-cli 命令，请确保已安装')
-            return False
-        except Exception as e:
-            print(f'[FeishuRecordSync] 异常：{e}')
-            import traceback
-            traceback.print_exc()
-            return False
+    def reset(cls):
+        """日期切换时重置缓存"""
+        cls._record_id = None
+        cls._current_date = None
 
 
 class SingleInstanceChecker:
@@ -737,11 +418,6 @@ class RestReminderWidget(QWidget):
         self.last_computer_usage_check = datetime.now()
         self.computer_usage_reminder_given_at = None  # 记录上次提醒的时间点（小时数）
 
-        # 飞书同步控制
-        self._last_sync_at_22 = False  # 记录今天是否已经在22点同步过
-        self._data_sync_tick = 0
-
-        self.silent_start = silent_start
         self.drag_position = None
 
         self.init_ui()
@@ -982,9 +658,14 @@ class RestReminderWidget(QWidget):
         self.setLayout(main_layout)
 
     def position_to_right(self):
-        screen = QApplication.desktop().screenGeometry()
-        screen_width = screen.width()
-        screen_height = screen.height()
+        screen = QApplication.primaryScreen()
+        if screen:
+            screen_geom = screen.geometry()
+            screen_width = screen_geom.width()
+            screen_height = screen_geom.height()
+        else:
+            screen_width = 1920
+            screen_height = 1080
 
         if '--center' in sys.argv:
             x = (screen_width - self.widget_width) // 2
@@ -1093,96 +774,17 @@ class RestReminderWidget(QWidget):
     def hide_to_edge(self):
         """隐藏窗口到桌面右侧边缘"""
         try:
-            # 保存当前位置
-            self._last_x = self.x()
-            self._last_y = self.y()
-
             screen = QApplication.primaryScreen()
             if screen:
                 screen_geometry = screen.geometry()
-                # 隐藏到右侧边缘，只露出一个小边（约5像素）
                 edge_width = 5
                 x = screen_geometry.width() - edge_width
                 y = (screen_geometry.height() - self.height()) // 2
                 self.move(x, y)
                 self.timer.stop()
-                self._is_hidden_to_edge = True
                 print(f"已隐藏到右侧边缘，位置：({x}, {y})")
-                # 确保窗口在最上层
-                self.activateWindow()
-                self.raise_()
         except Exception as e:
             print(f'[hide_to_edge 异常] {type(e).__name__}: {e}')
-
-    def show_from_edge(self):
-        """从右侧边缘显示窗口"""
-        try:
-            screen = QApplication.primaryScreen()
-            if screen:
-                # 恢复到之前的位置
-                if hasattr(self, '_last_x') and hasattr(self, '_last_y'):
-                    x = self._last_x
-                    y = self._last_y
-                else:
-                    screen_geometry = screen.geometry()
-                    x = screen_geometry.width() - self.width()
-                    y = (screen_geometry.height() - self.height()) // 2
-                self.move(x, y)
-                self.show()
-                self.activateWindow()
-                self.raise_()
-                self.timer.start(1000)
-                self._is_hidden_to_edge = False
-                print(f"已从边缘恢复，位置：({x}, {y})")
-        except Exception as e:
-            print(f'[show_from_edge 异常] {type(e).__name__}: {e}')
-
-    def setup_edge_watcher(self):
-        """设置边缘检测鼠标监视器"""
-        self._is_hidden_to_edge = False
-        self._edge_watch_timer = QTimer()
-        self._edge_watch_timer.timeout.connect(self._check_mouse_at_edge)
-        self._edge_watch_timer.start(100)  # 每100ms检测一次
-        self._hide_delay_timer = QTimer()
-        self._hide_delay_timer.setSingleShot(True)
-        self._hide_delay_timer.timeout.connect(self.hide_to_edge)
-
-    def _check_mouse_at_edge(self):
-        """检测鼠标位置，自动显示/隐藏"""
-        try:
-            cursor_pos = QCursor.pos()
-            screen = QApplication.primaryScreen()
-            if not screen:
-                return
-            screen_geometry = screen.geometry()
-            trigger_zone = 50  # 触发区域宽度（像素）
-
-            if self._is_hidden_to_edge:
-                # 窗口隐藏时：检测鼠标在右侧边缘就显示
-                if cursor_pos.x() >= screen_geometry.width() - trigger_zone:
-                    self.show_from_edge()
-            else:
-                # 窗口显示时：检测鼠标不在窗口区域就延迟隐藏
-                # 获取窗口区域
-                window_rect = self.geometry()
-                # 添加一点额外空间，防止鼠标稍微离开就立即隐藏
-                hover_zone = QRect(
-                    window_rect.x() - 20,
-                    window_rect.y() - 20,
-                    window_rect.width() + 40,
-                    window_rect.height() + 40
-                )
-
-                if not hover_zone.contains(cursor_pos):
-                    # 鼠标不在窗口区域，延迟隐藏
-                    if not self._hide_delay_timer.isActive():
-                        self._hide_delay_timer.start(500)  # 500ms延迟
-                else:
-                    # 鼠标在窗口区域，取消隐藏
-                    if self._hide_delay_timer.isActive():
-                        self._hide_delay_timer.stop()
-        except Exception as e:
-            print(f'[_check_mouse_at_edge 异常] {type(e).__name__}: {e}')
 
     def setup_timer(self):
         self.timer = QTimer()
@@ -1264,8 +866,7 @@ class RestReminderWidget(QWidget):
             self.open_random_video()
             self.study_hours_today += 1
             self.update_study_display()
-            # 学习 1 小时完成后，立即记录到飞书表格
-            FeishuRecordSync.increment_study_hour()
+            FeishuSync.increment_study_hour(self.study_hours_today)
             self._reset_timer_to_idle()
 
     def _handle_paused(self, now):
@@ -1302,45 +903,16 @@ class RestReminderWidget(QWidget):
 
             # --- 日期变化重置 ---
             if now.date() != self.current_date:
-                # 新的一天，先同步昨天的数据到飞书
-                if self.current_date:
-                    FeishuRecordSync.sync_record(
-                        self.study_hours_today,
-                        self.computer_usage_hours_today
-                    )
                 # 重置数据
                 self.played_today = set()
                 self.study_hours_today = 0
                 self.computer_usage_hours_today = 0
                 self.computer_usage_reminder_given_at = None
                 self.current_date = now.date()
-                self._last_sync_at_22 = False  # 新的一天，重置同步标记
+                FeishuSync.reset()
                 self.update_study_display()
                 self.update_computer_usage_display()
                 print(f'新的一天，数据已重置: {self.current_date}')
-
-            # --- 22 点自动记录数据到飞书表格 ---
-            if now.hour == 22 and not self._last_sync_at_22:
-                print(f'[22点自动记录] 正在记录今日数据到飞书表格...')
-                success = FeishuRecordSync.sync_record(
-                    self.study_hours_today,
-                    self.computer_usage_hours_today
-                )
-                if success:
-                    self.tray_icon.showMessage(
-                        '📊 数据已记录',
-                        '今日学习时长和电脑使用时长已记录到飞书表格',
-                        QSystemTrayIcon.Information,
-                        3000
-                    )
-                else:
-                    self.tray_icon.showMessage(
-                        '📊 记录失败',
-                        '数据已保存到本地，网络恢复后将自动同步',
-                        QSystemTrayIcon.Warning,
-                        3000
-                    )
-                self._last_sync_at_22 = True
 
             # --- 状态机路由 ---
             if self.timer_state == 'idle':
@@ -1400,8 +972,7 @@ class RestReminderWidget(QWidget):
 
         if current_cycle > last_cycle or (current_cycle > 0 and self.computer_usage_reminder_given_at != current_cycle):
             self.show_computer_usage_reminder()
-            # 电脑使用每满 3 小时后，立即记录到飞书表格
-            FeishuRecordSync.increment_computer_hour()
+            FeishuSync.increment_computer_hour(self.computer_usage_hours_today)
             self.computer_usage_reminder_given_at = current_cycle
 
     def show_computer_usage_reminder(self):
@@ -1661,81 +1232,13 @@ def main():
             QMessageBox.warning(None, '已在运行', '程序已在运行中！\n请检查系统托盘图标。')
         sys.exit(0)
 
-    print('=' * 70)
-    print('飞书同步功能测试')
-    print('=' * 70)
-    print()
-    print('[启动测试 1] 测试获取 access_token...')
-    print('-' * 70)
-    token = FeishuRecordSync._get_access_token()
-    if token:
-        print('✓ 获取 access_token 成功！')
-    else:
-        print('✗ 获取 access_token 失败！')
-        print('请检查 FEISHU_APP_ID 和 FEISHU_APP_SECRET 配置是否正确')
-
-    print()
-    print('[启动测试 2] 测试记录学习时长...')
-    print('-' * 70)
-    result = FeishuRecordSync.increment_study_hour()
-    if result:
-        print('✓ 学习时长记录成功！')
-    else:
-        print('✗ 学习时长记录失败！')
-
-    print()
-    print('[启动测试 3] 测试记录电脑使用时长...')
-    print('-' * 70)
-    result = FeishuRecordSync.increment_computer_hour()
-    if result:
-        print('✓ 电脑使用时长记录成功！')
-    else:
-        print('✗ 电脑使用时长记录失败！')
-
-    print()
-    print('=' * 70)
-    print('启动测试完成！')
-    print('=' * 70)
-    print()
-
-    # 先创建一个临时的同步器实例，用于记录早期崩溃
-    early_sync = FeishuRecordSync()
 
     def excepthook(exc_type, exc_value, exc_tb):
-        import traceback
         log_dir = os.path.dirname(os.path.abspath(__file__))
         with open(os.path.join(log_dir, 'crash.log'), 'a', encoding='utf-8') as f:
             from datetime import datetime
             f.write(f'[{datetime.now().isoformat()}] 未捕获异常：{exc_type.__name__}: {exc_value}\n')
             traceback.print_exception(exc_type, exc_value, exc_tb, file=f)
-        # 记录崩溃到本地
-        try:
-            today = datetime.now().date().isoformat()
-            record_file = os.path.join(log_dir, 'daily_sync_records.json')
-            records = []
-            if os.path.exists(record_file):
-                with open(record_file, 'r', encoding='utf-8') as rf:
-                    records = json.load(rf)
-            # 更新或添加今天的崩溃记录
-            updated = False
-            for r in records:
-                if r.get('date') == today:
-                    r['crash_count'] = r.get('crash_count', 0) + 1
-                    updated = True
-                    break
-            if not updated:
-                records.append({
-                    'date': today,
-                    'study_hours': 0,
-                    'computer_usage_hours': 0,
-                    'crash_count': 1,
-                    'recorded_at': datetime.now().isoformat(),
-                    'synced': False
-                })
-            with open(record_file, 'w', encoding='utf-8') as rf:
-                json.dump(records, rf, ensure_ascii=False, indent=2)
-        except:
-            pass
         os._exit(1)
     sys.excepthook = excepthook
 
@@ -1754,44 +1257,13 @@ def main():
     else:
         widget.show()
 
-    # 启动时尝试同步之前未同步的记录
-    FeishuRecordSync.sync_pending_records()
-
-    # 更新异常处理器
+    # 全局异常处理器
     def widget_excepthook(exc_type, exc_value, exc_tb):
-        import traceback
         log_dir = os.path.dirname(os.path.abspath(__file__))
         with open(os.path.join(log_dir, 'crash.log'), 'a', encoding='utf-8') as f:
             from datetime import datetime
             f.write(f'[{datetime.now().isoformat()}] 未捕获异常：{exc_type.__name__}: {exc_value}\n')
             traceback.print_exception(exc_type, exc_value, exc_tb, file=f)
-        # 记录崩溃到本地
-        try:
-            today = datetime.now().date().isoformat()
-            record_file = os.path.join(log_dir, 'daily_sync_records.json')
-            records = []
-            if os.path.exists(record_file):
-                with open(record_file, 'r', encoding='utf-8') as rf:
-                    records = json.load(rf)
-            updated = False
-            for r in records:
-                if r.get('date') == today:
-                    r['crash_count'] = r.get('crash_count', 0) + 1
-                    updated = True
-                    break
-            if not updated:
-                records.append({
-                    'date': today,
-                    'study_hours': widget.study_hours_today,
-                    'computer_usage_hours': widget.computer_usage_hours_today,
-                    'crash_count': 1,
-                    'recorded_at': datetime.now().isoformat(),
-                    'synced': False
-                })
-            with open(record_file, 'w', encoding='utf-8') as rf:
-                json.dump(records, rf, ensure_ascii=False, indent=2)
-        except:
-            pass
         os._exit(1)
     sys.excepthook = widget_excepthook
 

@@ -63,6 +63,8 @@ vendor/
 # 飞书 CLI 临时文件
 lark-cli.bat
 LARK_CLI使用说明.md
+.feishu_tmp.json
+.feishu_cache.json
 
 # 完全独立启动文件
 完全独立启动.vbs
