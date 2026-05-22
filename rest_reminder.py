@@ -256,7 +256,7 @@ class FeishuSync:
 
     @classmethod
     def _update_field(cls, field_name, new_value):
-        """更新指定字段的值"""
+        """更新指定字段的值，缓存过期时自动重试"""
         record_id = cls._ensure_record()
         if not record_id:
             print(f'[FeishuSync] 无法获取记录，跳过更新 {field_name}')
@@ -273,7 +273,23 @@ class FeishuSync:
             print(f'[FeishuSync] 更新成功: {field_name} = {round(new_value, 1)}')
             return True
         else:
-            print(f'[FeishuSync] 更新失败: {resp}')
+            print(f'[FeishuSync] 更新失败，缓存可能过期，重置后重试: {resp}')
+            # 缓存过期（如 record_id 已被删除或与表中不匹配），重置后重新查询
+            cls.reset()
+            new_record_id = cls._ensure_record()
+            if new_record_id and new_record_id != record_id:
+                resp2 = cls._call_lark([
+                    'base', '+record-upsert',
+                    '--base-token', FEISHU_BASE_TOKEN,
+                    '--table-id', FEISHU_TABLE_ID,
+                    '--record-id', new_record_id,
+                    '--as', 'user'
+                ], {field_name: round(new_value, 1)})
+                if resp2.get('ok'):
+                    print(f'[FeishuSync] 重试更新成功: {field_name} = {round(new_value, 1)}')
+                    return True
+                else:
+                    print(f'[FeishuSync] 重试也失败: {resp2}')
             return False
 
     @classmethod

@@ -51,6 +51,14 @@ daily_tracker_state.json
 !卸载.bat
 !run.bat
 temp_*
+temp_fields.txt
+
+# 备份与诊断文件
+*.backup
+versions/
+test_floatball.py
+params.json
+record.json
 
 # Vendor 依赖（使用 pip 安装）
 vendor/
