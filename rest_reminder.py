@@ -26,17 +26,15 @@ import traceback
 import winsound
 import math
 import logging
+from logging.handlers import RotatingFileHandler
 
-# 日志配置：写入文件（pythonw 模式下 print 全部丢失）
+# 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
-logging.basicConfig(
-    filename=_LOG_FILE,
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S',
-    encoding='utf-8'
-)
+_handler = RotatingFileHandler(_LOG_FILE, maxBytes=1_000_000, backupCount=3, encoding='utf-8')
+_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', '%Y-%m-%d %H:%M:%S'))
 log = logging.getLogger('rest_reminder')
+log.setLevel(logging.INFO)
+log.addHandler(_handler)
 
 
 def open_url(url):
@@ -125,9 +123,9 @@ class FloatingBall(QWidget):
                     self.main_window.raise_()
 
 
-# 飞书多维表格配置
-FEISHU_BASE_TOKEN = 'DcJzbLadCaGbGws2ZekchGHhnVe'
-FEISHU_TABLE_ID = 'tbl9DT9qniE63BH7'
+# 飞书多维表格配置（优先读环境变量，fallback 到默认值）
+FEISHU_BASE_TOKEN = os.environ.get('FEISHU_BASE_TOKEN', 'DcJzbLadCaGbGws2ZekchGHhnVe')
+FEISHU_TABLE_ID = os.environ.get('FEISHU_TABLE_ID', 'tbl9DT9qniE63BH7')
 
 
 class FeishuSync:

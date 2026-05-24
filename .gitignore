@@ -39,6 +39,7 @@ desktop.ini
 
 # Logs
 *.log
+*.log.*
 crash.log
 rest_reminder.log
 
