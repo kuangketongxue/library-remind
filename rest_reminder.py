@@ -39,6 +39,9 @@ log.addHandler(_handler)
 
 def open_url(url):
     """使用 Windows API 打开 URL，避免弹出命令窗口"""
+    if not url.startswith('https://'):
+        log.error(f'[open_url] 拒绝非 HTTPS URL: {url[:50]}')
+        return False
     try:
         ctypes.windll.shell32.ShellExecuteW(
             None,
@@ -157,22 +160,23 @@ class FeishuSync:
     @classmethod
     def _call_lark(cls, args, data=None):
         """调用 lark-cli，返回解析后的 JSON"""
-        cmd = 'lark-cli ' + ' '.join(args)
+        cmd_args = ['lark-cli'] + list(args)
         tmp = None
         if data:
-            tmp = '.feishu_tmp.json'
+            tmp = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.feishu_tmp.json')
             with open(tmp, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False)
-            cmd += ' --json "@' + tmp + '"'
+            cmd_args += ['--json', '@' + tmp]
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=30,
-                shell=True, encoding='utf-8',
+                cmd_args, capture_output=True, text=True, timeout=30,
+                encoding='utf-8',
                 cwd=os.path.dirname(os.path.abspath(__file__))
             )
             if result.returncode != 0:
+                redacted = [a if 'token' not in a.lower() else a[:10] + '***' for a in cmd_args]
                 log.error(f'[FeishuSync] lark-cli 返回码 {result.returncode}')
-                log.error(f'[FeishuSync] 执行命令: {cmd[:200]}')
+                log.error(f'[FeishuSync] 执行命令: {" ".join(redacted)[:200]}')
             return json.loads(result.stdout) if result.stdout.strip() else {}
         except Exception as e:
             log.error(f'[FeishuSync] lark-cli 调用失败: {e}')
@@ -1374,7 +1378,7 @@ class RestReminderWidget(QWidget):
 
                     for media in medias:
                         bvid = media.get('bvid')
-                        if bvid:
+                        if bvid and re.match(r'^BV[a-zA-Z0-9]{10}$', bvid):
                             videos.append(f'https://www.bilibili.com/video/{bvid}')
 
                     if len(medias) < page_size:
