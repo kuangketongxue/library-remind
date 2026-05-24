@@ -24,6 +24,10 @@ requirements.txt        — 依赖：PyQt5, requests, psutil
 | 护眼视频 URL | `show_computer_usage_reminder()` | BV14Y4y1N7PW |
 | 电脑使用周期 | `update_computer_usage()` | 每 3 小时循环提醒 |
 | 电脑使用缓存 | `.computer_usage.json` | 自动创建，跨重启持久化 |
+| 倒计时浮层坐标 | `.overlay_pos.json` | 拖动后自动保存，跨重启记忆 |
+| 倒计时浮层尺寸 | `CountdownOverlay.setFixedSize` | 200×110px |
+| 倒计时触发阈值 | `_handle_running` / `update_computer_usage` | 最后 300 秒（5 分钟） |
+| 倒计时浮层拖拽 | `CountdownOverlay.eventFilter` | 子组件事件过滤器转发鼠标事件 |
 | 窗口尺寸 | `init_ui()` 内 `widget_width/widget_height` | 340×380 |
 | 倒计时范围 | `update_display()` 内 `start_minutes/end_minutes` | 4:30~22:00（倒计时模式） |
 | 学习目标时长 | `study_progress_bar.setMaximum` | 14（14 小时） |
