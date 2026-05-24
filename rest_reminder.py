@@ -23,6 +23,8 @@ import psutil
 import atexit
 import winreg
 import traceback
+import winsound
+import math
 
 
 def open_url(url):
@@ -388,6 +390,154 @@ class SingleInstanceChecker:
 from PyQt5.QtCore import QThread, pyqtSignal
 
 
+class CountdownOverlay(QWidget):
+    """小型浮窗倒计时：拖动、位置记忆、进度条、呼吸动画、音效"""
+    _POS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.overlay_pos.json')
+
+    def __init__(self):
+        super().__init__()
+        self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.Tool)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setFixedSize(200, 110)
+
+        self._drag_offset = None
+        self._total_seconds = 300
+        self._chimed = False
+
+        self.setStyleSheet("""
+            background-color: rgba(30, 30, 30, 210);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 217, 61, 0.15);
+        """)
+        self.setCursor(Qt.OpenHandCursor)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 10, 12, 8)
+        layout.setSpacing(2)
+
+        self.title_label = QLabel('')
+        self.title_label.setAlignment(Qt.AlignCenter)
+        self.title_label.setStyleSheet('color: #FFD93D; font-size: 12px; font-weight: bold; background: transparent; border: none;')
+
+        self.timer_label = QLabel('')
+        self.timer_label.setAlignment(Qt.AlignCenter)
+        self.timer_label.setStyleSheet('color: #FFFFFF; font-size: 36px; font-weight: bold; font-family: Consolas; background: transparent; border: none;')
+
+        self.hint_label = QLabel('')
+        self.hint_label.setAlignment(Qt.AlignCenter)
+        self.hint_label.setStyleSheet('color: #999; font-size: 11px; background: transparent; border: none;')
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setMaximum(100)
+        self.progress_bar.setValue(100)
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setFixedHeight(4)
+        self.progress_bar.setStyleSheet("""
+            QProgressBar { background: rgba(255,255,255,0.06); border: none; border-radius: 2px; }
+            QProgressBar::chunk { background: qlineargradient(x1:0, x2:1, stop:0 #788C57, stop:0.6 #FFD93D, stop:1 #FF6B50); border-radius: 2px; }
+        """)
+
+        layout.addWidget(self.title_label)
+        layout.addWidget(self.timer_label)
+        layout.addWidget(self.hint_label)
+        layout.addWidget(self.progress_bar)
+
+        self._load_position()
+        self.hide()
+
+    def _load_position(self):
+        try:
+            if os.path.exists(self._POS_FILE):
+                with open(self._POS_FILE, 'r') as f:
+                    pos = json.load(f)
+                x, y = pos['x'], pos['y']
+                # 校验坐标在当前屏幕范围内
+                screen = QApplication.primaryScreen()
+                if screen:
+                    g = screen.geometry()
+                    if 0 <= x <= g.width() - self.width() and 0 <= y <= g.height() - self.height():
+                        self._saved_pos = QPoint(x, y)
+                        return
+                self._saved_pos = None
+            else:
+                self._saved_pos = None
+        except Exception:
+            self._saved_pos = None
+
+    def _save_position(self):
+        try:
+            pos = self.frameGeometry().topLeft()
+            with open(self._POS_FILE, 'w') as f:
+                json.dump({'x': pos.x(), 'y': pos.y()}, f)
+        except Exception as e:
+            print(f'[CountdownOverlay] 保存位置失败: {e}')
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._drag_offset = event.globalPos() - self.frameGeometry().topLeft()
+            self.setCursor(Qt.ClosedHandCursor)
+
+    def mouseMoveEvent(self, event):
+        if self._drag_offset is not None:
+            self.move(event.globalPos() - self._drag_offset)
+
+    def mouseReleaseEvent(self, event):
+        self._drag_offset = None
+        self.setCursor(Qt.OpenHandCursor)
+        self._save_position()
+
+    def show_countdown(self, remaining_seconds, title, hint, total_seconds=300):
+        self._total_seconds = total_seconds
+        m = int(remaining_seconds // 60)
+        s = int(remaining_seconds % 60)
+        self.title_label.setText(title)
+        self.timer_label.setText(f'{m:02d}:{s:02d}')
+        self.hint_label.setText(hint)
+
+        pct = int((remaining_seconds / min(total_seconds, remaining_seconds + 1)) * 100)
+        self.progress_bar.setValue(max(pct, 0))
+
+        if remaining_seconds <= 60:
+            phase = math.sin(time.time() * 3)
+            font_size = int(36 + phase * 3)
+            color = '#FF8A70' if phase > 0 else '#FF6B50'
+            self.timer_label.setStyleSheet(
+                f'color: {color}; font-size: {font_size}px; font-weight: bold; font-family: Consolas; background: transparent; border: none;'
+            )
+            self.title_label.setStyleSheet('color: #FF6B50; font-size: 12px; font-weight: bold; background: transparent; border: none;')
+        else:
+            self.timer_label.setStyleSheet('color: #FFFFFF; font-size: 36px; font-weight: bold; font-family: Consolas; background: transparent; border: none;')
+            self.title_label.setStyleSheet('color: #FFD93D; font-size: 12px; font-weight: bold; background: transparent; border: none;')
+
+        if not self._chimed:
+            self._chimed = True
+            import threading
+            threading.Thread(target=self._play_chime, daemon=True).start()
+
+    @staticmethod
+    def _play_chime():
+        try:
+            winsound.Beep(880, 150)
+            winsound.Beep(1100, 200)
+        except Exception:
+            pass
+
+        if not self.isVisible():
+            if self._saved_pos:
+                self.move(self._saved_pos)
+            else:
+                screen = QApplication.primaryScreen()
+                if screen:
+                    g = screen.geometry()
+                    self.move(g.width() - 220, 30)
+            self.show()
+        self.raise_()
+
+    def hide_overlay(self):
+        self._chimed = False
+        self.hide()
+
+
 class VideoFetchThread(QThread):
     """获取 B 站视频列表的线程"""
     finished = pyqtSignal(list)
@@ -429,10 +579,16 @@ class RestReminderWidget(QWidget):
         # 学习时长（本地计数，每次倒计时完成算 1 小时）
         self.study_hours_today = 0
 
-        # 电脑使用时长监控（每 3 小时提醒一次）
+        # 电脑使用时长监控（每 3 小时提醒一次 + 飞书同步）
         self.computer_usage_hours_today = 0
         self.last_computer_usage_check = datetime.now()
-        self.computer_usage_reminder_given_at = None  # 记录上次提醒的时间点（小时数）
+        self.computer_usage_reminder_given_at = None  # 记录上次提醒的周期数
+        self.computer_3h_cycles_today = 0  # 今天已完成的 3 小时周期数
+        self._load_computer_usage()
+
+        # 5分钟倒计时浮层状态
+        self._study_countdown_active = False
+        self._computer_countdown_active = False
 
         self.drag_position = None
 
@@ -442,6 +598,8 @@ class RestReminderWidget(QWidget):
         self.setup_timer()
         # 创建小浮球
         self.floating_ball = FloatingBall(self)
+        # 创建5分钟倒计时浮层
+        self.countdown_overlay = CountdownOverlay()
         # 启动时先显示主窗口看看效果
         self.show()
         # 移到屏幕右侧
@@ -853,6 +1011,8 @@ class RestReminderWidget(QWidget):
             self.timer_state = 'idle'
             self.start_time = None
             self.remaining_when_paused = None
+            self._study_countdown_active = False
+            self.countdown_overlay.hide_overlay()
             self._sync_buttons()
         except Exception as e:
             print(f'[_reset_timer_to_idle 异常] {type(e).__name__}: {e}')
@@ -877,8 +1037,19 @@ class RestReminderWidget(QWidget):
         progress = int((elapsed / total_seconds) * 100)
         self.progress_bar.setValue(min(progress, 100))
 
-        # 倒计时结束
+        # 最后5分钟倒计时浮层
+        if remaining <= 300 and remaining > 0:
+            self._study_countdown_active = True
+            self.countdown_overlay.show_countdown(
+                remaining,
+                '📚 学习即将结束',
+                '还剩不到5分钟，准备休息一下~',
+                total_seconds=300
+            )
+        # 倒计时结束（包含浮层清理）
         if remaining <= 0:
+            self._study_countdown_active = False
+            self.countdown_overlay.hide_overlay()
             self.open_random_video()
             self.study_hours_today += 1
             self.update_study_display()
@@ -890,6 +1061,10 @@ class RestReminderWidget(QWidget):
         mins = int(self.remaining_when_paused // 60)
         secs = int(self.remaining_when_paused % 60)
         self.time_label.setText(f'⏸ 已暂停：{mins:02d}:{secs:02d}')
+        # 暂停时隐藏倒计时浮层，避免冻结显示
+        if self._study_countdown_active:
+            self._study_countdown_active = False
+            self.countdown_overlay.hide_overlay()
 
     def _update_countdown(self, now):
         """更新22:00倒计时"""
@@ -923,9 +1098,14 @@ class RestReminderWidget(QWidget):
                 self.played_today = set()
                 self.study_hours_today = 0
                 self.computer_usage_hours_today = 0
+                self.computer_3h_cycles_today = 0
                 self.computer_usage_reminder_given_at = None
+                self._study_countdown_active = False
+                self._computer_countdown_active = False
+                self.countdown_overlay.hide_overlay()
                 self.current_date = now.date()
                 FeishuSync.reset()
+                self._save_computer_usage()
                 self.update_study_display()
                 self.update_computer_usage_display()
                 print(f'新的一天，数据已重置: {self.current_date}')
@@ -960,6 +1140,38 @@ class RestReminderWidget(QWidget):
         self.study_progress_label.setText(f'📚 学习时长：{h}小时')
         self.study_progress_bar.setValue(h)
 
+    def _get_usage_cache_path(self):
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), '.computer_usage.json')
+
+    def _load_computer_usage(self):
+        """从本地文件恢复今天的电脑使用计数（跨重启持久化）"""
+        path = self._get_usage_cache_path()
+        if not os.path.exists(path):
+            return
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            if data.get('date') == self.current_date.isoformat():
+                self.computer_usage_hours_today = data.get('hours', 0)
+                self.computer_3h_cycles_today = data.get('cycles', 0)
+                self.computer_usage_reminder_given_at = data.get('last_cycle', None)
+                print(f'[ComputerUsage] 恢复今日计数: {self.computer_usage_hours_today:.2f}h, {self.computer_3h_cycles_today} 个周期')
+        except Exception as e:
+            print(f'[ComputerUsage] 加载缓存失败: {e}')
+
+    def _save_computer_usage(self):
+        """保存当前电脑使用计数到本地文件"""
+        try:
+            with open(self._get_usage_cache_path(), 'w', encoding='utf-8') as f:
+                json.dump({
+                    'date': self.current_date.isoformat(),
+                    'hours': self.computer_usage_hours_today,
+                    'cycles': self.computer_3h_cycles_today,
+                    'last_cycle': self.computer_usage_reminder_given_at
+                }, f, ensure_ascii=False)
+        except Exception as e:
+            print(f'[ComputerUsage] 保存缓存失败: {e}')
+
     def update_computer_usage(self, now):
         """更新电脑使用时长（倒计时模式：3 小时→0）"""
         # 每秒增加使用时长
@@ -982,14 +1194,36 @@ class RestReminderWidget(QWidget):
         self.computer_usage_bar.setFormat(f'{remaining_h}H{remaining_m:02d}min')
         self.computer_usage_bar.setValue(countdown_pct)
 
-        # 每 3 小时提醒一次（取整除判断）
-        current_cycle = int(self.computer_usage_hours_today / 3)
-        last_cycle = int((self.computer_usage_hours_today - 1/3600) / 3) if self.computer_usage_hours_today >= 1/3600 else 0
+        # 最后5分钟倒计时浮层
+        remaining_seconds = remaining_min * 3600
+        if remaining_seconds <= 300 and remaining_seconds > 0 and not self._study_countdown_active:
+            self._computer_countdown_active = True
+            self.countdown_overlay.show_countdown(
+                remaining_seconds,
+                '💻 电脑使用即将到期',
+                '还剩不到5分钟，准备休息眼睛~',
+                total_seconds=300
+            )
+        elif self._computer_countdown_active and (remaining_seconds > 300 or remaining_seconds <= 0):
+            self._computer_countdown_active = False
+            if not self._study_countdown_active:
+                self.countdown_overlay.hide_overlay()
 
-        if current_cycle > last_cycle or (current_cycle > 0 and self.computer_usage_reminder_given_at != current_cycle):
+        # 每 3 小时触发一次（跨重启持久化计数）
+        current_cycle = int(self.computer_usage_hours_today / 3)
+        if current_cycle > self.computer_3h_cycles_today:
+            self.computer_3h_cycles_today = current_cycle
+            self.computer_usage_reminder_given_at = current_cycle
+            self._computer_countdown_active = False
+            self.countdown_overlay.hide_overlay()
             self.show_computer_usage_reminder()
             FeishuSync.increment_computer_hour(self.computer_usage_hours_today)
-            self.computer_usage_reminder_given_at = current_cycle
+            self._save_computer_usage()
+            print(f'[ComputerUsage] 触发第 {current_cycle} 个 3 小时周期，飞书同步={current_cycle}')
+        else:
+            # 每 60 秒保存一次计数（防止重启丢失）
+            if int(self.computer_usage_hours_today * 3600) % 60 == 0:
+                self._save_computer_usage()
 
     def show_computer_usage_reminder(self):
         """电脑使用 3 小时后提醒，打开护眼视频"""
@@ -1231,6 +1465,7 @@ class RestReminderWidget(QWidget):
 
     def quit_app(self):
         try:
+            self._save_computer_usage()
             self.timer.stop()
             self.tray_icon.hide()
             QApplication.quit()

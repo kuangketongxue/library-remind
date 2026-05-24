@@ -23,6 +23,7 @@ requirements.txt        — 依赖：PyQt5, requests, psutil
 | 用户 ID | `get_bilibili_videos()` 内 `mid` | 529362421 |
 | 护眼视频 URL | `show_computer_usage_reminder()` | BV14Y4y1N7PW |
 | 电脑使用周期 | `update_computer_usage()` | 每 3 小时循环提醒 |
+| 电脑使用缓存 | `.computer_usage.json` | 自动创建，跨重启持久化 |
 | 窗口尺寸 | `init_ui()` 内 `widget_width/widget_height` | 340×380 |
 | 倒计时范围 | `update_display()` 内 `start_minutes/end_minutes` | 4:30~22:00（倒计时模式） |
 | 学习目标时长 | `study_progress_bar.setMaximum` | 14（14 小时） |

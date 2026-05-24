@@ -44,6 +44,8 @@ crash.log
 # 本地数据文件
 daily_records.json
 daily_tracker_state.json
+.computer_usage.json
+.overlay_pos.json
 
 # 临时文件
 *.cmd
