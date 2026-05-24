@@ -17,7 +17,7 @@ import tempfile
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel,
                              QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox)
-from PyQt5.QtCore import QTimer, Qt, QPoint
+from PyQt5.QtCore import QTimer, Qt, QPoint, QEvent
 from PyQt5.QtGui import QIcon, QFont, QCursor, QPainter, QColor, QBrush, QPen
 import psutil
 import atexit
@@ -456,8 +456,27 @@ class CountdownOverlay(QWidget):
         layout.addWidget(self.hint_label)
         layout.addWidget(self.progress_bar)
 
+        for w in (self.title_label, self.timer_label, self.hint_label, self.progress_bar):
+            w.installEventFilter(self)
+
         self._load_position()
         self.hide()
+
+    def eventFilter(self, obj, event):
+        t = event.type()
+        if t == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+            self._drag_offset = event.globalPos() - self.frameGeometry().topLeft()
+            self.setCursor(Qt.ClosedHandCursor)
+            return True
+        if t == QEvent.MouseMove and self._drag_offset is not None:
+            self.move(event.globalPos() - self._drag_offset)
+            return True
+        if t == QEvent.MouseButtonRelease:
+            self._drag_offset = None
+            self.setCursor(Qt.OpenHandCursor)
+            self._save_position()
+            return True
+        return super().eventFilter(obj, event)
 
     def _load_position(self):
         try:
@@ -528,14 +547,6 @@ class CountdownOverlay(QWidget):
             import threading
             threading.Thread(target=self._play_chime, daemon=True).start()
 
-    @staticmethod
-    def _play_chime():
-        try:
-            winsound.Beep(880, 150)
-            winsound.Beep(1100, 200)
-        except Exception:
-            pass
-
         if not self.isVisible():
             if self._saved_pos:
                 self.move(self._saved_pos)
@@ -546,6 +557,14 @@ class CountdownOverlay(QWidget):
                     self.move(g.width() - 220, 30)
             self.show()
         self.raise_()
+
+    @staticmethod
+    def _play_chime():
+        try:
+            winsound.Beep(880, 150)
+            winsound.Beep(1100, 200)
+        except Exception:
+            pass
 
     def hide_overlay(self):
         self._chimed = False
