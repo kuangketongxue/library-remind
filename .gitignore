@@ -40,6 +40,7 @@ desktop.ini
 # Logs
 *.log
 crash.log
+rest_reminder.log
 
 # 本地数据文件
 daily_records.json

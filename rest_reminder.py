@@ -25,6 +25,18 @@ import winreg
 import traceback
 import winsound
 import math
+import logging
+
+# 日志配置：写入文件（pythonw 模式下 print 全部丢失）
+_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
+logging.basicConfig(
+    filename=_LOG_FILE,
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+    encoding='utf-8'
+)
+log = logging.getLogger('rest_reminder')
 
 
 def open_url(url):
@@ -40,12 +52,12 @@ def open_url(url):
         )
         return True
     except Exception as e:
-        print(f'[open_url] 使用 ShellExecuteW 失败: {e}')
+        log.error(f'[open_url] 使用 ShellExecuteW 失败: {e}')
         try:
             import webbrowser
             return webbrowser.open(url)
         except Exception as e2:
-            print(f'[open_url] 使用 webbrowser 也失败: {e2}')
+            log.error(f'[open_url] 使用 webbrowser 也失败: {e2}')
             return False
 
 
@@ -161,11 +173,11 @@ class FeishuSync:
                 cwd=os.path.dirname(os.path.abspath(__file__))
             )
             if result.returncode != 0:
-                print(f'[FeishuSync] lark-cli 返回码 {result.returncode}')
-                print(f'[FeishuSync] 执行命令: {cmd[:200]}')
+                log.error(f'[FeishuSync] lark-cli 返回码 {result.returncode}')
+                log.error(f'[FeishuSync] 执行命令: {cmd[:200]}')
             return json.loads(result.stdout) if result.stdout.strip() else {}
         except Exception as e:
-            print(f'[FeishuSync] lark-cli 调用失败: {e}')
+            log.error(f'[FeishuSync] lark-cli 调用失败: {e}')
             return {}
         finally:
             if tmp and os.path.exists(tmp):
@@ -211,10 +223,10 @@ class FeishuSync:
                 continue
             if date_str == today:
                 rid = rids[i]
-                print(f'[FeishuSync] 找到今天的已有记录: {rid}')
+                log.info(f'[FeishuSync] 找到今天的已有记录: {rid}')
                 return rid
 
-        print(f'[FeishuSync] 未找到今天的记录，将创建新记录')
+        log.info(f'[FeishuSync] 未找到今天的记录，将创建新记录')
         return None
 
     @classmethod
@@ -261,7 +273,7 @@ class FeishuSync:
         """更新指定字段的值，缓存过期时自动重试"""
         record_id = cls._ensure_record()
         if not record_id:
-            print(f'[FeishuSync] 无法获取记录，跳过更新 {field_name}')
+            log.error(f'[FeishuSync] 无法获取记录，跳过更新 {field_name}')
             return False
 
         resp = cls._call_lark([
@@ -272,10 +284,10 @@ class FeishuSync:
             '--as', 'user'
         ], {field_name: round(new_value, 1)})
         if resp.get('ok'):
-            print(f'[FeishuSync] 更新成功: {field_name} = {round(new_value, 1)}')
+            log.info(f'[FeishuSync] 更新成功: {field_name} = {round(new_value, 1)}')
             return True
         else:
-            print(f'[FeishuSync] 更新失败，缓存可能过期，重置后重试: {resp}')
+            log.error(f'[FeishuSync] 更新失败，缓存可能过期，重置后重试: {resp}')
             # 缓存过期（如 record_id 已被删除或与表中不匹配），重置后重新查询
             cls.reset()
             new_record_id = cls._ensure_record()
@@ -288,22 +300,22 @@ class FeishuSync:
                     '--as', 'user'
                 ], {field_name: round(new_value, 1)})
                 if resp2.get('ok'):
-                    print(f'[FeishuSync] 重试更新成功: {field_name} = {round(new_value, 1)}')
+                    log.info(f'[FeishuSync] 重试更新成功: {field_name} = {round(new_value, 1)}')
                     return True
                 else:
-                    print(f'[FeishuSync] 重试也失败: {resp2}')
+                    log.error(f'[FeishuSync] 重试也失败: {resp2}')
             return False
 
     @classmethod
     def increment_study_hour(cls, total_hours):
         """学习满 1 小时，更新飞书中的学习时长"""
-        print(f'[FeishuSync] 记录学习时长: {total_hours}h')
+        log.info(f'[FeishuSync] 记录学习时长: {total_hours}h')
         return cls._update_field('学习时长（H）', total_hours)
 
     @classmethod
     def increment_computer_hour(cls, total_hours):
         """电脑使用满 3 小时，更新飞书中的电脑使用时长"""
-        print(f'[FeishuSync] 记录电脑使用时长: {total_hours}h')
+        log.info(f'[FeishuSync] 记录电脑使用时长: {total_hours}h')
         return cls._update_field('电脑使用时长（H）', total_hours)
 
     @classmethod
@@ -339,7 +351,7 @@ class SingleInstanceChecker:
         except ImportError:
             return self._fallback_check()
         except Exception as e:
-            print(f'单实例检查失败：{e}')
+            log.error(f'单实例检查失败：{e}')
             return False
 
     def _fallback_check(self):
@@ -368,7 +380,7 @@ class SingleInstanceChecker:
             atexit.register(self.cleanup)
             return False
         except Exception as e:
-            print(f'备用单实例检查失败：{e}')
+            log.error(f'备用单实例检查失败：{e}')
             return False
 
     def cleanup(self):
@@ -470,7 +482,7 @@ class CountdownOverlay(QWidget):
             with open(self._POS_FILE, 'w') as f:
                 json.dump({'x': pos.x(), 'y': pos.y()}, f)
         except Exception as e:
-            print(f'[CountdownOverlay] 保存位置失败: {e}')
+            log.error(f'[CountdownOverlay] 保存位置失败: {e}')
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -550,7 +562,7 @@ class VideoFetchThread(QThread):
         try:
             videos = self._get_videos()
         except Exception as e:
-            print(f'[VideoFetchThread] 获取视频异常：{e}')
+            log.error(f'[VideoFetchThread] 获取视频异常：{e}')
             videos = []
         self.finished.emit(videos)
 
@@ -844,14 +856,14 @@ class RestReminderWidget(QWidget):
         if '--center' in sys.argv:
             x = (screen_width - self.widget_width) // 2
             y = (screen_height - self.widget_height) // 2
-            print(f"窗口居中显示：({x}, {y})")
+            log.info(f"窗口居中显示：({x}, {y})")
         else:
             margin = 10
             x = screen_width - self.widget_width - margin
             y = (screen_height - self.widget_height) // 2
-            print(f"窗口右侧显示：({x}, {y})")
+            log.info(f"窗口右侧显示：({x}, {y})")
 
-        print(f"屏幕分辨率：{screen_width} x {screen_height}")
+        log.info(f"屏幕分辨率：{screen_width} x {screen_height}")
         self.move(x, y)
 
     def _get_autostart_cmd(self):
@@ -883,7 +895,7 @@ class RestReminderWidget(QWidget):
             winreg.CloseKey(key)
             return True
         except Exception as e:
-            print(f'设置自启动失败：{e}')
+            log.error(f'设置自启动失败：{e}')
             return False
 
     def toggle_autostart(self):
@@ -943,7 +955,7 @@ class RestReminderWidget(QWidget):
                 self.raise_()
                 self.timer.start(1000)
         except Exception as e:
-            print(f'[toggle_visibility 异常] {type(e).__name__}: {e}')
+            log.error(f'[toggle_visibility 异常] {type(e).__name__}: {e}')
 
     def hide_to_edge(self):
         """隐藏窗口到桌面右侧边缘"""
@@ -956,9 +968,9 @@ class RestReminderWidget(QWidget):
                 y = (screen_geometry.height() - self.height()) // 2
                 self.move(x, y)
                 self.timer.stop()
-                print(f"已隐藏到右侧边缘，位置：({x}, {y})")
+                log.info(f"已隐藏到右侧边缘，位置：({x}, {y})")
         except Exception as e:
-            print(f'[hide_to_edge 异常] {type(e).__name__}: {e}')
+            log.error(f'[hide_to_edge 异常] {type(e).__name__}: {e}')
 
     def setup_timer(self):
         self.timer = QTimer()
@@ -979,7 +991,7 @@ class RestReminderWidget(QWidget):
             self.pause_btn.setEnabled(c['pause_en'])
             self.pause_btn.setText(c['pause_txt'])
         except Exception as e:
-            print(f'[_sync_buttons 异常] {type(e).__name__}: {e}')
+            log.error(f'[_sync_buttons 异常] {type(e).__name__}: {e}')
 
     def on_start_clicked(self):
         try:
@@ -993,7 +1005,7 @@ class RestReminderWidget(QWidget):
             self.timer_state = 'running'
             self._sync_buttons()
         except Exception as e:
-            print(f'[on_start_clicked 异常] {type(e).__name__}: {e}')
+            log.error(f'[on_start_clicked 异常] {type(e).__name__}: {e}')
 
     def on_pause_clicked(self):
         try:
@@ -1004,7 +1016,7 @@ class RestReminderWidget(QWidget):
             self.timer_state = 'paused'
             self._sync_buttons()
         except Exception as e:
-            print(f'[on_pause_clicked 异常] {type(e).__name__}: {e}')
+            log.error(f'[on_pause_clicked 异常] {type(e).__name__}: {e}')
 
     def _reset_timer_to_idle(self):
         try:
@@ -1015,7 +1027,7 @@ class RestReminderWidget(QWidget):
             self.countdown_overlay.hide_overlay()
             self._sync_buttons()
         except Exception as e:
-            print(f'[_reset_timer_to_idle 异常] {type(e).__name__}: {e}')
+            log.error(f'[_reset_timer_to_idle 异常] {type(e).__name__}: {e}')
 
     def _handle_idle(self):
         """处理空闲状态 - 显示默认时间"""
@@ -1108,7 +1120,7 @@ class RestReminderWidget(QWidget):
                 self._save_computer_usage()
                 self.update_study_display()
                 self.update_computer_usage_display()
-                print(f'新的一天，数据已重置: {self.current_date}')
+                log.info(f'新的一天，数据已重置: {self.current_date}')
 
             # --- 状态机路由 ---
             if self.timer_state == 'idle':
@@ -1131,7 +1143,7 @@ class RestReminderWidget(QWidget):
             self.update_computer_usage(now)
 
         except Exception as e:
-            print(f'[update_display 异常] {type(e).__name__}: {e}')
+            log.error(f'[update_display 异常] {type(e).__name__}: {e}')
             traceback.print_exc()
 
     def update_study_display(self):
@@ -1155,9 +1167,9 @@ class RestReminderWidget(QWidget):
                 self.computer_usage_hours_today = data.get('hours', 0)
                 self.computer_3h_cycles_today = data.get('cycles', 0)
                 self.computer_usage_reminder_given_at = data.get('last_cycle', None)
-                print(f'[ComputerUsage] 恢复今日计数: {self.computer_usage_hours_today:.2f}h, {self.computer_3h_cycles_today} 个周期')
+                log.info(f'[ComputerUsage] 恢复今日计数: {self.computer_usage_hours_today:.2f}h, {self.computer_3h_cycles_today} 个周期')
         except Exception as e:
-            print(f'[ComputerUsage] 加载缓存失败: {e}')
+            log.error(f'[ComputerUsage] 加载缓存失败: {e}')
 
     def _save_computer_usage(self):
         """保存当前电脑使用计数到本地文件"""
@@ -1170,7 +1182,7 @@ class RestReminderWidget(QWidget):
                     'last_cycle': self.computer_usage_reminder_given_at
                 }, f, ensure_ascii=False)
         except Exception as e:
-            print(f'[ComputerUsage] 保存缓存失败: {e}')
+            log.error(f'[ComputerUsage] 保存缓存失败: {e}')
 
     def update_computer_usage(self, now):
         """更新电脑使用时长（倒计时模式：3 小时→0）"""
@@ -1216,22 +1228,23 @@ class RestReminderWidget(QWidget):
             self.computer_usage_reminder_given_at = current_cycle
             self._computer_countdown_active = False
             self.countdown_overlay.hide_overlay()
-            self.show_computer_usage_reminder()
+            self.show_computer_usage_reminder(cycle=current_cycle)
             FeishuSync.increment_computer_hour(self.computer_usage_hours_today)
             self._save_computer_usage()
-            print(f'[ComputerUsage] 触发第 {current_cycle} 个 3 小时周期，飞书同步={current_cycle}')
+            log.info(f'[ComputerUsage] 触发第 {current_cycle} 个 3 小时周期，飞书同步={current_cycle}')
         else:
             # 每 60 秒保存一次计数（防止重启丢失）
             if int(self.computer_usage_hours_today * 3600) % 60 == 0:
                 self._save_computer_usage()
 
-    def show_computer_usage_reminder(self):
+    def show_computer_usage_reminder(self, cycle=1):
         """电脑使用 3 小时后提醒，打开护眼视频"""
+        total_h = int(self.computer_usage_hours_today)
         video_url = 'https://www.bilibili.com/video/BV14Y4y1N7PW/?spm_id_from=333.1387.favlist.content.click'
         open_url(video_url)
         self.tray_icon.showMessage(
             '💻 电脑使用时间过长',
-            '已经连续使用 3 小时了，看看护眼视频休息一下眼睛吧~',
+            f'今天累计 {total_h} 小时（第 {cycle} 个周期），看看护眼视频休息一下眼睛吧~',
             QSystemTrayIcon.Information,
             5000
         )
@@ -1306,7 +1319,7 @@ class RestReminderWidget(QWidget):
 
         except Exception as e:
             self.battery_label.setText('❌ 电池状态获取失败')
-            print(f'获取电池状态失败：{e}')
+            log.error(f'获取电池状态失败：{e}')
 
     def show_battery_warning(self, percent):
         self.tray_icon.showMessage(
@@ -1354,7 +1367,7 @@ class RestReminderWidget(QWidget):
                     data = response.json()
                     code = data.get('code')
                     if code != 0:
-                        print(f'B 站 API 返回错误 code={code}, msg={data.get("message")} (尝试 {attempt+1}/3)')
+                        log.error(f'B 站 API 返回错误 code={code}, msg={data.get("message")} (尝试 {attempt+1}/3)')
                         break
 
                     medias = data.get('data', {}).get('medias') or []
@@ -1371,17 +1384,17 @@ class RestReminderWidget(QWidget):
                     page += 1
 
                 if videos:
-                    print(f'获取到 {len(videos)} 个收藏视频（{page} 页，第{attempt+1}次尝试）')
+                    log.info(f'获取到 {len(videos)} 个收藏视频（{page} 页，第{attempt+1}次尝试）')
                     return videos
 
             except Exception as e:
-                print(f'获取视频列表异常 (尝试 {attempt+1}/3): {e}')
+                log.error(f'获取视频列表异常 (尝试 {attempt+1}/3): {e}')
 
             if attempt < 2:
                 time.sleep(2)
 
         # 兜底方案
-        print('API 3 次全部失败，尝试从收藏夹页面提取视频链接...')
+        log.info('API 3 次全部失败，尝试从收藏夹页面提取视频链接...')
         try:
             page_url = f'https://space.bilibili.com/{mid}/favlist?fid={fid}&ftype=create'
             resp = requests.get(page_url, headers={'User-Agent': user_agents[0], 'Referer': 'https://www.bilibili.com'}, timeout=10)
@@ -1394,10 +1407,10 @@ class RestReminderWidget(QWidget):
                     seen.add(bv)
                     unique.append(bv)
             if unique:
-                print(f'从页面兜底提取到 {len(unique)} 个视频')
+                log.info(f'从页面兜底提取到 {len(unique)} 个视频')
                 return [f'https://www.bilibili.com/video/{bv}' for bv in unique]
         except Exception as e:
-            print(f'页面兜底也失败了：{e}')
+            log.error(f'页面兜底也失败了：{e}')
 
         return []
 
@@ -1411,13 +1424,13 @@ class RestReminderWidget(QWidget):
                 if videos:
                     remaining = [v for v in videos if v not in self.played_today]
                     if not remaining:
-                        print('当天视频已全部播放过，重置记录')
+                        log.info('当天视频已全部播放过，重置记录')
                         self.played_today = set()
                         remaining = videos
 
                     video_url = random.choice(remaining)
                     self.played_today.add(video_url)
-                    print(f'打开视频：{video_url} (今日已播 {len(self.played_today)}/{len(self.video_list)})')
+                    log.info(f'打开视频：{video_url} (今日已播 {len(self.played_today)}/{len(self.video_list)})')
                     open_url(video_url)
                     self.tray_icon.showMessage(
                         '休息时间到！',
@@ -1430,7 +1443,7 @@ class RestReminderWidget(QWidget):
                     open_url(fallback_url)
                     self.tray_icon.showMessage('休息时间到！', '已为您打开收藏夹页面~', QSystemTrayIcon.Information, 3000)
             except Exception as e:
-                print(f'[open_random_video 回调异常] {type(e).__name__}: {e}')
+                log.error(f'[open_random_video 回调异常] {type(e).__name__}: {e}')
                 traceback.print_exc()
 
         if hasattr(self, '_video_thread') and self._video_thread.isRunning():
@@ -1446,7 +1459,7 @@ class RestReminderWidget(QWidget):
                 self.drag_position = event.globalPos() - self.frameGeometry().topLeft()
                 event.accept()
         except Exception as e:
-            print(f'[mousePressEvent 异常] {type(e).__name__}: {e}')
+            log.error(f'[mousePressEvent 异常] {type(e).__name__}: {e}')
 
     def mouseMoveEvent(self, event):
         try:
@@ -1454,14 +1467,14 @@ class RestReminderWidget(QWidget):
                 self.move(event.globalPos() - self.drag_position)
                 event.accept()
         except Exception as e:
-            print(f'[mouseMoveEvent 异常] {type(e).__name__}: {e}')
+            log.error(f'[mouseMoveEvent 异常] {type(e).__name__}: {e}')
 
     def closeEvent(self, event):
         try:
             event.ignore()
             self.hide_to_edge()
         except Exception as e:
-            print(f'[closeEvent 异常] {type(e).__name__}: {e}')
+            log.error(f'[closeEvent 异常] {type(e).__name__}: {e}')
 
     def quit_app(self):
         try:
@@ -1470,14 +1483,14 @@ class RestReminderWidget(QWidget):
             self.tray_icon.hide()
             QApplication.quit()
         except Exception as e:
-            print(f'[quit_app 异常] {type(e).__name__}: {e}')
+            log.error(f'[quit_app 异常] {type(e).__name__}: {e}')
 
 
 def main():
     single = SingleInstanceChecker()
 
     if single.is_already_running():
-        print('休息提醒程序已经在运行中！')
+        log.warning('休息提醒程序已经在运行中！')
         if '--silent' not in sys.argv:
             a = QApplication(sys.argv)
             QMessageBox.warning(None, '已在运行', '程序已在运行中！\n请检查系统托盘图标。')
@@ -1530,7 +1543,7 @@ def main():
             ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, hicon_ptr)
             ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, hicon_ptr)
     except Exception as e:
-        print(f'WM_SETICON error: {e}')
+        log.error(f'WM_SETICON error: {e}')
 
     sys.exit(app.exec_())
 
