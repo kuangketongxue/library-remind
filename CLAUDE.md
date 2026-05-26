@@ -27,8 +27,8 @@ requirements.txt        — 依赖：PyQt5, requests, psutil
 | 电脑使用缓存 | `.computer_usage.json` | 自动创建，跨重启持久化 |
 | 倒计时浮层坐标 | `.overlay_pos.json` | 拖动后自动保存，跨重启记忆 |
 | 学习目标时长 | `study_progress_bar.setMaximum` | 14（14 小时） |
-| 飞书 base token | 顶部 `FEISHU_BASE_TOKEN` | DcJzbLadCaGbGws2ZekchGHhnVe |
-| 飞书表 ID | 顶部 `FEISHU_TABLE_ID` | tbl9DT9qniE63BH7 |
+| 飞书 base token | 环境变量 `FEISHU_BASE_TOKEN` | 必填（开源版不包含默认值） |
+| 飞书表 ID | 环境变量 `FEISHU_TABLE_ID` | 必填（开源版不包含默认值） |
 | 计时器状态机 | `self.timer_state` | idle → running → paused → auto-restart |
 
 ## 运行和验证
@@ -42,9 +42,9 @@ pythonw rest_reminder.py
 # 杀掉所有进程
 taskkill /F /IM pythonw.exe
 
-# 用 PowerShell 验证并重启
+# 用 PowerShell 验证并重启（请替换 YOUR_USERNAME 为实际用户名）
 Get-Process pythonw | Stop-Process -Force
-Start-Process -WindowStyle Hidden -FilePath "C:\Users\binlo\AppData\Local\Python\bin\pythonw.exe" -ArgumentList "C:\Users\binlo\Desktop\休息提醒\rest_reminder.py" -WorkingDirectory "C:\Users\binlo\Desktop\休息提醒" -PassThru
+Start-Process -WindowStyle Hidden -FilePath "pythonw.exe" -ArgumentList "rest_reminder.py" -WorkingDirectory "path\to\休息提醒" -PassThru
 ```
 
 ## 踩坑记录（必读）

@@ -14,6 +14,7 @@ import json
 import os
 import subprocess
 import tempfile
+import re
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel,
                              QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox)
@@ -126,9 +127,14 @@ class FloatingBall(QWidget):
                     self.main_window.raise_()
 
 
-# 飞书多维表格配置（优先读环境变量，fallback 到默认值）
-FEISHU_BASE_TOKEN = os.environ.get('FEISHU_BASE_TOKEN', 'DcJzbLadCaGbGws2ZekchGHhnVe')
-FEISHU_TABLE_ID = os.environ.get('FEISHU_TABLE_ID', 'tbl9DT9qniE63BH7')
+# 飞书多维表格配置（必须通过环境变量设置，开源版本不包含默认值）
+FEISHU_BASE_TOKEN = os.environ.get('FEISHU_BASE_TOKEN')
+FEISHU_TABLE_ID = os.environ.get('FEISHU_TABLE_ID')
+
+if not FEISHU_BASE_TOKEN or not FEISHU_TABLE_ID:
+    log.warning('未设置飞书同步凭据（FEISHU_BASE_TOKEN / FEISHU_TABLE_ID），飞书同步功能将禁用')
+    FEISHU_BASE_TOKEN = FEISHU_BASE_TOKEN or ''
+    FEISHU_TABLE_ID = FEISHU_TABLE_ID or ''
 
 
 class FeishuSync:
@@ -172,20 +178,22 @@ class FeishuSync:
             cmd_args += ['--json', '@' + tmp]
         try:
             # shell=True 是 windows .cmd shim 的关键修复
+            # Windows pipe 的 GBK 编码问题：必须二进制捕获然后手动 utf-8 decode，
+            # 不能用 text=True + encoding='utf-8'（内部线程仍会用 gbk 解码导致 UnicodeDecodeError）
             result = subprocess.run(
-                cmd_args, capture_output=True, text=True, timeout=30,
-                encoding='utf-8',
+                cmd_args, capture_output=True, timeout=30,
                 cwd=os.path.dirname(os.path.abspath(__file__)),
                 shell=is_windows
             )
+            stdout = result.stdout.decode('utf-8', errors='replace')
+            stderr = result.stderr.decode('utf-8', errors='replace') if result.stderr else ''
             if result.returncode != 0:
                 redacted = [a if 'token' not in a.lower() else a[:10] + '***' for a in cmd_args]
                 log.error(f'[FeishuSync] lark-cli 返回码 {result.returncode}')
                 log.error(f'[FeishuSync] 执行命令: {" ".join(redacted)[:200]}')
-                stderr_tail = (result.stderr or '')[:500]
-                if stderr_tail:
-                    log.error(f'[FeishuSync] stderr: {stderr_tail}')
-            return json.loads(result.stdout) if result.stdout.strip() else {}
+                if stderr:
+                    log.error(f'[FeishuSync] stderr: {stderr[:500]}')
+            return json.loads(stdout) if stdout.strip() else {}
         except Exception as e:
             log.error(f'[FeishuSync] lark-cli 调用失败: {e}')
             return {}
@@ -645,6 +653,7 @@ class RestReminderWidget(QWidget):
         self.last_computer_usage_check = datetime.now()
         self.computer_usage_reminder_given_at = None  # 记录上次提醒的周期数
         self.computer_3h_cycles_today = 0  # 今天已完成的 3 小时周期数
+        self._computer_usage_save_tick = 0  # 每 60 tick 保存一次
         self._load_computer_usage()
 
         # 5分钟倒计时浮层状态
@@ -994,20 +1003,19 @@ class RestReminderWidget(QWidget):
             self.toggle_visibility()
 
     def toggle_visibility(self):
+        """切换窗口可见性（不停止后台计时器——电池监控、电脑使用追踪等需持续运行）"""
         try:
             if self.isVisible():
                 self.hide()
-                self.timer.stop()
             else:
                 self.show()
                 self.activateWindow()
                 self.raise_()
-                self.timer.start(1000)
         except Exception as e:
             log.error(f'[toggle_visibility 异常] {type(e).__name__}: {e}')
 
     def hide_to_edge(self):
-        """隐藏窗口到桌面右侧边缘"""
+        """隐藏窗口到桌面右侧边缘（不停止后台计时器——只是视觉隐藏）"""
         try:
             screen = QApplication.primaryScreen()
             if screen:
@@ -1016,7 +1024,6 @@ class RestReminderWidget(QWidget):
                 x = screen_geometry.width() - edge_width
                 y = (screen_geometry.height() - self.height()) // 2
                 self.move(x, y)
-                self.timer.stop()
                 log.info(f"已隐藏到右侧边缘，位置：({x}, {y})")
         except Exception as e:
             log.error(f'[hide_to_edge 异常] {type(e).__name__}: {e}')
@@ -1073,7 +1080,9 @@ class RestReminderWidget(QWidget):
             self.start_time = None
             self.remaining_when_paused = None
             self._study_countdown_active = False
-            self.countdown_overlay.hide_overlay()
+            # 学习倒计时结束，但电脑使用倒计时可能还在运行
+            if not self._computer_countdown_active:
+                self.countdown_overlay.hide_overlay()
             self._sync_buttons()
         except Exception as e:
             log.error(f'[_reset_timer_to_idle 异常] {type(e).__name__}: {e}')
@@ -1110,7 +1119,9 @@ class RestReminderWidget(QWidget):
         # 倒计时结束（包含浮层清理）
         if remaining <= 0:
             self._study_countdown_active = False
-            self.countdown_overlay.hide_overlay()
+            # 不直接隐藏浮层：电脑使用倒计时可能还在运行
+            if not self._computer_countdown_active:
+                self.countdown_overlay.hide_overlay()
             self.open_random_video()
             self.study_hours_today += 1
             self.update_study_display()
@@ -1282,8 +1293,10 @@ class RestReminderWidget(QWidget):
             self._save_computer_usage()
             log.info(f'[ComputerUsage] 触发第 {current_cycle} 个 3 小时周期，飞书同步={current_cycle}')
         else:
-            # 每 60 秒保存一次计数（防止重启丢失）
-            if int(self.computer_usage_hours_today * 3600) % 60 == 0:
+            # 每 60 秒保存一次计数（防止重启丢失），用 tick 计数器避免浮点精度问题
+            self._computer_usage_save_tick += 1
+            if self._computer_usage_save_tick >= 60:
+                self._computer_usage_save_tick = 0
                 self._save_computer_usage()
 
     def show_computer_usage_reminder(self, cycle=1):
@@ -1447,7 +1460,6 @@ class RestReminderWidget(QWidget):
         try:
             page_url = f'https://space.bilibili.com/{mid}/favlist?fid={fid}&ftype=create'
             resp = requests.get(page_url, headers={'User-Agent': user_agents[0], 'Referer': 'https://www.bilibili.com'}, timeout=10)
-            import re
             bvids = re.findall(r'BV[a-zA-Z0-9]{10}', resp.text)
             seen = set()
             unique = []

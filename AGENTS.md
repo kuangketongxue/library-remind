@@ -33,8 +33,8 @@ requirements.txt        — 依赖：PyQt5, requests, psutil
 | 学习目标时长 | `study_progress_bar.setMaximum` | 14（14 小时） |
 | 电池轮询间隔 | `update_display()` 内 `_battery_tick` 计数器 | 每 15 秒 |
 | 飞书同步（实时） | `FeishuSync` (L:115) | 学习每 +1h → 飞书 / 电脑每 +3h → 飞书 |
-| 飞书 base token | 顶部 `FEISHU_BASE_TOKEN` | DcJzbLadCaGbGws2ZekchGHhnVe |
-| 飞书表 ID | 顶部 `FEISHU_TABLE_ID` | tbl9DT9qniE63BH7 |
+| 飞书 base token | 环境变量 `FEISHU_BASE_TOKEN` | 必填（开源版不包含默认值） |
+| 飞书表 ID | 环境变量 `FEISHU_TABLE_ID` | 必填（开源版不包含默认值） |
 | 计时器状态机 | `self.timer_state` | idle → running → paused → auto-restart |
 
 ## 运行和验证
