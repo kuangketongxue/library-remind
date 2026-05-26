@@ -160,23 +160,31 @@ class FeishuSync:
     @classmethod
     def _call_lark(cls, args, data=None):
         """调用 lark-cli，返回解析后的 JSON"""
+        # Windows: lark-cli 是 .cmd 批处理 shim，必须 shell=True 才能执行
+        is_windows = sys.platform == 'win32'
         cmd_args = ['lark-cli'] + list(args)
         tmp = None
         if data:
             tmp = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.feishu_tmp.json')
             with open(tmp, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False)
+            # Windows 下 shell=True 用 list2cmdline 拼接，确保 @file 引用正确
             cmd_args += ['--json', '@' + tmp]
         try:
+            # shell=True 是 windows .cmd shim 的关键修复
             result = subprocess.run(
                 cmd_args, capture_output=True, text=True, timeout=30,
                 encoding='utf-8',
-                cwd=os.path.dirname(os.path.abspath(__file__))
+                cwd=os.path.dirname(os.path.abspath(__file__)),
+                shell=is_windows
             )
             if result.returncode != 0:
                 redacted = [a if 'token' not in a.lower() else a[:10] + '***' for a in cmd_args]
                 log.error(f'[FeishuSync] lark-cli 返回码 {result.returncode}')
                 log.error(f'[FeishuSync] 执行命令: {" ".join(redacted)[:200]}')
+                stderr_tail = (result.stderr or '')[:500]
+                if stderr_tail:
+                    log.error(f'[FeishuSync] stderr: {stderr_tail}')
             return json.loads(result.stdout) if result.stdout.strip() else {}
         except Exception as e:
             log.error(f'[FeishuSync] lark-cli 调用失败: {e}')
@@ -187,48 +195,68 @@ class FeishuSync:
 
     @classmethod
     def _find_today_record(cls):
-        """查询今天是否已有记录，返回 record_id 或 None"""
+        """分页查询今天是否已有记录，返回 record_id 或 None
+
+        该表可能超过 200 条记录，必须逐页遍历查找今日记录。
+        """
         today = datetime.now().date().isoformat()
-        resp = cls._call_lark([
-            'base', '+record-list',
-            '--base-token', FEISHU_BASE_TOKEN,
-            '--table-id', FEISHU_TABLE_ID,
-            '--as', 'user',
-            '--limit', '200',
-            '--format', 'json'
-        ])
-        if not resp.get('ok'):
-            return None
+        offset = 0
+        while True:
+            resp = cls._call_lark([
+                'base', '+record-list',
+                '--base-token', FEISHU_BASE_TOKEN,
+                '--table-id', FEISHU_TABLE_ID,
+                '--as', 'user',
+                '--limit', '200',
+                '--offset', str(offset),
+                '--format', 'json'
+            ])
+            if not resp.get('ok'):
+                log.error(f'[FeishuSync] +record-list 未返回 ok，跳过')
+                return None
 
-        records = resp.get('data', {}).get('data', [])
-        fields = resp.get('data', {}).get('fields', [])
-        rids = resp.get('data', {}).get('record_id_list', [])
-
-        # 找到"日期"字段的索引
-        try:
-            date_idx = fields.index('日期')
-        except ValueError:
-            return None
-
-        for i, rec in enumerate(records):
-            if i >= len(rids):
+            d = resp.get('data', {})
+            records = d.get('data', [])
+            if not records:
                 break
-            date_val = rec[date_idx] if date_idx < len(rec) else None
-            if date_val is None:
-                continue
-            if isinstance(date_val, (int, float)):
-                dt = datetime.fromtimestamp(date_val / 1000)
-                date_str = dt.strftime('%Y-%m-%d')
-            elif isinstance(date_val, str):
-                date_str = date_val[:10]
-            else:
-                continue
-            if date_str == today:
-                rid = rids[i]
-                log.info(f'[FeishuSync] 找到今天的已有记录: {rid}')
-                return rid
 
-        log.info(f'[FeishuSync] 未找到今天的记录，将创建新记录')
+            field_ids = d.get('field_id_list', [])
+            rids = d.get('record_id_list', [])
+
+            try:
+                date_idx = field_ids.index('fldTXDs0Ro')
+            except ValueError:
+                log.error('[FeishuSync] 找不到日期字段 fldTXDs0Ro')
+                return None
+
+            for i, rec in enumerate(records):
+                if i >= len(rids):
+                    break
+                date_val = rec[date_idx] if date_idx < len(rec) else None
+                if date_val is None:
+                    continue
+                if isinstance(date_val, (int, float)):
+                    dt = datetime.fromtimestamp(date_val / 1000)
+                    date_str = dt.strftime('%Y-%m-%d')
+                elif isinstance(date_val, str):
+                    date_str = date_val[:10]
+                else:
+                    continue
+                if date_str == today:
+                    rid = rids[i]
+                    log.info(f'[FeishuSync] 找到今日记录: {rid}')
+                    return rid
+
+            # 检查是否有下一页
+            has_more = d.get('has_more', False)
+            if not has_more:
+                break
+            offset += len(records)
+            if offset >= 2000:
+                log.error('[FeishuSync] 翻页超过 2000 条仍未找到今日记录，终止')
+                break
+
+        log.info('[FeishuSync] 未找到今天的记录')
         return None
 
     @classmethod
@@ -247,7 +275,7 @@ class FeishuSync:
             cls._current_date = today
             return cls._record_id
 
-        # 查询飞书
+        # 查飞书（逐页扫描，确保不漏）
         record_id = cls._find_today_record()
         if record_id:
             cls._record_id = record_id
@@ -255,7 +283,8 @@ class FeishuSync:
             cls._save_cache(today, record_id)
             return record_id
 
-        # 创建新记录
+        # 确实没有今天的记录才新建
+        log.info('[FeishuSync] 创建新记录')
         resp = cls._call_lark([
             'base', '+record-upsert',
             '--base-token', FEISHU_BASE_TOKEN,
@@ -272,7 +301,7 @@ class FeishuSync:
 
     @classmethod
     def _update_field(cls, field_name, new_value):
-        """更新指定字段的值，缓存过期时自动重试"""
+        """更新指定字段的值，如果找不到记录则跳过"""
         record_id = cls._ensure_record()
         if not record_id:
             log.error(f'[FeishuSync] 无法获取记录，跳过更新 {field_name}')
@@ -289,8 +318,7 @@ class FeishuSync:
             log.info(f'[FeishuSync] 更新成功: {field_name} = {round(new_value, 1)}')
             return True
         else:
-            log.error(f'[FeishuSync] 更新失败，缓存可能过期，重置后重试: {resp}')
-            # 缓存过期（如 record_id 已被删除或与表中不匹配），重置后重新查询
+            log.error(f'[FeishuSync] 更新失败（可能缓存过期）: {resp}')
             cls.reset()
             new_record_id = cls._ensure_record()
             if new_record_id and new_record_id != record_id:
