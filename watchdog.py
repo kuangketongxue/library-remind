@@ -17,6 +17,27 @@ PYTHONW = os.path.join(os.path.dirname(sys.executable), 'pythonw.exe')
 if not os.path.exists(PYTHONW):
     PYTHONW = sys.executable
 
+# WindowsApps 代理检测：如果 pythonw.exe 是 Store 代理（体积 < 100KB），
+# 查找真实 Python 安装目录下的 pythonw.exe
+def _find_real_pythonw(candidate):
+    """如果 candidate 是 WindowsApps 代理，返回真实 Python 的 pythonw.exe"""
+    try:
+        if 'WindowsApps' in candidate and os.path.exists(candidate):
+            size = os.path.getsize(candidate)
+            if size < 100_000:  # 代理文件通常很小
+                # 从 PATH 中找非 WindowsApps 的 pythonw
+                for p in os.environ.get('PATH', '').split(os.pathsep):
+                    if 'WindowsApps' in p:
+                        continue
+                    real = os.path.join(p, 'pythonw.exe')
+                    if os.path.exists(real) and os.path.getsize(real) > 100_000:
+                        return real
+    except Exception:
+        pass
+    return candidate
+
+PYTHONW = _find_real_pythonw(PYTHONW)
+
 CRASH_LOG = os.path.join(APP_DIR, 'crash.log')
 MAX_RESTARTS = 50
 RESTART_DELAY = 3
@@ -124,7 +145,9 @@ def main():
         log_event(f'rest_reminder.py exited code={proc.returncode} runtime={runtime:.1f}s')
 
         if proc.returncode == 0 and runtime > 10:
-            break
+            log_event(f'进程干净退出 code=0 runtime={runtime:.1f}s，继续守护（不中断）')
+            # 不 break：干净退出不代表用户主动关闭，可能是 GC/窗口丢失等意外
+            # 只有用户通过托盘菜单"退出"才会真正终止看门狗进程
 
         time.sleep(RESTART_DELAY)
 

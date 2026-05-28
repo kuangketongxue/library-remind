@@ -71,6 +71,7 @@ vendor/
 *.local
 *.env
 .env.*
+config.json
 
 # 飞书 CLI 临时文件
 lark-cli.bat

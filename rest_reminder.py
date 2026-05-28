@@ -127,14 +127,35 @@ class FloatingBall(QWidget):
                     self.main_window.raise_()
 
 
-# 飞书多维表格配置（必须通过环境变量设置，开源版本不包含默认值）
+# 飞书多维表格配置 — 环境变量优先，config.json 兜底
 FEISHU_BASE_TOKEN = os.environ.get('FEISHU_BASE_TOKEN')
 FEISHU_TABLE_ID = os.environ.get('FEISHU_TABLE_ID')
+
+if not FEISHU_BASE_TOKEN or not FEISHU_TABLE_ID:
+    # 环境变量缺失时从 config.json 读取（pythonw 子进程可能继承不到 setx 设的变量）
+    _config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
+    if os.path.exists(_config_path):
+        try:
+            with open(_config_path, 'r', encoding='utf-8') as _f:
+                _cfg = json.load(_f)
+            FEISHU_BASE_TOKEN = FEISHU_BASE_TOKEN or _cfg.get('FEISHU_BASE_TOKEN', '')
+            FEISHU_TABLE_ID = FEISHU_TABLE_ID or _cfg.get('FEISHU_TABLE_ID', '')
+        except Exception:
+            pass
 
 if not FEISHU_BASE_TOKEN or not FEISHU_TABLE_ID:
     log.warning('未设置飞书同步凭据（FEISHU_BASE_TOKEN / FEISHU_TABLE_ID），飞书同步功能将禁用')
     FEISHU_BASE_TOKEN = FEISHU_BASE_TOKEN or ''
     FEISHU_TABLE_ID = FEISHU_TABLE_ID or ''
+
+
+# lark-cli Node.js 入口路径（.cmd 包装器在 pythonw 上下文中失败时的 fallback）
+_LARK_CLI_RUN_JS = None
+_app_dir = os.path.dirname(os.path.abspath(__file__))
+_npm_cli_dir = os.path.join(os.path.expandvars(r'%APPDATA%'), 'npm', 'node_modules', '@larksuite', 'cli')
+_run_js = os.path.join(_npm_cli_dir, 'scripts', 'run.js')
+if os.path.exists(_run_js):
+    _LARK_CLI_RUN_JS = _run_js
 
 
 class FeishuSync:
@@ -165,41 +186,66 @@ class FeishuSync:
 
     @classmethod
     def _call_lark(cls, args, data=None):
-        """调用 lark-cli，返回解析后的 JSON"""
-        # Windows: lark-cli 是 .cmd 批处理 shim，必须 shell=True 才能执行
-        is_windows = sys.platform == 'win32'
+        """调用 lark-cli，返回解析后的 JSON
+
+        三重保障：
+        1. shell=True 调 lark-cli（.cmd shim）
+        2. 如果返回码非 0，fallback 到 Node.js 直接调 scripts/run.js
+        3. 始终用内联 JSON（不用 @file，避免路径校验失败）
+        """
+        app_dir = os.path.dirname(os.path.abspath(__file__))
+        json_str = json.dumps(data, ensure_ascii=False) if data else None
+
+        # 构造 lark-cli 命令行
         cmd_args = ['lark-cli'] + list(args)
-        tmp = None
-        if data:
-            tmp = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.feishu_tmp.json')
-            with open(tmp, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False)
-            # Windows 下 shell=True 用 list2cmdline 拼接，确保 @file 引用正确
-            cmd_args += ['--json', '@' + tmp]
-        try:
-            # shell=True 是 windows .cmd shim 的关键修复
-            # Windows pipe 的 GBK 编码问题：必须二进制捕获然后手动 utf-8 decode，
-            # 不能用 text=True + encoding='utf-8'（内部线程仍会用 gbk 解码导致 UnicodeDecodeError）
-            result = subprocess.run(
-                cmd_args, capture_output=True, timeout=30,
-                cwd=os.path.dirname(os.path.abspath(__file__)),
-                shell=is_windows
-            )
-            stdout = result.stdout.decode('utf-8', errors='replace')
-            stderr = result.stderr.decode('utf-8', errors='replace') if result.stderr else ''
-            if result.returncode != 0:
-                redacted = [a if 'token' not in a.lower() else a[:10] + '***' for a in cmd_args]
-                log.error(f'[FeishuSync] lark-cli 返回码 {result.returncode}')
-                log.error(f'[FeishuSync] 执行命令: {" ".join(redacted)[:200]}')
-                if stderr:
-                    log.error(f'[FeishuSync] stderr: {stderr[:500]}')
-            return json.loads(stdout) if stdout.strip() else {}
-        except Exception as e:
-            log.error(f'[FeishuSync] lark-cli 调用失败: {e}')
-            return {}
-        finally:
-            if tmp and os.path.exists(tmp):
-                os.unlink(tmp)
+        if json_str:
+            cmd_args += ['--json', json_str]
+
+        def _run(cmd, shell=True):
+            """执行命令并返回 (returncode, stdout_dict, stderr_str)"""
+            try:
+                result = subprocess.run(
+                    cmd, capture_output=True, timeout=30, cwd=app_dir, shell=shell
+                )
+                stdout = result.stdout.decode('utf-8', errors='replace') if result.stdout else ''
+                stderr = result.stderr.decode('utf-8', errors='replace') if result.stderr else ''
+                parsed = {}
+                if stdout.strip():
+                    try:
+                        parsed = json.loads(stdout)
+                    except json.JSONDecodeError:
+                        pass
+                return result.returncode, parsed, stderr
+            except Exception as e:
+                log.error(f'[FeishuSync] 命令执行异常: {e}')
+                return -1, {}, str(e)
+
+        # 方法 1：shell=True 调 lark-cli（.cmd shim）
+        rc, resp, stderr = _run(cmd_args, shell=(sys.platform == 'win32'))
+        if rc == 0 and resp:
+            return resp
+
+        # 方法 2：Node.js 直接调 scripts/run.js（绕过 .cmd 包装器）
+        resp2 = {}
+        if _LARK_CLI_RUN_JS:
+            node_cmd = ['node', _LARK_CLI_RUN_JS] + list(args)
+            if json_str:
+                node_cmd += ['--json', json_str]
+            rc2, resp2, stderr2 = _run(node_cmd, shell=False)
+            if rc2 == 0 and resp2:
+                log.info('[FeishuSync] Node.js 直接调用成功（.cmd 包装器 fallback）')
+                return resp2
+            log.error(f'[FeishuSync] Node.js 直接调用也失败 code={rc2}: {stderr2[:300]}')
+        else:
+            log.error('[FeishuSync] 未找到 lark-cli scripts/run.js，无法 fallback')
+
+        # 两种方式都失败
+        redacted = [a if 'token' not in a.lower() else a[:10] + '***' for a in cmd_args]
+        log.error(f'[FeishuSync] lark-cli 最终失败 code={rc}')
+        log.error(f'[FeishuSync] 命令: {" ".join(redacted)[:200]}')
+        if stderr:
+            log.error(f'[FeishuSync] stderr: {stderr[:500]}')
+        return resp or resp2
 
     @classmethod
     def _find_today_record(cls):
@@ -925,10 +971,22 @@ class RestReminderWidget(QWidget):
         self.move(x, y)
 
     def _get_autostart_cmd(self):
-        script = os.path.abspath(sys.argv[0] if sys.argv[0].endswith('.py') else __file__)
+        script = os.path.abspath(os.path.join(os.path.dirname(__file__), 'watchdog.py'))
         pythonw = os.path.join(os.path.dirname(sys.executable), 'pythonw.exe')
         if not os.path.exists(pythonw):
             pythonw = sys.executable
+        # WindowsApps 代理检测：避免 Store 代理导致双实例
+        try:
+            if 'WindowsApps' in pythonw and os.path.exists(pythonw) and os.path.getsize(pythonw) < 100_000:
+                for p in os.environ.get('PATH', '').split(os.pathsep):
+                    if 'WindowsApps' in p:
+                        continue
+                    real = os.path.join(p, 'pythonw.exe')
+                    if os.path.exists(real) and os.path.getsize(real) > 100_000:
+                        pythonw = real
+                        break
+        except Exception:
+            pass
         return f'"{pythonw}" "{script}" --startup'
 
     def is_autostart_enabled(self):
@@ -1398,6 +1456,7 @@ class RestReminderWidget(QWidget):
 
     def get_bilibili_videos(self):
         """获取 B 站收藏夹视频列表（带重试）"""
+        import re as _re  # 模块级 re 在 daemon 线程中偶尔不可用，本地导入兜底
         fid = '3648313921'
         mid = '529362421'
 
@@ -1438,7 +1497,7 @@ class RestReminderWidget(QWidget):
 
                     for media in medias:
                         bvid = media.get('bvid')
-                        if bvid and re.match(r'^BV[a-zA-Z0-9]{10}$', bvid):
+                        if bvid and _re.match(r'^BV[a-zA-Z0-9]{10}$', bvid):
                             videos.append(f'https://www.bilibili.com/video/{bvid}')
 
                     if len(medias) < page_size:
@@ -1460,7 +1519,7 @@ class RestReminderWidget(QWidget):
         try:
             page_url = f'https://space.bilibili.com/{mid}/favlist?fid={fid}&ftype=create'
             resp = requests.get(page_url, headers={'User-Agent': user_agents[0], 'Referer': 'https://www.bilibili.com'}, timeout=10)
-            bvids = re.findall(r'BV[a-zA-Z0-9]{10}', resp.text)
+            bvids = _re.findall(r'BV[a-zA-Z0-9]{10}', resp.text)
             seen = set()
             unique = []
             for bv in bvids:
@@ -1547,10 +1606,11 @@ class RestReminderWidget(QWidget):
             log.error(f'[quit_app 异常] {type(e).__name__}: {e}')
 
 
-def main():
-    single = SingleInstanceChecker()
+_single_instance = SingleInstanceChecker()
 
-    if single.is_already_running():
+
+def main():
+    if _single_instance.is_already_running():
         log.warning('休息提醒程序已经在运行中！')
         if '--silent' not in sys.argv:
             a = QApplication(sys.argv)

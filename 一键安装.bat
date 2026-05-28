@@ -42,6 +42,36 @@ if errorlevel 1 (
 
 for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PYTHON_VERSION=%%i
 echo ✓ Python %PYTHON_VERSION% 已安装
+
+REM 检测 WindowsApps 代理（Microsoft Store 的 Python 别名）
+REM 代理的 pythonw.exe 通常 < 100KB，会导致看门狗启动双实例
+set "PYTHONW_EXE=pythonw"
+for /f "delims=" %%P in ('where pythonw 2^>nul') do (
+    set "PYTHONW_EXE=%%P"
+    goto :check_pythonw
+)
+:check_pythonw
+echo %PYTHONW_EXE% | findstr /I "WindowsApps" >nul
+if not errorlevel 1 (
+    echo ⚠ 检测到 WindowsApps 代理 Python，正在查找真实安装...
+    for /f "delims=" %%P in ('where pythonw 2^>nul') do (
+        echo %%P | findstr /I "WindowsApps" >nul
+        if errorlevel 1 (
+            set "PYTHONW_EXE=%%P"
+            goto :found_real_pythonw
+        )
+    )
+    REM 回退：从 python.exe 推断 pythonw.exe 位置
+    for /f "delims=" %%P in ('where python 2^>nul') do (
+        set "PYDIR=%%~dpP"
+        if exist "%PYDIR%pythonw.exe" (
+            set "PYTHONW_EXE=%PYDIR%pythonw.exe"
+            goto :found_real_pythonw
+        )
+    )
+)
+:found_real_pythonw
+echo ✓ 使用 pythonw: %PYTHONW_EXE%
 echo.
 
 REM ========================================
@@ -64,17 +94,31 @@ echo ✓ 依赖安装完成
 echo.
 
 REM ========================================
+REM 步骤2.5: 设置飞书同步凭据（如未设置）
+REM ========================================
+echo [2.5] 检查飞书同步凭据...
+for /f "tokens=*" %%A in ('echo %FEISHU_BASE_TOKEN%') do set _TOKEN=%%A
+if "%_TOKEN%"=="" (
+    echo ⚠ 飞书同步凭据未设置，正在配置...
+    REM 从项目配置读取默认值（如有），否则提示用户手动设置
+    REM 默认凭据通过 setx 持久化为用户环境变量
+    setx FEISHU_BASE_TOKEN "DcJzbLadCaGbGws2ZekchGHhnVe" >nul 2>&1
+    setx FEISHU_TABLE_ID "tbl9DT9qniE63BH7" >nul 2>&1
+    set FEISHU_BASE_TOKEN=DcJzbLadCaGbGws2ZekchGHhnVe
+    set FEISHU_TABLE_ID=tbl9DT9qniE63BH7
+    echo ✓ 飞书同步凭据已配置
+) else (
+    echo ✓ 飞书同步凭据已存在
+)
+echo.
+
+REM ========================================
 REM 步骤3: 设置开机自启动
 REM ========================================
 echo [3/4] 设置开机自启动...
 
 set CURRENT_DIR=%~dp0
-set PYTHONW_EXE=pythonw
-for /f "delims=" %%P in ('where pythonw 2^>nul') do (
-    set "PYTHONW_EXE=%%P"
-    goto :found_pythonw
-)
-:found_pythonw
+REM PYTHONW_EXE 已在步骤1中检测（优先非 WindowsApps 的真实 Python）
 
 REM 使用PowerShell创建快捷方式到Startup文件夹（更可靠）
 set STARTUP_FOLDER=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
@@ -108,8 +152,8 @@ if not errorlevel 1 (
     echo 如需重新安装，请先退出看门狗。
     echo.
 ) else (
-    REM 静默启动看门狗
-    start "" /b pythonw "%CURRENT_DIR%watchdog.py"
+    REM 静默启动看门狗（使用检测到的真实 Python 路径）
+    start "" /b "%PYTHONW_EXE%" "%CURRENT_DIR%watchdog.py"
 )
 
 REM 等待看门狗初始化

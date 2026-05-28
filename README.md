@@ -68,7 +68,8 @@ MIT License
 
 ## Changelog
 
-- **v2.5** (2026-05-26) — 修复飞书同步 GBK 编码崩溃、import re 位置导致 B站获取失败、倒计时浮层冲突、托盘隐藏停止后台 timer、电脑使用保存不可靠
+- **v2.7** (2026-05-28) — 修复飞书同步三重故障：.cmd 包装器在 pythonw 中失败（fallback 到 Node.js 直接调用）、环境变量丢失（新增 config.json 兜底）、@file 路径校验失败（始终内联 JSON）
+- **v2.6** (2026-05-27) — 修复 SingleInstanceChecker 作用域、watchdog 干净退出、re 变量未绑定、@file 路径、WindowsApps 代理双实例、环境变量持久化、注册表自启动指向
 - **v2.4** (2026-05-26) — 修复飞书同步三大根因：shell=True 解决 lark-cli .cmd 脚本执行失败；分页遍历防重复创建记录；简化二次确认逻辑
 - **v2.3.1** (2026-05-26) — 修复飞书同步编码问题（改用 field_id_list）
 - **v2.3** (2026-05-25) — 倒计时浮层显示+拖拽修复
