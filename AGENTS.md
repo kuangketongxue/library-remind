@@ -1,7 +1,7 @@
 # 休息提醒 — AGENTS.md
 
 ## 项目概述
-PyQt5 桌面挂件：60 分钟计时（自动循环）+ 暂停/继续 + 每小时随机打开 B 站收藏夹视频 + 每 3 小时打开护眼视频 + 电池监控 +22:00 倒计时。绿色小浮球：点击显示/隐藏主窗口，可拖动。看门狗守护：watchdog.py 监控主进程，崩溃自动重启，开机自启动指向看门狗。
+PyQt5 桌面挂件：60 分钟计时（自动循环）+ 暂停/继续 + 每小时随机打开 B 站收藏夹视频 + 每 3 小时打开护眼视频 + 电池监控 +22:00 倒计时 + 数据本地持久化。绿色小浮球：点击显示/隐藏主窗口，可拖动。看门狗守护：watchdog.py 监控主进程，崩溃自动重启，开机自启动指向看门狗。
 
 ## 技术栈
 Python 3.7+ / PyQt5 / requests / psutil
@@ -31,10 +31,8 @@ requirements.txt        — 依赖：PyQt5, requests, psutil
 | 窗口尺寸 | `init_ui()` 内 `widget_width/widget_height` | 340×380 |
 | 倒计时范围 | `update_display()` 内 `start_minutes/end_minutes` | 4:30~22:00（倒计时模式） |
 | 学习目标时长 | `study_progress_bar.setMaximum` | 14（14 小时） |
+| 每日数据存储 | `.daily_log.json` | LocalSync，学习+电脑时长，跨重启持久化 |
 | 电池轮询间隔 | `update_display()` 内 `_battery_tick` 计数器 | 每 15 秒 |
-| 飞书同步（实时） | `FeishuSync` (L:115) | 学习每 +1h → 飞书 / 电脑每 +3h → 飞书 |
-| 飞书 base token | 环境变量 `FEISHU_BASE_TOKEN` | 必填（开源版不包含默认值） |
-| 飞书表 ID | 环境变量 `FEISHU_TABLE_ID` | 必填（开源版不包含默认值） |
 | 计时器状态机 | `self.timer_state` | idle → running → paused → auto-restart |
 
 ## 运行和验证

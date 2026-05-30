@@ -4,6 +4,7 @@
 - 监控电池充电状态
 - 监控电脑使用时长（每 3 小时提醒）
 - 学习时长本地计数（每次倒计时完成算 1 小时）
+- 数据本地持久化（.daily_log.json）
 """
 import sys
 import time
@@ -12,7 +13,6 @@ import requests
 import ctypes
 import json
 import os
-import subprocess
 import tempfile
 import re
 from datetime import datetime, timedelta
@@ -127,285 +127,68 @@ class FloatingBall(QWidget):
                     self.main_window.raise_()
 
 
-# 飞书多维表格配置 — 环境变量优先，config.json 兜底
-FEISHU_BASE_TOKEN = os.environ.get('FEISHU_BASE_TOKEN')
-FEISHU_TABLE_ID = os.environ.get('FEISHU_TABLE_ID')
 
-if not FEISHU_BASE_TOKEN or not FEISHU_TABLE_ID:
-    # 环境变量缺失时从 config.json 读取（pythonw 子进程可能继承不到 setx 设的变量）
-    _config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
-    if os.path.exists(_config_path):
-        try:
-            with open(_config_path, 'r', encoding='utf-8') as _f:
-                _cfg = json.load(_f)
-            FEISHU_BASE_TOKEN = FEISHU_BASE_TOKEN or _cfg.get('FEISHU_BASE_TOKEN', '')
-            FEISHU_TABLE_ID = FEISHU_TABLE_ID or _cfg.get('FEISHU_TABLE_ID', '')
-        except Exception:
-            pass
+class LocalSync:
+    """本地存储学习/电脑使用时长（替代飞书同步）"""
 
-if not FEISHU_BASE_TOKEN or not FEISHU_TABLE_ID:
-    log.warning('未设置飞书同步凭据（FEISHU_BASE_TOKEN / FEISHU_TABLE_ID），飞书同步功能将禁用')
-    FEISHU_BASE_TOKEN = FEISHU_BASE_TOKEN or ''
-    FEISHU_TABLE_ID = FEISHU_TABLE_ID or ''
-
-
-# lark-cli Node.js 入口路径（.cmd 包装器在 pythonw 上下文中失败时的 fallback）
-_LARK_CLI_RUN_JS = None
-_app_dir = os.path.dirname(os.path.abspath(__file__))
-_npm_cli_dir = os.path.join(os.path.expandvars(r'%APPDATA%'), 'npm', 'node_modules', '@larksuite', 'cli')
-_run_js = os.path.join(_npm_cli_dir, 'scripts', 'run.js')
-if os.path.exists(_run_js):
-    _LARK_CLI_RUN_JS = _run_js
-
-
-class FeishuSync:
-    """通过 lark-cli 将学习/电脑使用时长同步到飞书多维表格"""
-
-    _record_id = None
+    _data = None
     _current_date = None
 
     @classmethod
-    def _get_cache_path(cls):
-        return os.path.join(os.path.dirname(os.path.abspath(__file__)), '.feishu_cache.json')
+    def _get_path(cls):
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), '.daily_log.json')
 
     @classmethod
-    def _load_cache(cls):
-        path = cls._get_cache_path()
-        if not os.path.exists(path):
-            return {}
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except:
-            return {}
-
-    @classmethod
-    def _save_cache(cls, date, record_id):
-        with open(cls._get_cache_path(), 'w', encoding='utf-8') as f:
-            json.dump({'date': date, 'record_id': record_id}, f, ensure_ascii=False)
-
-    @classmethod
-    def _call_lark(cls, args, data=None):
-        """调用 lark-cli，返回解析后的 JSON
-
-        三重保障：
-        1. shell=True 调 lark-cli（.cmd shim）
-        2. 如果返回码非 0，fallback 到 Node.js 直接调 scripts/run.js
-        3. 始终用内联 JSON（不用 @file，避免路径校验失败）
-        """
-        app_dir = os.path.dirname(os.path.abspath(__file__))
-        json_str = json.dumps(data, ensure_ascii=False) if data else None
-
-        # 构造 lark-cli 命令行
-        cmd_args = ['lark-cli'] + list(args)
-        if json_str:
-            cmd_args += ['--json', json_str]
-
-        def _run(cmd, shell=True):
-            """执行命令并返回 (returncode, stdout_dict, stderr_str)"""
-            try:
-                result = subprocess.run(
-                    cmd, capture_output=True, timeout=30, cwd=app_dir, shell=shell
-                )
-                stdout = result.stdout.decode('utf-8', errors='replace') if result.stdout else ''
-                stderr = result.stderr.decode('utf-8', errors='replace') if result.stderr else ''
-                parsed = {}
-                if stdout.strip():
-                    try:
-                        parsed = json.loads(stdout)
-                    except json.JSONDecodeError:
-                        pass
-                return result.returncode, parsed, stderr
-            except Exception as e:
-                log.error(f'[FeishuSync] 命令执行异常: {e}')
-                return -1, {}, str(e)
-
-        # 方法 1：shell=True 调 lark-cli（.cmd shim）
-        rc, resp, stderr = _run(cmd_args, shell=(sys.platform == 'win32'))
-        if rc == 0 and resp:
-            return resp
-
-        # 方法 2：Node.js 直接调 scripts/run.js（绕过 .cmd 包装器）
-        resp2 = {}
-        if _LARK_CLI_RUN_JS:
-            node_cmd = ['node', _LARK_CLI_RUN_JS] + list(args)
-            if json_str:
-                node_cmd += ['--json', json_str]
-            rc2, resp2, stderr2 = _run(node_cmd, shell=False)
-            if rc2 == 0 and resp2:
-                log.info('[FeishuSync] Node.js 直接调用成功（.cmd 包装器 fallback）')
-                return resp2
-            log.error(f'[FeishuSync] Node.js 直接调用也失败 code={rc2}: {stderr2[:300]}')
-        else:
-            log.error('[FeishuSync] 未找到 lark-cli scripts/run.js，无法 fallback')
-
-        # 两种方式都失败
-        redacted = [a if 'token' not in a.lower() else a[:10] + '***' for a in cmd_args]
-        log.error(f'[FeishuSync] lark-cli 最终失败 code={rc}')
-        log.error(f'[FeishuSync] 命令: {" ".join(redacted)[:200]}')
-        if stderr:
-            log.error(f'[FeishuSync] stderr: {stderr[:500]}')
-        return resp or resp2
-
-    @classmethod
-    def _find_today_record(cls):
-        """分页查询今天是否已有记录，返回 record_id 或 None
-
-        该表可能超过 200 条记录，必须逐页遍历查找今日记录。
-        """
+    def _load(cls):
         today = datetime.now().date().isoformat()
-        offset = 0
-        while True:
-            resp = cls._call_lark([
-                'base', '+record-list',
-                '--base-token', FEISHU_BASE_TOKEN,
-                '--table-id', FEISHU_TABLE_ID,
-                '--as', 'user',
-                '--limit', '200',
-                '--offset', str(offset),
-                '--format', 'json'
-            ])
-            if not resp.get('ok'):
-                log.error(f'[FeishuSync] +record-list 未返回 ok，跳过')
-                return None
-
-            d = resp.get('data', {})
-            records = d.get('data', [])
-            if not records:
-                break
-
-            field_ids = d.get('field_id_list', [])
-            rids = d.get('record_id_list', [])
-
+        if cls._data is not None and cls._current_date == today:
+            return cls._data
+        path = cls._get_path()
+        if os.path.exists(path):
             try:
-                date_idx = field_ids.index('fldTXDs0Ro')
-            except ValueError:
-                log.error('[FeishuSync] 找不到日期字段 fldTXDs0Ro')
-                return None
-
-            for i, rec in enumerate(records):
-                if i >= len(rids):
-                    break
-                date_val = rec[date_idx] if date_idx < len(rec) else None
-                if date_val is None:
-                    continue
-                if isinstance(date_val, (int, float)):
-                    dt = datetime.fromtimestamp(date_val / 1000)
-                    date_str = dt.strftime('%Y-%m-%d')
-                elif isinstance(date_val, str):
-                    date_str = date_val[:10]
-                else:
-                    continue
-                if date_str == today:
-                    rid = rids[i]
-                    log.info(f'[FeishuSync] 找到今日记录: {rid}')
-                    return rid
-
-            # 检查是否有下一页
-            has_more = d.get('has_more', False)
-            if not has_more:
-                break
-            offset += len(records)
-            if offset >= 2000:
-                log.error('[FeishuSync] 翻页超过 2000 条仍未找到今日记录，终止')
-                break
-
-        log.info('[FeishuSync] 未找到今天的记录')
-        return None
+                with open(path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                if data.get('date') == today:
+                    cls._data = data
+                    cls._current_date = today
+                    return cls._data
+            except Exception:
+                pass
+        cls._data = {'date': today, 'study_hours': 0, 'computer_hours': 0}
+        cls._current_date = today
+        return cls._data
 
     @classmethod
-    def _ensure_record(cls):
-        """确保今天的记录存在，返回 record_id"""
-        today = datetime.now().date().isoformat()
-
-        # 内存缓存命中
-        if cls._record_id and cls._current_date == today:
-            return cls._record_id
-
-        # 本地缓存命中
-        cache = cls._load_cache()
-        if cache.get('date') == today and cache.get('record_id'):
-            cls._record_id = cache['record_id']
-            cls._current_date = today
-            return cls._record_id
-
-        # 查飞书（逐页扫描，确保不漏）
-        record_id = cls._find_today_record()
-        if record_id:
-            cls._record_id = record_id
-            cls._current_date = today
-            cls._save_cache(today, record_id)
-            return record_id
-
-        # 确实没有今天的记录才新建
-        log.info('[FeishuSync] 创建新记录')
-        resp = cls._call_lark([
-            'base', '+record-upsert',
-            '--base-token', FEISHU_BASE_TOKEN,
-            '--table-id', FEISHU_TABLE_ID,
-            '--as', 'user'
-        ], {'日期': today, '学习时长（H）': 0, '电脑使用时长（H）': 0})
-        if resp.get('ok'):
-            rid = resp['data']['record']['record_id_list'][0]
-            cls._record_id = rid
-            cls._current_date = today
-            cls._save_cache(today, rid)
-            return rid
-        return None
-
-    @classmethod
-    def _update_field(cls, field_name, new_value):
-        """更新指定字段的值，如果找不到记录则跳过"""
-        record_id = cls._ensure_record()
-        if not record_id:
-            log.error(f'[FeishuSync] 无法获取记录，跳过更新 {field_name}')
-            return False
-
-        resp = cls._call_lark([
-            'base', '+record-upsert',
-            '--base-token', FEISHU_BASE_TOKEN,
-            '--table-id', FEISHU_TABLE_ID,
-            '--record-id', record_id,
-            '--as', 'user'
-        ], {field_name: round(new_value, 1)})
-        if resp.get('ok'):
-            log.info(f'[FeishuSync] 更新成功: {field_name} = {round(new_value, 1)}')
-            return True
-        else:
-            log.error(f'[FeishuSync] 更新失败（可能缓存过期）: {resp}')
-            cls.reset()
-            new_record_id = cls._ensure_record()
-            if new_record_id and new_record_id != record_id:
-                resp2 = cls._call_lark([
-                    'base', '+record-upsert',
-                    '--base-token', FEISHU_BASE_TOKEN,
-                    '--table-id', FEISHU_TABLE_ID,
-                    '--record-id', new_record_id,
-                    '--as', 'user'
-                ], {field_name: round(new_value, 1)})
-                if resp2.get('ok'):
-                    log.info(f'[FeishuSync] 重试更新成功: {field_name} = {round(new_value, 1)}')
-                    return True
-                else:
-                    log.error(f'[FeishuSync] 重试也失败: {resp2}')
-            return False
+    def _save(cls):
+        path = cls._get_path()
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(cls._data, f, ensure_ascii=False)
 
     @classmethod
     def increment_study_hour(cls, total_hours):
-        """学习满 1 小时，更新飞书中的学习时长"""
-        log.info(f'[FeishuSync] 记录学习时长: {total_hours}h')
-        return cls._update_field('学习时长（H）', total_hours)
+        data = cls._load()
+        data['study_hours'] = round(total_hours, 1)
+        cls._save()
+        log.info(f'[LocalSync] 学习时长: {total_hours}h')
+        return True
 
     @classmethod
     def increment_computer_hour(cls, total_hours):
-        """电脑使用满 3 小时，更新飞书中的电脑使用时长"""
-        log.info(f'[FeishuSync] 记录电脑使用时长: {total_hours}h')
-        return cls._update_field('电脑使用时长（H）', total_hours)
+        data = cls._load()
+        data['computer_hours'] = round(total_hours, 1)
+        cls._save()
+        log.info(f'[LocalSync] 电脑使用时长: {total_hours}h')
+        return True
+
+    @classmethod
+    def load_study_hours(cls):
+        """启动时恢复今日学习时长"""
+        data = cls._load()
+        return data.get('study_hours', 0)
 
     @classmethod
     def reset(cls):
-        """日期切换时重置缓存"""
-        cls._record_id = None
+        cls._data = None
         cls._current_date = None
 
 
@@ -679,9 +462,18 @@ class RestReminderWidget(QWidget):
         self.timer_state = 'idle'
         self._battery_tick = 0
 
+        # 鼠标空闲检测（10分钟不动 = 未在学习）
+        self._last_mouse_move_time = datetime.now()
+        self._mouse_idle_threshold = 600  # 10分钟（秒）
+        self._was_paused_by_idle = False  # 是否因空闲被自动暂停
+        self._setup_mouse_hook()
+
         # 视频相关
         self.video_list = []
         self.played_today = set()
+
+        # 22:00 每日汇报标记（每天只弹一次）
+        self._daily_report_shown_today = False
 
         # 电池相关
         self.last_charging_state = None
@@ -692,9 +484,9 @@ class RestReminderWidget(QWidget):
         self.current_date = datetime.now().date()
 
         # 学习时长（本地计数，每次倒计时完成算 1 小时）
-        self.study_hours_today = 0
+        self.study_hours_today = LocalSync.load_study_hours()
 
-        # 电脑使用时长监控（每 3 小时提醒一次 + 飞书同步）
+        # 电脑使用时长监控（每 3 小时提醒一次）
         self.computer_usage_hours_today = 0
         self.last_computer_usage_check = datetime.now()
         self.computer_usage_reminder_given_at = None  # 记录上次提醒的周期数
@@ -709,6 +501,7 @@ class RestReminderWidget(QWidget):
         self.drag_position = None
 
         self.init_ui()
+        self.update_study_display()
         self.init_tray()
         self.set_autostart(True)
         self.setup_timer()
@@ -1091,11 +884,71 @@ class RestReminderWidget(QWidget):
         self.timer.timeout.connect(self.update_display)
         self.timer.start(1000)
 
+        # 鼠标位置轮询（仅在全局钩子失败时启动）
+        self._mouse_poll_timer = QTimer()
+        self._mouse_poll_timer.timeout.connect(self._poll_mouse_position)
+        if self._mouse_hook is None:
+            self._last_polled_mouse_pos = self._get_mouse_pos()
+            self._mouse_poll_timer.start(3000)
+            log.info('[MousePoll] 钩子不可用，启用3秒轮询备用方案')
+
+    def _poll_mouse_position(self):
+        """轮询鼠标位置，检测移动（仅钩子失败时运行）"""
+        if self._mouse_hook is not None:
+            return  # 钩子正常工作，跳过轮询
+        try:
+            current_pos = self._get_mouse_pos()
+            if current_pos != self._last_polled_mouse_pos:
+                self._last_mouse_move_time = datetime.now()
+                self._last_polled_mouse_pos = current_pos
+        except Exception:
+            pass
+
     _BTN_CONFIG = {
         'idle':    {'start_en': True,  'start_txt': '▶ 开始', 'pause_en': False, 'pause_txt': '⏸ 暂停'},
         'running': {'start_en': False, 'start_txt': '▶ 开始', 'pause_en': True,  'pause_txt': '⏸ 暂停'},
         'paused':  {'start_en': True,  'start_txt': '▶ 继续', 'pause_en': False, 'pause_txt': '⏸ 已暂停'},
     }
+
+    def _setup_mouse_hook(self):
+        """设置全局鼠标钩子，追踪鼠标最后移动时间"""
+        try:
+            WH_MOUSE_LL = 14
+            WM_MOUSEMOVE = 0x0200
+
+            # 保存引用防止被垃圾回收
+            self._mouse_hook_ref = self
+
+            def _mouse_proc(nCode, wParam, lParam):
+                if wParam == WM_MOUSEMOVE:
+                    self._last_mouse_move_time = datetime.now()
+                return ctypes.windll.user32.CallNextHookEx(None, nCode, wParam, lParam)
+
+            # 设置钩子
+            self._mouse_hook_proc = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_int, ctypes.POINTER(ctypes.c_void_p), ctypes.POINTER(ctypes.c_void_p))(_mouse_proc)
+            self._mouse_hook = ctypes.windll.user32.SetWindowsHookExW(WH_MOUSE_LL, self._mouse_hook_proc, None, 0)
+            if not self._mouse_hook:
+                log.warning('[MouseHook] 设置全局鼠标钩子失败，将使用定时轮询方案')
+                self._mouse_hook = None
+            else:
+                log.info('[MouseHook] 全局鼠标钩子已设置')
+        except Exception as e:
+            log.error(f'[MouseHook] 初始化失败: {e}，使用定时轮询方案')
+            self._mouse_hook = None
+
+    def _get_mouse_pos(self):
+        """获取当前鼠标位置（轮询方案的备用）"""
+        try:
+            pt = ctypes.wintypes.POINT()
+            ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
+            return pt.x, pt.y
+        except (OSError, ctypes.ArgumentError):
+            return getattr(self, '_last_polled_mouse_pos', (0, 0))
+
+    def _check_mouse_idle(self):
+        """检查鼠标是否空闲超过阈值"""
+        idle_seconds = (datetime.now() - self._last_mouse_move_time).total_seconds()
+        return idle_seconds >= self._mouse_idle_threshold
 
     def _sync_buttons(self):
         try:
@@ -1107,6 +960,20 @@ class RestReminderWidget(QWidget):
         except Exception as e:
             log.error(f'[_sync_buttons 异常] {type(e).__name__}: {e}')
 
+    def _pause_timer(self):
+        """暂停计时器（计算剩余时间）"""
+        remaining = self.interval_minutes * 60 - (datetime.now() - self.start_time).total_seconds()
+        self.remaining_when_paused = max(remaining, 0)
+        self.timer_state = 'paused'
+        self._sync_buttons()
+
+    def _resume_timer(self):
+        """恢复计时器（从暂停位置继续）"""
+        self.start_time = datetime.now() - timedelta(seconds=(self.interval_minutes * 60 - self.remaining_when_paused))
+        self.remaining_when_paused = None
+        self.timer_state = 'running'
+        self._sync_buttons()
+
     def on_start_clicked(self):
         try:
             if self.timer_state not in ('idle', 'paused'):
@@ -1114,8 +981,8 @@ class RestReminderWidget(QWidget):
             if self.timer_state == 'idle':
                 self.start_time = datetime.now()
             else:
-                self.start_time = datetime.now() - timedelta(seconds=(self.interval_minutes * 60 - self.remaining_when_paused))
-            self.remaining_when_paused = None
+                self._resume_timer()
+                return
             self.timer_state = 'running'
             self._sync_buttons()
         except Exception as e:
@@ -1125,10 +992,8 @@ class RestReminderWidget(QWidget):
         try:
             if self.timer_state != 'running':
                 return
-            remaining = self.interval_minutes * 60 - (datetime.now() - self.start_time).total_seconds()
-            self.remaining_when_paused = max(remaining, 0)
-            self.timer_state = 'paused'
-            self._sync_buttons()
+            self._pause_timer()
+            self._was_paused_by_idle = False
         except Exception as e:
             log.error(f'[on_pause_clicked 异常] {type(e).__name__}: {e}')
 
@@ -1137,6 +1002,7 @@ class RestReminderWidget(QWidget):
             self.timer_state = 'idle'
             self.start_time = None
             self.remaining_when_paused = None
+            self._was_paused_by_idle = False
             self._study_countdown_active = False
             # 学习倒计时结束，但电脑使用倒计时可能还在运行
             if not self._computer_countdown_active:
@@ -1183,14 +1049,17 @@ class RestReminderWidget(QWidget):
             self.open_random_video()
             self.study_hours_today += 1
             self.update_study_display()
-            FeishuSync.increment_study_hour(self.study_hours_today)
+            LocalSync.increment_study_hour(self.study_hours_today)
             self._reset_timer_to_idle()
 
     def _handle_paused(self, now):
         """处理暂停状态 - 显示暂停时间"""
         mins = int(self.remaining_when_paused // 60)
         secs = int(self.remaining_when_paused % 60)
-        self.time_label.setText(f'⏸ 已暂停：{mins:02d}:{secs:02d}')
+        if self._was_paused_by_idle:
+            self.time_label.setText(f'🖱️ 鼠标空闲：{mins:02d}:{secs:02d}')
+        else:
+            self.time_label.setText(f'⏸ 已暂停：{mins:02d}:{secs:02d}')
         # 暂停时隐藏倒计时浮层，避免冻结显示
         if self._study_countdown_active:
             self._study_countdown_active = False
@@ -1218,6 +1087,19 @@ class RestReminderWidget(QWidget):
         progress = 100 - int((seconds_since_midnight / (22 * 3600)) * 100)
         self.countdown_bar.setValue(max(progress, 0))
 
+        # 22:00 每日汇报提醒（每天只弹一次）
+        if now.hour >= 22 and not self._daily_report_shown_today:
+            self._daily_report_shown_today = True
+            study = self.study_hours_today
+            computer = self.computer_usage_hours_today
+            computer_h = int(computer)
+            computer_m = int((computer - computer_h) * 60)
+            msg = (f'今日学习：{study} 小时\n'
+                   f'今日电脑使用：{computer_h} 小时 {computer_m} 分钟\n\n'
+                   f'记得记录到飞书～')
+            self.tray_icon.showMessage('📋 每日记录提醒', msg, QSystemTrayIcon.Information, 8000)
+            log.info(f'[DailyReport] 22:00 提醒: 学习{study}h, 电脑{computer:.1f}h')
+
     def update_display(self):
         try:
             now = datetime.now()
@@ -1234,11 +1116,25 @@ class RestReminderWidget(QWidget):
                 self._computer_countdown_active = False
                 self.countdown_overlay.hide_overlay()
                 self.current_date = now.date()
-                FeishuSync.reset()
+                self._daily_report_shown_today = False
+                LocalSync.reset()
                 self._save_computer_usage()
                 self.update_study_display()
                 self.update_computer_usage_display()
                 log.info(f'新的一天，数据已重置: {self.current_date}')
+
+            # --- 鼠标空闲检测（10分钟不动 = 未在学习） ---
+            if self.timer_state == 'running' and self._check_mouse_idle():
+                self._pause_timer()
+                self._was_paused_by_idle = True
+                if self._study_countdown_active:
+                    self._study_countdown_active = False
+                    self.countdown_overlay.hide_overlay()
+                log.info(f'[MouseIdle] 鼠标空闲10分钟，自动暂停（剩余{int(self.remaining_when_paused//60)}分{int(self.remaining_when_paused%60)}秒）')
+            elif self.timer_state == 'paused' and self._was_paused_by_idle and not self._check_mouse_idle():
+                self._resume_timer()
+                self._was_paused_by_idle = False
+                log.info('[MouseActive] 鼠标恢复活动，自动继续')
 
             # --- 状态机路由 ---
             if self.timer_state == 'idle':
@@ -1347,9 +1243,9 @@ class RestReminderWidget(QWidget):
             self._computer_countdown_active = False
             self.countdown_overlay.hide_overlay()
             self.show_computer_usage_reminder(cycle=current_cycle)
-            FeishuSync.increment_computer_hour(self.computer_usage_hours_today)
+            LocalSync.increment_computer_hour(self.computer_usage_hours_today)
             self._save_computer_usage()
-            log.info(f'[ComputerUsage] 触发第 {current_cycle} 个 3 小时周期，飞书同步={current_cycle}')
+            log.info(f'[ComputerUsage] 触发第 {current_cycle} 个 3 小时周期')
         else:
             # 每 60 秒保存一次计数（防止重启丢失），用 tick 计数器避免浮点精度问题
             self._computer_usage_save_tick += 1
@@ -1535,43 +1431,20 @@ class RestReminderWidget(QWidget):
         return []
 
     def open_random_video(self):
-        """打开随机视频"""
-        thread = VideoFetchThread(self.get_bilibili_videos)
-
-        def on_videos_fetched(videos):
-            try:
-                self.video_list = videos
-                if videos:
-                    remaining = [v for v in videos if v not in self.played_today]
-                    if not remaining:
-                        log.info('当天视频已全部播放过，重置记录')
-                        self.played_today = set()
-                        remaining = videos
-
-                    video_url = random.choice(remaining)
-                    self.played_today.add(video_url)
-                    log.info(f'打开视频：{video_url} (今日已播 {len(self.played_today)}/{len(self.video_list)})')
-                    open_url(video_url)
-                    self.tray_icon.showMessage(
-                        '休息时间到！',
-                        f'已为您打开休息视频（今日第{len(self.played_today)}个），记得放松一下哦~',
-                        QSystemTrayIcon.Information,
-                        3000
-                    )
-                else:
-                    fallback_url = 'https://space.bilibili.com/529362421/favlist?fid=3648313921&ftype=create'
-                    open_url(fallback_url)
-                    self.tray_icon.showMessage('休息时间到！', '已为您打开收藏夹页面~', QSystemTrayIcon.Information, 3000)
-            except Exception as e:
-                log.error(f'[open_random_video 回调异常] {type(e).__name__}: {e}')
-                traceback.print_exc()
-
-        if hasattr(self, '_video_thread') and self._video_thread.isRunning():
-            self._video_thread.wait(3000)
-
-        self._video_thread = VideoFetchThread(self.get_bilibili_videos)
-        self._video_thread.finished.connect(on_videos_fetched)
-        self._video_thread.start()
+        """打开B站收藏夹页面"""
+        try:
+            fav_url = 'https://space.bilibili.com/529362421/favlist?fid=3648313921&ftype=create'
+            open_url(fav_url)
+            log.info(f'打开收藏夹：{fav_url}')
+            self.tray_icon.showMessage(
+                '休息时间到！',
+                '已为您打开B站收藏夹，记得放松一下哦~',
+                QSystemTrayIcon.Information,
+                3000
+            )
+        except Exception as e:
+            log.error(f'[open_random_video 异常] {type(e).__name__}: {e}')
+            traceback.print_exc()
 
     def mousePressEvent(self, event):
         try:

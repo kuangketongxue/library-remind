@@ -94,25 +94,6 @@ echo ✓ 依赖安装完成
 echo.
 
 REM ========================================
-REM 步骤2.5: 设置飞书同步凭据（如未设置）
-REM ========================================
-echo [2.5] 检查飞书同步凭据...
-for /f "tokens=*" %%A in ('echo %FEISHU_BASE_TOKEN%') do set _TOKEN=%%A
-if "%_TOKEN%"=="" (
-    echo ⚠ 飞书同步凭据未设置，正在配置...
-    REM 从项目配置读取默认值（如有），否则提示用户手动设置
-    REM 默认凭据通过 setx 持久化为用户环境变量
-    setx FEISHU_BASE_TOKEN "DcJzbLadCaGbGws2ZekchGHhnVe" >nul 2>&1
-    setx FEISHU_TABLE_ID "tbl9DT9qniE63BH7" >nul 2>&1
-    set FEISHU_BASE_TOKEN=DcJzbLadCaGbGws2ZekchGHhnVe
-    set FEISHU_TABLE_ID=tbl9DT9qniE63BH7
-    echo ✓ 飞书同步凭据已配置
-) else (
-    echo ✓ 飞书同步凭据已存在
-)
-echo.
-
-REM ========================================
 REM 步骤3: 设置开机自启动
 REM ========================================
 echo [3/4] 设置开机自启动...
