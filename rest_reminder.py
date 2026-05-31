@@ -462,10 +462,11 @@ class RestReminderWidget(QWidget):
         self.timer_state = 'idle'
         self._battery_tick = 0
 
-        # 鼠标空闲检测（10分钟不动 = 未在学习）
+        # 鼠标空闲检测（15分钟不动 = 未在学习）
         self._last_mouse_move_time = datetime.now()
-        self._mouse_idle_threshold = 600  # 10分钟（秒）
+        self._mouse_idle_threshold = 900  # 15分钟（秒）—— 10分钟太灵敏，看书/思考时不一定动鼠标
         self._was_paused_by_idle = False  # 是否因空闲被自动暂停
+        self._last_idle_pause_log = None  # 防止暂停日志洪水
         self._setup_mouse_hook()
 
         # 视频相关
@@ -969,18 +970,26 @@ class RestReminderWidget(QWidget):
 
     def _resume_timer(self):
         """恢复计时器（从暂停位置继续）"""
+        if self.remaining_when_paused is None:
+            log.warning('[_resume_timer] remaining_when_paused is None, resetting to idle')
+            self._reset_timer_to_idle()
+            return
         self.start_time = datetime.now() - timedelta(seconds=(self.interval_minutes * 60 - self.remaining_when_paused))
         self.remaining_when_paused = None
         self.timer_state = 'running'
+        self._was_paused_by_idle = False
         self._sync_buttons()
 
     def on_start_clicked(self):
         try:
             if self.timer_state not in ('idle', 'paused'):
                 return
+            # 用户刚点了按钮 → 一定在活动，重置空闲检测避免恢复后立即被误判为空闲
+            self._last_mouse_move_time = datetime.now()
             if self.timer_state == 'idle':
                 self.start_time = datetime.now()
             else:
+                log.info(f'[on_start_clicked] 用户点击继续（剩余{int(self.remaining_when_paused//60)}分{int(self.remaining_when_paused%60)}秒）')
                 self._resume_timer()
                 return
             self.timer_state = 'running'
@@ -1054,6 +1063,9 @@ class RestReminderWidget(QWidget):
 
     def _handle_paused(self, now):
         """处理暂停状态 - 显示暂停时间"""
+        if self.remaining_when_paused is None:
+            self.time_label.setText('⏸ 已暂停')
+            return
         mins = int(self.remaining_when_paused // 60)
         secs = int(self.remaining_when_paused % 60)
         if self._was_paused_by_idle:
@@ -1123,17 +1135,23 @@ class RestReminderWidget(QWidget):
                 self.update_computer_usage_display()
                 log.info(f'新的一天，数据已重置: {self.current_date}')
 
-            # --- 鼠标空闲检测（10分钟不动 = 未在学习） ---
+            # --- 鼠标空闲检测（15分钟不动 = 未在学习） ---
             if self.timer_state == 'running' and self._check_mouse_idle():
                 self._pause_timer()
                 self._was_paused_by_idle = True
                 if self._study_countdown_active:
                     self._study_countdown_active = False
                     self.countdown_overlay.hide_overlay()
-                log.info(f'[MouseIdle] 鼠标空闲10分钟，自动暂停（剩余{int(self.remaining_when_paused//60)}分{int(self.remaining_when_paused%60)}秒）')
+                # 防重复日志：同一次暂停只记一次
+                now_str = now.strftime('%H:%M')
+                if self._last_idle_pause_log != now_str:
+                    log.info(f'[MouseIdle] 鼠标空闲15分钟，自动暂停（剩余{int(self.remaining_when_paused//60)}分{int(self.remaining_when_paused%60)}秒）')
+                    self._last_idle_pause_log = now_str
             elif self.timer_state == 'paused' and self._was_paused_by_idle and not self._check_mouse_idle():
                 self._resume_timer()
                 self._was_paused_by_idle = False
+                self._last_idle_pause_log = None
+                self._last_mouse_move_time = now
                 log.info('[MouseActive] 鼠标恢复活动，自动继续')
 
             # --- 状态机路由 ---
@@ -1247,9 +1265,9 @@ class RestReminderWidget(QWidget):
             self._save_computer_usage()
             log.info(f'[ComputerUsage] 触发第 {current_cycle} 个 3 小时周期')
         else:
-            # 每 60 秒保存一次计数（防止重启丢失），用 tick 计数器避免浮点精度问题
+            # 每 120 秒（2分钟）保存一次计数（防止重启丢失），用 tick 计数器避免浮点精度问题
             self._computer_usage_save_tick += 1
-            if self._computer_usage_save_tick >= 60:
+            if self._computer_usage_save_tick >= 120:
                 self._computer_usage_save_tick = 0
                 self._save_computer_usage()
 

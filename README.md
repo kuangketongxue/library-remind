@@ -67,6 +67,7 @@ MIT License
 
 ## Changelog
 
+- **v2.9** (2026-06-01) — 修复"继续"按钮卡住问题：鼠标空闲自动暂停后点"继续"，因 `_was_paused_by_idle` 未清除 + 鼠标轮询延迟导致恢复后立即被误判为空闲再次暂停；修复：`on_start_clicked` 重置 `_last_mouse_move_time`、`_resume_timer` 清除 `_was_paused_by_idle` + 防御 `remaining_when_paused=None`
 - **v2.8** (2026-05-28) — 移除飞书同步，改为全本地持久化（`.daily_log.json`）：学习时长跨重启恢复、无网络依赖、无 lark-cli 报错
 - **v2.7** (2026-05-28) — 修复飞书同步三重故障：.cmd 包装器在 pythonw 中失败（fallback 到 Node.js 直接调用）、环境变量丢失（新增 config.json 兜底）、@file 路径校验失败（始终内联 JSON）
 - **v2.6** (2026-05-27) — 修复 SingleInstanceChecker 作用域、watchdog 干净退出、re 变量未绑定、@file 路径、WindowsApps 代理双实例、环境变量持久化、注册表自启动指向
