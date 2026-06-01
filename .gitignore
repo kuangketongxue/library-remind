@@ -48,6 +48,9 @@ daily_records.json
 daily_tracker_state.json
 .computer_usage.json
 .overlay_pos.json
+.stats_history.json
+.settings.json
+.streak.json
 
 # 临时文件
 *.cmd
