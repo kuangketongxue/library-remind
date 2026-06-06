@@ -1,86 +1,121 @@
-# 休息提醒桌面挂件
+<div align="center">
 
-每小时提醒休息，随机打开 B 站收藏夹视频，电池监控，每日数据追踪，奢华暗黑主题。
+# 🖥️ Rest Reminder
 
-## 功能
+**智能桌面久坐提醒 · 学习工作两不误**
 
-- **自动循环计时**：60 分钟倒计时完成后自动重启，无需手动操作
-- **B站视频**：每小时结束随机打开收藏夹视频；每 3 小时打开护眼视频
-- **每日数据追踪**：记录并显示学习时长、电脑使用时长、休息时长
-- **本地持久化**：`.daily_log.json` + `.computer_usage.json` + `.stats_history.json`，跨重启恢复所有数据
-- **5分钟倒计时浮层**：学习/电脑使用最后 5 分钟，屏幕顶部显示可拖动浮窗，含进度条、呼吸动画、音效提醒
-- **电池监控**：实时电量显示，断电自动提醒（只提醒一次）
-- **22:00 倒计时**：4:30~22:00 可视化进度（倒计时模式）
-- **连续打卡**：每天学习≥4小时自动打卡，显示连续天数
-- **学习统计**：托盘右键查看最近7天学习/电脑使用柱状图
-- **数据导出**：托盘右键导出本周数据到剪贴板
-- **提醒方式可选**：打开B站 / 只弹通知 / 无操作
-- **快捷键**：Ctrl+Alt+P 暂停/继续
-- **奢华暗黑主题**：金色点缀，衬线字体，渐变进度条
-- **托盘常驻**：最小化到系统托盘，双击显示/隐藏
-- **开机自启**：注册表方式，托盘右键可开关
-- **日志系统**：`rest_reminder.log` 自动轮转（3×1MB），pythonw 模式下可查运行状态
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.7+-yellow.svg)](https://python.org)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010/11-lightgrey.svg)]()
+[![Stars](https://img.shields.io/github/stars/kuangketongxue/library-remind?style=social)]()
 
-## 快速开始
+[📥 免费下载](https://github.com/kuangketongxue/library-remind/releases/latest) · [🌐 官网](https://rest-reminder-app.netlify.app) · [💬 反馈](https://github.com/kuangketongxue/library-remind/issues)
+
+</div>
+
+---
+
+## 📸 截图
+
+<div align="center">
+
+| 主界面 | 学习统计 | 系统托盘 |
+|:---:|:---:|:---:|
+| ![主界面](public/screenshot-main.png) | ![统计](public/screenshot-stats.png) | ![菜单](public/screenshot-menu.png) |
+
+</div>
+
+## ✨ 功能一览
+
+| 功能 | 🆓 免费版 | 💎 Pro版 |
+|------|:---------:|:--------:|
+| 60分钟循环休息提醒 | ✅ | ✅ |
+| 自定义提醒间隔（15-120分钟） | ❌ | ✅ |
+| B站护眼/放松视频自动播放 | ✅ | ✅ |
+| 用户自定义收藏夹和视频 | ✅ | ✅ |
+| 学习时长追踪 | ✅ | ✅ |
+| 连续打卡统计 | ✅ | ✅ |
+| 电脑使用时长监控（每3小时提醒） | ✅ | ✅ |
+| 云同步（数据永不丢失） | ❌ | ✅ |
+| 周报/月报统计 | ❌ | ✅ |
+| 数据导出（CSV） | ❌ | ✅ |
+| 多主题（护眼绿/极简白/深海蓝） | ❌ | ✅ |
+| 开机自启 + 崩溃自动重启 | ✅ | ✅ |
+
+**Pro版：19.9元/月** · [升级方式见官网](https://rest-reminder-app.netlify.app)
+
+## 🎁 推荐返利
+
+分享推荐码给朋友，**双方各得7天免费Pro！**
+
+## 🚀 快速开始
+
+### 方式一：下载 exe（推荐）
+
+1. [下载最新版](https://github.com/kuangketongxue/library-remind/releases/latest) `RestReminder.exe`
+2. 双击运行
+3. 系统托盘找到绿色小球，右键设置
+
+### 方式二：源码运行
+
+```bash
+# 克隆仓库
+git clone https://github.com/kuangketongxue/library-remind.git
+cd library-remind
+
+# 安装依赖
+pip install -r requirements.txt
+
+# 启动（推荐通过看门狗，崩溃自动重启）
+pythonw watchdog.py
+```
+
+## 🔧 自定义设置
+
+右键托盘图标 → ⚙️ 设置：
+
+- **B站收藏夹**：填入你的收藏夹 ID，休息时打开你的视频
+- **提醒视频**：填入 BV 号，自定义休息时播放的视频
+- **提醒间隔**：Pro版可自定义 15-120 分钟
+
+## 📁 项目结构
 
 ```
-双击 一键安装.bat
+├── rest_reminder.py        # 主程序（所有逻辑）
+├── watchdog.py             # 看门狗（崩溃自动重启）
+├── cute_icon.png/ico       # 图标
+├── requirements.txt        # 依赖
+├── 一键安装.bat             # 安装+自启动
+├── 完全独立启动.vbs          # 独立启动脚本
+└── dist/RestReminder.exe   # 打包好的 exe
 ```
 
-自动完成：检查 Python → 安装依赖 → 设置开机自启 → 启动看门狗。
+## 🔒 隐私声明
 
-## 启动方式
+- **免费版**：所有数据存储在本地，不联网，不上传任何信息
+- **Pro版**：云同步数据加密存储于 [Supabase](https://supabase.com)，仅你本人可访问
+- **我们不收集、不共享、不出售任何用户数据**
 
-| 方式 | 命令 |
-|------|------|
-| 看门狗（推荐） | `pythonw watchdog.py` |
-| 直接启动 | `pythonw rest_reminder.py` |
-| 调试模式 | `python rest_reminder.py` |
+## 🐛 问题反馈
 
-## 卸载
+遇到问题？请到 [Issues](https://github.com/kuangketongxue/library-remind/issues) 提交，附上：
 
-```
-双击 卸载.bat
-```
+1. 操作系统版本
+2. Python 版本（如源码运行）
+3. `rest_reminder.log` 日志文件（程序目录下）
 
-## 项目结构
+## 📄 更新日志
 
-```
-rest_reminder.py          主程序
-watchdog.py               看门狗（崩溃自动重启）
-cute_icon.ico/png         图标
-requirements.txt          依赖：PyQt5, requests, psutil
-一键安装.bat              安装 + 自启 + 启动看门狗
-卸载.bat                  移除自启 + 停止进程
-run.bat                   手动启动
-完全独立启动.vbs           独立启动脚本
-CLAUDE.md                 开发文档
-```
+查看 [CHANGELOG.md](CHANGELOG.md)
 
-## 自定义
+## 📄 License
 
-| 配置 | 位置 | 默认值 |
-|------|------|--------|
-| 提醒间隔 | `self.interval_minutes` | 60 分钟 |
-| 收藏夹 ID | `get_bilibili_videos()` 内 `fid` | 3648313921 |
-| 用户 ID | `get_bilibili_videos()` 内 `mid` | 529362421 |
-| 学习目标 | `study_progress_bar.setMaximum` | 14 小时 |
-| 打卡目标 | `_check_streak()` 内 | 4 小时 |
-| 提醒方式 | `.settings.json` `reminder_mode` | video |
-| 快捷键 | `Ctrl+Alt+P` | 暂停/继续 |
+[MIT License](LICENSE) — 自由使用、修改、分发
 
-## 许可证
+---
 
-MIT License
+<div align="center">
 
-## Changelog
+**如果觉得有用，点个 ⭐ Star 支持一下！**
 
-- **v3.0** (2026-06-01) — 奢华暗黑主题重新设计（金色点缀+衬线字体+渐变进度条）；新增功能：休息时长追踪、连续打卡天数、提醒方式可选（打开B站/只弹通知/无操作）、历史数据导出到剪贴板、周统计图表、随机休息文案；新增快捷键 Ctrl+Alt+P；移除鼠标空闲检测；修复 save_daily_stats 只保存一次的bug
-- **v2.9** (2026-06-01) — 修复"继续"按钮卡住问题：鼠标空闲自动暂停后点"继续"，因 `_was_paused_by_idle` 未清除 + 鼠标轮询延迟导致恢复后立即被误判为空闲再次暂停；修复：`on_start_clicked` 重置 `_last_mouse_move_time`、`_resume_timer` 清除 `_was_paused_by_idle` + 防御 `remaining_when_paused=None`
-- **v2.8** (2026-05-28) — 移除飞书同步，改为全本地持久化（`.daily_log.json`）：学习时长跨重启恢复、无网络依赖、无 lark-cli 报错
-- **v2.7** (2026-05-28) — 修复飞书同步三重故障：.cmd 包装器在 pythonw 中失败（fallback 到 Node.js 直接调用）、环境变量丢失（新增 config.json 兜底）、@file 路径校验失败（始终内联 JSON）
-- **v2.6** (2026-05-27) — 修复 SingleInstanceChecker 作用域、watchdog 干净退出、re 变量未绑定、@file 路径、WindowsApps 代理双实例、环境变量持久化、注册表自启动指向
-- **v2.4** (2026-05-26) — 修复飞书同步三大根因：shell=True 解决 lark-cli .cmd 脚本执行失败；分页遍历防重复创建记录；简化二次确认逻辑
-- **v2.3.1** (2026-05-26) — 修复飞书同步编码问题（改用 field_id_list）
-- **v2.3** (2026-05-25) — 倒计时浮层显示+拖拽修复
-- **v2.2** (2026-05-24) — 5分钟倒计时浮层+电脑使用持久化
+</div>

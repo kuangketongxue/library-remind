@@ -28,6 +28,7 @@ requirements.txt        — 依赖：PyQt5, requests, psutil
 | 倒计时浮层坐标 | `.overlay_pos.json` | 拖动后自动保存，跨重启记忆 |
 | 学习目标时长 | `study_progress_bar.setMaximum` | 14（14 小时） |
 | 每日数据存储 | `.daily_log.json` | 学习+电脑时长，跨重启持久化 |
+| 运行状态存储 | `.app_state.json` | 计时器状态+休息+播放记录，跨重启续接 |
 | 计时器状态机 | `self.timer_state` | idle → running → paused → auto-restart |
 
 ## 运行和验证

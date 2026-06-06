@@ -82,6 +82,7 @@ LARK_CLI使用说明.md
 .feishu_tmp.json
 .feishu_cache.json
 .daily_log.json
+.app_state.json
 
 # 完全独立启动文件
 完全独立启动.vbs
