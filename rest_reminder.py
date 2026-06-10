@@ -1,6 +1,7 @@
 """
 桌面休息提醒挂件
 - 每小时提醒休息，并随机打开 B 站收藏夹中的视频
+- 20-20-20 护眼提醒：每 20 分钟浮窗提示看远处 20 秒
 - 监控电池充电状态
 - 监控电脑使用时长（每 3 小时提醒）
 - 学习时长本地计数（每次倒计时完成算 1 小时）
@@ -403,17 +404,74 @@ class SingleInstanceChecker:
 from PyQt5.QtCore import QThread, pyqtSignal
 
 
-class CountdownOverlay(QWidget):
+class DraggableOverlay(QWidget):
+    """可拖动浮窗基类：共享拖动、位置记忆逻辑"""
+    _POS_FILE = None  # 子类必须覆盖
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.Tool)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self._drag_offset = None
+        self._saved_pos = None
+        self.setCursor(Qt.OpenHandCursor)
+
+    def eventFilter(self, obj, event):
+        t = event.type()
+        if t == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+            self._drag_offset = event.globalPos() - self.frameGeometry().topLeft()
+            self.setCursor(Qt.ClosedHandCursor)
+            return True
+        if t == QEvent.MouseMove and self._drag_offset is not None:
+            self.move(event.globalPos() - self._drag_offset)
+            return True
+        if t == QEvent.MouseButtonRelease:
+            self._drag_offset = None
+            self.setCursor(Qt.OpenHandCursor)
+            self._save_position()
+            return True
+        return super().eventFilter(obj, event)
+
+    def _load_position(self):
+        try:
+            if self._POS_FILE and os.path.exists(self._POS_FILE):
+                with open(self._POS_FILE, 'r') as f:
+                    pos = json.load(f)
+                x, y = pos['x'], pos['y']
+                screen = QApplication.primaryScreen()
+                if screen:
+                    g = screen.geometry()
+                    if 0 <= x <= g.width() - self.width() and 0 <= y <= g.height() - self.height():
+                        self._saved_pos = QPoint(x, y)
+                        return
+                self._saved_pos = None
+            else:
+                self._saved_pos = None
+        except Exception:
+            self._saved_pos = None
+
+    def _save_position(self):
+        try:
+            pos = self.frameGeometry().topLeft()
+            with open(self._POS_FILE, 'w') as f:
+                json.dump({'x': pos.x(), 'y': pos.y()}, f)
+        except Exception as e:
+            log.error(f'[{type(self).__name__}] 保存位置失败: {e}')
+
+    def _install_drag_on_children(self, *widgets):
+        """为子控件安装事件过滤器以支持拖动"""
+        for w in widgets:
+            w.installEventFilter(self)
+
+
+class CountdownOverlay(DraggableOverlay):
     """小型浮窗倒计时：拖动、位置记忆、进度条、呼吸动画、音效"""
     _POS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.overlay_pos.json')
 
     def __init__(self):
         super().__init__()
-        self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.Tool)
-        self.setAttribute(Qt.WA_TranslucentBackground)
         self.setFixedSize(200, 110)
 
-        self._drag_offset = None
         self._total_seconds = 300
         self._chimed = False
 
@@ -422,7 +480,6 @@ class CountdownOverlay(QWidget):
             border-radius: 12px;
             border: 1px solid rgba(255, 217, 61, 0.15);
         """)
-        self.setCursor(Qt.OpenHandCursor)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 10, 12, 8)
@@ -455,68 +512,10 @@ class CountdownOverlay(QWidget):
         layout.addWidget(self.hint_label)
         layout.addWidget(self.progress_bar)
 
-        for w in (self.title_label, self.timer_label, self.hint_label, self.progress_bar):
-            w.installEventFilter(self)
+        self._install_drag_on_children(self.title_label, self.timer_label, self.hint_label, self.progress_bar)
 
         self._load_position()
         self.hide()
-
-    def eventFilter(self, obj, event):
-        t = event.type()
-        if t == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
-            self._drag_offset = event.globalPos() - self.frameGeometry().topLeft()
-            self.setCursor(Qt.ClosedHandCursor)
-            return True
-        if t == QEvent.MouseMove and self._drag_offset is not None:
-            self.move(event.globalPos() - self._drag_offset)
-            return True
-        if t == QEvent.MouseButtonRelease:
-            self._drag_offset = None
-            self.setCursor(Qt.OpenHandCursor)
-            self._save_position()
-            return True
-        return super().eventFilter(obj, event)
-
-    def _load_position(self):
-        try:
-            if os.path.exists(self._POS_FILE):
-                with open(self._POS_FILE, 'r') as f:
-                    pos = json.load(f)
-                x, y = pos['x'], pos['y']
-                # 校验坐标在当前屏幕范围内
-                screen = QApplication.primaryScreen()
-                if screen:
-                    g = screen.geometry()
-                    if 0 <= x <= g.width() - self.width() and 0 <= y <= g.height() - self.height():
-                        self._saved_pos = QPoint(x, y)
-                        return
-                self._saved_pos = None
-            else:
-                self._saved_pos = None
-        except Exception:
-            self._saved_pos = None
-
-    def _save_position(self):
-        try:
-            pos = self.frameGeometry().topLeft()
-            with open(self._POS_FILE, 'w') as f:
-                json.dump({'x': pos.x(), 'y': pos.y()}, f)
-        except Exception as e:
-            log.error(f'[CountdownOverlay] 保存位置失败: {e}')
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self._drag_offset = event.globalPos() - self.frameGeometry().topLeft()
-            self.setCursor(Qt.ClosedHandCursor)
-
-    def mouseMoveEvent(self, event):
-        if self._drag_offset is not None:
-            self.move(event.globalPos() - self._drag_offset)
-
-    def mouseReleaseEvent(self, event):
-        self._drag_offset = None
-        self.setCursor(Qt.OpenHandCursor)
-        self._save_position()
 
     def show_countdown(self, remaining_seconds, title, hint, total_seconds=300):
         self._total_seconds = total_seconds
@@ -567,6 +566,96 @@ class CountdownOverlay(QWidget):
 
     def hide_overlay(self):
         self._chimed = False
+        self.hide()
+
+
+class EyeRestOverlay(DraggableOverlay):
+    """20-20-20 护眼提醒浮窗：轻量、自动消失、不打断学习流"""
+    _POS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.eye_rest_pos.json')
+    _COUNTDOWN_STYLE = 'color: #FFFFFF; font-size: 20px; font-weight: bold; font-family: Consolas; background: transparent; border: none;'
+    _DONE_STYLE = 'color: #78B450; font-size: 20px; font-weight: bold; font-family: Consolas; background: transparent; border: none;'
+
+    def __init__(self):
+        super().__init__()
+        self.setFixedSize(260, 90)
+
+        self.setStyleSheet("""
+            background-color: rgba(20, 30, 20, 220);
+            border-radius: 14px;
+            border: 1.5px solid rgba(120, 180, 80, 0.4);
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 10, 14, 8)
+        layout.setSpacing(3)
+
+        self.icon_label = QLabel('👁️ 看看远处')
+        self.icon_label.setAlignment(Qt.AlignCenter)
+        self.icon_label.setStyleSheet('color: #78B450; font-size: 13px; font-weight: bold; background: transparent; border: none;')
+
+        self.hint_label = QLabel('看 6 米以外的东西 20 秒')
+        self.hint_label.setAlignment(Qt.AlignCenter)
+        self.hint_label.setStyleSheet('color: #b0d090; font-size: 11px; background: transparent; border: none;')
+
+        self.countdown_label = QLabel('20')
+        self.countdown_label.setAlignment(Qt.AlignCenter)
+        self.countdown_label.setStyleSheet(self._COUNTDOWN_STYLE)
+
+        layout.addWidget(self.icon_label)
+        layout.addWidget(self.hint_label)
+        layout.addWidget(self.countdown_label)
+
+        self._install_drag_on_children(self.icon_label, self.hint_label, self.countdown_label)
+
+        self._auto_hide_timer = QTimer(self)
+        self._auto_hide_timer.setSingleShot(True)
+        self._auto_hide_timer.timeout.connect(self.hide_overlay)
+
+        self._countdown_timer = QTimer(self)
+        self._countdown_timer.timeout.connect(self._tick)
+        self._remaining = 0
+
+        self._load_position()
+        self.hide()
+
+    def show_reminder(self):
+        """显示护眼提醒，15 秒后自动消失"""
+        self._remaining = 20
+        self.countdown_label.setText('20')
+        self.countdown_label.setStyleSheet(self._COUNTDOWN_STYLE)
+
+        if not self.isVisible():
+            if self._saved_pos:
+                self.move(self._saved_pos)
+            else:
+                screen = QApplication.primaryScreen()
+                if screen:
+                    g = screen.geometry()
+                    self.move(g.width() - 280, 40)
+            self.show()
+        self.raise_()
+
+        self._countdown_timer.start(1000)
+        self._auto_hide_timer.start(15000)
+
+    def _tick(self):
+        self._remaining -= 1
+        if self._remaining <= 0:
+            self._countdown_timer.stop()
+            self.countdown_label.setText('✓')
+            self.countdown_label.setStyleSheet(self._DONE_STYLE)
+            self.icon_label.setText('👁️ 好了~')
+            self.hint_label.setText('眼睛舒服一点了吧')
+        else:
+            self.countdown_label.setText(str(self._remaining))
+
+    def hide_overlay(self):
+        self._countdown_timer.stop()
+        self._auto_hide_timer.stop()
+        if self.isVisible():
+            self.icon_label.setText('👁️ 看看远处')
+            self.hint_label.setText('看 6 米以外的东西 20 秒')
+            self.countdown_label.setStyleSheet(self._COUNTDOWN_STYLE)
         self.hide()
 
 
@@ -755,6 +844,10 @@ class RestReminderWidget(QWidget):
         self._study_countdown_active = False
         self._computer_countdown_active = False
 
+        # 20-20-20 护眼提醒
+        self.eye_rest_interval = 20 * 60  # 20 分钟（秒）
+        self.eye_rest_elapsed = 0         # 距上次护眼提醒的秒数
+
         self.drag_position = None
 
         self.init_ui()
@@ -769,6 +862,8 @@ class RestReminderWidget(QWidget):
         self.floating_ball = FloatingBall(self)
         # 创建5分钟倒计时浮层
         self.countdown_overlay = CountdownOverlay()
+        # 创建20-20-20护眼提醒浮层
+        self.eye_rest_overlay = EyeRestOverlay()
         # 启动时先显示主窗口看看效果
         self.show()
         # 移到屏幕右侧
@@ -1398,6 +1493,7 @@ class RestReminderWidget(QWidget):
         # 倒计时结束（包含浮层清理）
         if remaining <= 0:
             self._study_countdown_active = False
+            self._reset_eye_rest()
             # 不直接隐藏浮层：电脑使用倒计时可能还在运行
             if not self._computer_countdown_active:
                 self.countdown_overlay.hide_overlay()
@@ -1488,6 +1584,7 @@ class RestReminderWidget(QWidget):
                 self.computer_usage_reminder_given_at = None
                 self._study_countdown_active = False
                 self._computer_countdown_active = False
+                self._reset_eye_rest()
                 self.countdown_overlay.hide_overlay()
                 self.current_date = now.date()
                 self._daily_report_shown_today = False
@@ -1505,6 +1602,16 @@ class RestReminderWidget(QWidget):
                 self._handle_running(now)
             elif self.timer_state == 'paused':
                 self._handle_paused(now)
+
+            # --- 20-20-20 护眼提醒（仅在学习计时器运行时） ---
+            if self.timer_state == 'running':
+                self.eye_rest_elapsed += 1
+                if self.eye_rest_elapsed >= self.eye_rest_interval:
+                    self.eye_rest_elapsed = 0
+                    self._show_eye_rest_reminder()
+            elif self.timer_state == 'idle' and self.break_start is not None:
+                # 休息期间重置计数，下次学习重新开始 20 分钟
+                self._reset_eye_rest()
 
             # --- 22:00 倒计时（统一更新，避免重复请求） ---
             self._update_countdown(now)
@@ -1550,6 +1657,16 @@ class RestReminderWidget(QWidget):
             self.break_label.setText(f'☕ 今日休息：{self.break_minutes_today:.0f}分钟')
         else:
             self.break_label.setText('☕ 今日休息：0分钟')
+
+    def _show_eye_rest_reminder(self):
+        """显示 20-20-20 护眼提醒浮窗"""
+        self.eye_rest_overlay.show_reminder()
+        log.info('[EyeRest] 20-20-20 护眼提醒触发')
+
+    def _reset_eye_rest(self):
+        """重置护眼计时器（每次学习周期结束/日期切换时调用）"""
+        self.eye_rest_elapsed = 0
+        self.eye_rest_overlay.hide_overlay()
 
     def _set_reminder_mode(self, mode):
         """设置提醒方式"""
@@ -1602,6 +1719,7 @@ class RestReminderWidget(QWidget):
                 log.warning(f'[恢复] break_start 解析失败: {e}')
 
         self.played_today = set(state.get('played_today', []))
+        self.eye_rest_elapsed = state.get('eye_rest_elapsed', 0)
         self.update_study_display()
         self._update_break_display()
 
@@ -1619,6 +1737,7 @@ class RestReminderWidget(QWidget):
             'break_start': self.break_start.isoformat() if self.break_start else None,
             'break_minutes': self.break_minutes_today,
             'played_today': list(self.played_today),
+            'eye_rest_elapsed': self.eye_rest_elapsed,
         }
         LocalSync.save_app_state(state)
 
