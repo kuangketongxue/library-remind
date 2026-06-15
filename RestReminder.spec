@@ -5,7 +5,7 @@ a = Analysis(
     ['rest_reminder.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('cute_icon.ico', '.'), ('cute_icon.png', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
