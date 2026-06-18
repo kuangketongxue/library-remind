@@ -1948,20 +1948,28 @@ class RestReminderWidget(QWidget):
             f'color: rgb({r},{g},30); letter-spacing: 4px;')
 
     def show_stats(self):
-        """显示趋势分析窗口（缓存实例，不重复创建）"""
+        """显示趋势分析窗口（每次重建，避免 WA_DeleteOnClose 后引用失效）"""
         log.info('[show_stats] 用户点击了趋势分析')
         LocalSync.save_daily_stats()
         try:
-            if not hasattr(self, '_trend_window') or self._trend_window is None:
-                self._trend_window = TrendWindow()
+            # 检查旧窗口是否还活着
+            if hasattr(self, '_trend_window'):
+                try:
+                    if self._trend_window.isVisible():
+                        self._trend_window.raise_()
+                        self._trend_window.activateWindow()
+                        return
+                except (RuntimeError, Exception):
+                    pass  # C++ 对象已销毁，重建
+            self._trend_window = TrendWindow()
             self._trend_window.show()
-            self._trend_window.raise_()
-            self._trend_window.activateWindow()
-            log.info('[show_stats] TrendWindow 已显示')
+            log.info('[show_stats] TrendWindow 已创建并显示')
         except Exception as e:
             import traceback
             log.error(f'[show_stats] 失败: {type(e).__name__}: {e}')
             traceback.print_exc()
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(self, '提示', f'无法打开报告窗口: {e}')
 
     def position_to_right(self):
         screen = QApplication.primaryScreen()
@@ -2062,10 +2070,13 @@ class RestReminderWidget(QWidget):
         self.tray_icon.show()
 
     def _on_tray_activated(self, reason):
-        if reason == QSystemTrayIcon.DoubleClick:
-            self.show()
-            self.activateWindow()
-            self.raise_()
+        if reason in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick):
+            if self.isVisible():
+                self.hide()
+            else:
+                self.show()
+                self.activateWindow()
+                self.raise_()
 
     def _tray_open_main(self):
         self.show()
