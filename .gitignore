@@ -86,3 +86,9 @@ LARK_CLI使用说明.md
 
 # 完全独立启动文件
 完全独立启动.vbs
+
+# 本地用户数据
+.review_log.json
+
+# Pro 版（闭源，含AI KEY）
+rest-reminder-pro/
