@@ -2670,7 +2670,7 @@ class RestReminderWidget(QWidget):
                                      QLineEdit, QPushButton, QHBoxLayout, QMessageBox)
         dialog = QDialog(self)
         dialog.setWindowTitle('⚙️ 设置')
-        dialog.setFixedSize(340, 380)
+        dialog.setFixedSize(340, 450)
         dialog.setStyleSheet("""
             QDialog { background-color: #141413; color: #faf9f5; border-radius: 12px; }
             QLabel { color: #e8e6e1; font-size: 12px; }
@@ -2805,14 +2805,36 @@ class RestReminderWidget(QWidget):
         import hashlib, platform, uuid
         dev_id = hashlib.md5(f"{platform.node()}-{uuid.getnode()}".encode()).hexdigest()[:12]
 
+        dev_row = QHBoxLayout()
+        dev_row.setSpacing(6)
         dev_id_label = QLineEdit(dev_id)
         dev_id_label.setReadOnly(True)
         dev_id_label.setStyleSheet('background: #1a1a22; color: #c96442; border: 1px solid rgba(201,100,66,0.2); border-radius: 6px; padding: 6px; font-size: 12px; font-family: monospace;')
-        layout.addWidget(dev_id_label)
+        dev_id_label.setFixedWidth(200)
+        dev_row.addWidget(dev_id_label)
+
+        copy_btn = QPushButton('📋 复制')
+        copy_btn.setObjectName('testBtn')
+        copy_btn.setFixedWidth(70)
+        def do_copy():
+            clip = QApplication.clipboard()
+            clip.setText(dev_id)
+            old = copy_btn.text()
+            copy_btn.setText('✅ 已复制')
+            QTimer.singleShot(2000, lambda: copy_btn.setText(old))
+        copy_btn.clicked.connect(do_copy)
+        dev_row.addWidget(copy_btn)
+        dev_row.addStretch()
+        layout.addLayout(dev_row)
 
         bind_hint = QLabel('复制此 ID 到网站 Pro 页面绑定')
         bind_hint.setStyleSheet('color: #888; font-size: 10px; background: transparent;')
         layout.addWidget(bind_hint)
+
+        open_login_btn = QPushButton('🌐  打开 Pro 登录界面')
+        open_login_btn.setObjectName('testBtn')
+        open_login_btn.clicked.connect(lambda: open_url('https://master.rest-reminder-app.pages.dev/account'))
+        layout.addWidget(open_login_btn)
 
         btn_row = QHBoxLayout()
         save_btn = QPushButton('保存')
