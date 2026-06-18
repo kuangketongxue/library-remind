@@ -12,13 +12,13 @@ if exist "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\休息提醒.l
     echo 未找到自启动快捷方式
 )
 
-REM Stop watchdog if running
-tasklist /FI "IMAGENAME eq pythonw.exe" 2>NUL | find /I "watchdog.py" >NUL
+REM Stop program if running
+tasklist /FI "IMAGENAME eq pythonw.exe" 2>NUL | find /I "rest_reminder.py" >NUL
 if not errorlevel 1 (
-    taskkill /FI "IMAGENAME eq pythonw.exe" /IMAGENAME "watchdog.py" /F 2>nul
-    echo 已关闭看门狗进程
+    taskkill /FI "IMAGENAME eq pythonw.exe" /IMAGENAME "rest_reminder.py" /F 2>nul
+    echo 已关闭程序进程
 ) else (
-    echo 未检测到正在运行的看门狗
+    echo 未检测到正在运行的程序
 )
 
 echo.

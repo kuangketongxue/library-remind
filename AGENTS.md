@@ -1,7 +1,7 @@
 # 休息提醒 — AGENTS.md
 
 ## 项目概述
-PyQt5 桌面挂件：60 分钟计时（自动循环）+ 暂停/继续 + 每小时随机打开 B 站收藏夹视频 + 每 3 小时打开护眼视频 + 电池监控 +22:00 倒计时 + 数据本地持久化。绿色小浮球：点击显示/隐藏主窗口，可拖动。看门狗守护：watchdog.py 监控主进程，崩溃自动重启，开机自启动指向看门狗。
+PyQt5 桌面挂件：60 分钟计时（自动循环）+ 暂停/继续 + 每小时随机打开 B 站收藏夹视频 + 每 3 小时打开护眼视频 + 电池监控 +22:00 倒计时 + 数据本地持久化。绿色小浮球：点击显示/隐藏主窗口，可拖动。开机自启动：注册表指向主程序，崩溃后用户手动重启。
 
 ## 技术栈
 Python 3.7+ / PyQt5 / requests / psutil
@@ -9,10 +9,9 @@ Python 3.7+ / PyQt5 / requests / psutil
 ## 关键文件
 ```
 rest_reminder.py        — 主程序（所有逻辑都在这一个文件）
-watchdog.py             — 看门狗进程（监控主进程，崩溃自动重启，CREATE_NO_WINDOW 静默）
 cute_icon.png / .ico    — 托盘和任务栏图标
 requirements.txt        — 依赖：PyQt5, requests, psutil
-一键安装.bat             — 安装 + 自启动 + 启动看门狗（推荐用户入口）
+一键安装.bat             — 安装 + 自启动 + 启动主程序（推荐用户入口）
 ```
 
 ## 关键配置位置
@@ -37,10 +36,7 @@ requirements.txt        — 依赖：PyQt5, requests, psutil
 
 ## 运行和验证
 ```bash
-# 启动看门狗（推荐，崩溃自动重启）
-pythonw watchdog.py
-
-# 直接启动主程序（调试用）
+# 启动主程序（崩溃后用户手动重启）
 pythonw rest_reminder.py
 
 # 验证进程
@@ -52,7 +48,7 @@ taskkill /F /IM pythonw.exe
 
 ## 改完代码后必须做的
 1. 杀掉旧进程：`taskkill /F /IM pythonw.exe`
-2. 启动看门狗：`start "" pythonw watchdog.py`
+2. 启动主程序：`pythonw rest_reminder.py`
 3. 验证新进程 PID 已出现
 
 ## 禁止事项

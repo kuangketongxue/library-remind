@@ -44,7 +44,7 @@ for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PYTHON_VERSION=%%i
 echo ✓ Python %PYTHON_VERSION% 已安装
 
 REM 检测 WindowsApps 代理（Microsoft Store 的 Python 别名）
-REM 代理的 pythonw.exe 通常 < 100KB，会导致看门狗启动双实例
+REM 代理的 pythonw.exe 通常 < 100KB，会导致启动双实例
 set "PYTHONW_EXE=pythonw"
 for /f "delims=" %%P in ('where pythonw 2^>nul') do (
     set "PYTHONW_EXE=%%P"
@@ -107,7 +107,7 @@ powershell -ExecutionPolicy Bypass -Command "^&
     `$WshShell = New-Object -ComObject WScript.Shell;^n
     `$Shortcut = `$WshShell.CreateShortcut('%STARTUP_FOLDER%\\休息提醒.lnk');^n
     `$Shortcut.TargetPath = '%PYTHONW_EXE%';^n
-    `$Shortcut.Arguments = '\"%~dp0watchdog.py\" --startup';^n
+    `$Shortcut.Arguments = '\"%~dp0rest_reminder.py\" --silent';^n
     `$Shortcut.WorkingDirectory = '%CURRENT_DIR%';^n
     `$Shortcut.Description = '每小时休息提醒挂件（自动启动）';^n
     `$Shortcut.WindowStyle = 7;^n
@@ -122,25 +122,25 @@ if errorlevel 1 (
 echo.
 
 REM ========================================
-REM 步骤4: 启动监视器
+REM 步骤4: 启动程序
 REM ========================================
-echo [4/4] 启动看门狗监视器...
+echo [4/4] 启动休息提醒...
 
-REM 检查是否已有看门狗在运行
-tasklist /FI "IMAGENAME eq pythonw.exe" 2>NUL | find /I "watchdog.py" >NUL
+REM 检查是否已有程序在运行
+tasklist /FI "IMAGENAME eq pythonw.exe" 2>NUL | find /I "rest_reminder.py" >NUL
 if not errorlevel 1 (
-    echo 检测到看门狗已在运行
-    echo 如需重新安装，请先退出看门狗。
+    echo 检测到程序已在运行
+    echo 如需重新安装，请先退出程序。
     echo.
 ) else (
-    REM 静默启动看门狗（使用检测到的真实 Python 路径）
-    start "" /b "%PYTHONW_EXE%" "%CURRENT_DIR%watchdog.py"
+    REM 静默启动主程序（使用检测到的真实 Python 路径）
+    start "" /b "%PYTHONW_EXE%" "%CURRENT_DIR%rest_reminder.py" --silent
 )
 
-REM 等待看门狗初始化
+REM 等待程序初始化
 timeout /t 3 >nul
 
-echo ✓ 看门狗已启动
+echo ✓ 程序已启动
 echo.
 
 echo ╔════════════════════════════════════════╗
@@ -150,7 +150,7 @@ echo.
 echo 程序已在后台运行，请查看系统托盘图标
 echo.
 echo ✓ 开机自启动：已启用
-echo ✓ 运行模式：静默后台（看门狗守护）
+echo ✓ 运行模式：静默后台
 echo ✓ 托盘图标：已显示
 echo.
 echo ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -167,8 +167,7 @@ echo.
 echo 💡 如需退出程序：
 echo    → 右键托盘图标 → 选择"退出"
 echo.
-echo ⚠ 程序由看门狗守护，请通过托盘图标退出
-echo   或使用卸载脚本进行清理
+echo ⚠ 如需卸载，请使用卸载脚本进行清理
 echo.
 echo ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 echo.

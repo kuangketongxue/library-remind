@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{width:1080px;height:1440px;background:#0a0a0f;font-family:'Inter','Helvetica Neue',sans-serif;color:#fff;overflow:hidden}
+.grid{position:absolute;top:72px;left:72px;right:72px;bottom:80px;display:flex;flex-direction:column;justify-content:space-between}
+.num{font-size:120px;font-weight:900;color:rgba(0,212,255,0.15);line-height:1}
+.title{font-size:48px;font-weight:800;margin-top:-40px;letter-spacing:-1px}
+.title span{color:#00d4ff}
+.desc{font-size:20px;color:#888;margin-top:16px;line-height:1.6}
+.items{margin-top:40px;display:flex;flex-direction:column;gap:20px}
+.item{display:flex;align-items:center;gap:20px;padding:24px;background:rgba(255,255,255,0.03);border-radius:12px;border-left:3px solid #00d4ff}
+.item .icon{font-size:36px;flex-shrink:0}
+.item .text{font-size:18px;line-height:1.5}
+.item .text b{color:#00d4ff}
+.page{position:absolute;bottom:80px;right:72px;font-size:14px;color:#444}
+</style></head><body>
+<div class="grid">
+  <div>
+    <div class="num">01</div>
+    <div class="title">智能<span>循环计时</span></div>
+    <div class="desc">自定义15-120分钟，到时间自动提醒</div>
+    <div class="items">
+      <div class="item"><div class="icon">⏰</div><div class="text"><b>自动循环</b> — 休息完自动开始下一轮计时</div></div>
+      <div class="item"><div class="icon">📺</div><div class="text"><b>B站护眼视频</b> — 休息时自动打开你收藏的放松视频</div></div>
+      <div class="item"><div class="icon">💻</div><div class="text"><b>电脑使用监控</b> — 每3小时提醒你站起来活动</div></div>
+      <div class="item"><div class="icon">🎯</div><div class="text"><b>自定义收藏夹</b> — 填你自己的B站ID，打开你的视频</div></div>
+    </div>
+  </div>
+  <div class="page">02 / 05</div>
+</div>
+</body></html>

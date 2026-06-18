@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>精力管理 · 设计稿</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #08080c;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Inter', -apple-system, sans-serif;
+  padding: 40px;
+}
+
+/* ── Card mock (380x540) ── */
+.card {
+  width: 380px;
+  background: radial-gradient(ellipse at 50% 0%, rgba(212, 175, 55, 0.05) 0%, #0a0a10 70%);
+  border-radius: 24px;
+  border: 1px solid rgba(212, 175, 55, 0.10);
+  padding: 28px 24px 24px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.8), inset 0 1px 0 rgba(212,175,55,0.06);
+}
+
+/* ── Decorative corner accents ── */
+.card::before {
+  content: '';
+  position: absolute;
+  top: -1px; left: -1px;
+  width: 80px; height: 80px;
+  border-top: 1.5px solid rgba(212, 175, 55, 0.25);
+  border-left: 1.5px solid rgba(212, 175, 55, 0.25);
+  border-radius: 24px 0 0 0;
+  pointer-events: none;
+}
+.card::after {
+  content: '';
+  position: absolute;
+  bottom: -1px; right: -1px;
+  width: 80px; height: 80px;
+  border-bottom: 1.5px solid rgba(212, 175, 55, 0.15);
+  border-right: 1.5px solid rgba(212, 175, 55, 0.15);
+  border-radius: 0 0 24px 0;
+  pointer-events: none;
+}
+
+/* ── Header: title + goal + close ── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.header-title {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: #d4af37;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.header-goal {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 11px;
+  color: #6a8cbb;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(106, 140, 187, 0.15);
+  transition: all 0.3s;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.header-goal:hover {
+  border-color: rgba(106, 140, 187, 0.4);
+  background: rgba(106, 140, 187, 0.08);
+}
+.header-goal::before {
+  content: '🎯 ';
+}
+
+.header-close {
+  width: 28px; height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #555;
+  font-size: 20px;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: all 0.3s;
+}
+.header-close:hover {
+  color: #d4af37;
+  background: rgba(212,175,55,0.10);
+}
+
+/* ── Timer section ── */
+.timer-section {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.timer-display {
+  font-family: 'Inter', monospace;
+  font-size: 52px;
+  font-weight: 300;
+  color: #d4af37;
+  letter-spacing: 6px;
+  line-height: 1.1;
+}
+.timer-display.fire {
+  color: #ff7a50;
+  text-shadow: 0 0 30px rgba(255, 122, 80, 0.15);
+}
+
+.timer-sublabel {
+  font-size: 11px;
+  color: #555;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.timer-progress {
+  margin-top: 12px;
+  height: 3px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+.timer-progress-bar {
+  height: 100%;
+  width: 60%;
+  background: linear-gradient(90deg, #8b6914, #d4af37, #f0d060);
+  border-radius: 4px;
+  transition: width 1s linear;
+}
+
+/* ── Stats grid ── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.stat-card {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 12px;
+  padding: 10px 12px;
+  transition: all 0.3s;
+}
+.stat-card:hover {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(212,175,55,0.10);
+}
+
+.stat-label {
+  font-size: 10px;
+  color: #666;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  font-size: 18px;
+  font-weight: 400;
+  color: #e8e6e1;
+  letter-spacing: 1px;
+}
+.stat-value.gold { color: #d4af37; }
+.stat-value.blue { color: #6a8cbb; }
+.stat-value.green { color: #6a9b6a; }
+.stat-value.orange { color: #d97757; }
+.stat-value.purple { color: #7a5aab; }
+
+.stat-sub {
+  font-size: 9px;
+  color: #444;
+  margin-top: 1px;
+}
+
+/* ── Progress bars in stat cards ── */
+.stat-bar {
+  height: 2px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 2px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+.stat-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+}
+.stat-bar-fill.gold { background: linear-gradient(90deg, #8b6914, #d4af37); }
+.stat-bar-fill.blue { background: linear-gradient(90deg, #2a5a8a, #6a9bcc); }
+.stat-bar-fill.green { background: linear-gradient(90deg, #3a6a30, #6a9b6a); }
+
+/* ── Divider ── */
+.divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212,175,55,0.10), transparent);
+  margin: 12px 0;
+}
+
+/* ── Bottom row: streak badges ── */
+.bottom-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.streak-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #d97757;
+}
+.streak-badge .fire { font-size: 14px; }
+
+.reminder-badge {
+  font-size: 10px;
+  color: #555;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.04);
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.reminder-badge:hover {
+  border-color: rgba(212,175,55,0.20);
+  color: #d4af37;
+}
+
+/* ── Breathing glow (simulated) ── */
+@keyframes breathe {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+}
+
+.glow-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #d4af37;
+  animation: breathe 2.5s ease-in-out infinite;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* ── Avant-garde touch: diagonal accent line ── */
+.diagonal-accent {
+  position: absolute;
+  top: -40px; right: 30px;
+  width: 1px; height: 120px;
+  background: linear-gradient(180deg, transparent, rgba(212,175,55,0.12), transparent);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+/* ── Responsive ── */
+@media (max-width: 420px) {
+  .card { width: 100%; padding: 20px 16px; }
+  .timer-display { font-size: 42px; }
+}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="diagonal-accent"></div>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-title">
+      <span class="glow-dot"></span>精力管理
+    </div>
+    <div class="header-goal">编程/开发</div>
+    <div class="header-close">×</div>
+  </div>
+
+  <!-- Timer -->
+  <div class="timer-section">
+    <div class="timer-display fire">45:23</div>
+    <div class="timer-sublabel">续航剩余</div>
+    <div class="timer-progress">
+      <div class="timer-progress-bar" style="width: 24%"></div>
+    </div>
+  </div>
+
+  <!-- Stats Grid -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">今日产出</div>
+      <div class="stat-value gold">6h <span style="font-size:12px;color:#6a8cbb;">🎯 编程/开发</span></div>
+      <div class="stat-bar"><div class="stat-bar-fill gold" style="width: 42%"></div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">连续打卡</div>
+      <div class="stat-value orange">13<span class="stat-sub" style="font-size:12px;color:#666;"> 天</span></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">22:00 倒计时</div>
+      <div class="stat-value blue">8h 37m</div>
+      <div class="stat-bar"><div class="stat-bar-fill blue" style="width: 61%"></div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">今日休息</div>
+      <div class="stat-value green">24<span class="stat-sub" style="font-size:12px;color:#666;"> 分钟</span></div>
+    </div>
+  </div>
+
+  <!-- Divider -->
+  <div class="divider"></div>
+
+  <!-- Bottom Row -->
+  <div class="bottom-row">
+    <div class="streak-badge">
+      <span class="fire">🔥</span> 连续 13 天（最佳 13 天）
+    </div>
+    <div class="reminder-badge">B站 提醒</div>
+  </div>
+
+  <!-- Battery + Computer -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;gap:8px;">
+    <div style="flex:1;display:flex;align-items:center;gap:8px;">
+      <span style="font-size:11px;color:#7a5aab;">💻</span>
+      <div style="flex:1;height:2px;background:rgba(255,255,255,0.04);border-radius:2px;">
+        <div style="width:70%;height:100%;background:linear-gradient(90deg,#4a2a7a,#7a5aab);border-radius:2px;"></div>
+      </div>
+      <span style="font-size:9px;color:#555;">6H 12min</span>
+    </div>
+    <div style="flex:0 0 auto;display:flex;align-items:center;gap:6px;">
+      <span style="font-size:11px;color:#5a8a30;">🔋</span>
+      <span style="font-size:9px;color:#555;">78%</span>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

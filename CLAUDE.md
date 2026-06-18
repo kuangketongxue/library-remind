@@ -9,7 +9,6 @@ Python 3.7+ / PyQt5 / requests / psutil / Win32 API (ctypes)
 ## 关键文件
 ```
 rest_reminder.py              — 主程序（开源版）
-watchdog.py                   — 看门狗进程
 design-preview.html           — 最新UI设计稿（frontend-design）
 rest-reminder-pro/            — Pro版（订阅制）
   backend.py                  — Supabase客户端 + 订阅验证
@@ -54,9 +53,9 @@ pyinstaller RestReminderPro.spec
 ```
 
 ## 踩坑记录（必读）
-- **SingleInstanceChecker 必须模块级生命周期**：放在 main() 作为局部变量会 GC 回收导致 watchdog 误判重启
+- **SingleInstanceChecker 必须模块级生命周期**：放在 main() 作为局部变量会 GC 回收导致锁文件清理异常
 - **WindowsApps pythonw.exe 是 Store 代理**：文件 < 100KB，会启动双实例
-- **注册表自启动必须指向 watchdog.py**：指向 rest_reminder.py 则崩溃后无守护
+- **注册表自启动指向主程序**：崩溃后用户手动重启，比看门狗更可靠
 - **opencli 发布小红书需要 180s 超时**：`OPENCLI_BROWSER_COMMAND_TIMEOUT=180000`
 
 ## 禁止事项

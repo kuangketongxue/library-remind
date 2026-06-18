@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{width:1080px;height:1440px;background:#0a0a0f;font-family:'Inter','Helvetica Neue',sans-serif;color:#fff;overflow:hidden}
+.grid{position:absolute;top:72px;left:72px;right:72px;bottom:80px;display:flex;flex-direction:column;justify-content:space-between}
+.num{font-size:120px;font-weight:900;color:rgba(0,212,255,0.15);line-height:1}
+.title{font-size:48px;font-weight:800;margin-top:-40px;letter-spacing:-1px}
+.title span{color:#00d4ff}
+.desc{font-size:20px;color:#888;margin-top:16px;line-height:1.6}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:40px}
+.stat{background:rgba(0,212,255,0.06);border:1px solid rgba(0,212,255,0.15);border-radius:16px;padding:32px;text-align:center}
+.stat .value{font-size:48px;font-weight:900;color:#00d4ff}
+.stat .label{font-size:16px;color:#888;margin-top:8px}
+.note{margin-top:32px;padding:20px;background:rgba(76,175,80,0.1);border:1px solid rgba(76,175,80,0.3);border-radius:12px;font-size:16px;color:#4caf50;text-align:center}
+.page{position:absolute;bottom:80px;right:72px;font-size:14px;color:#444}
+</style></head><body>
+<div class="grid">
+  <div>
+    <div class="num">02</div>
+    <div class="title">学习<span>数据追踪</span></div>
+    <div class="desc">每天学了多久，一看就知道</div>
+    <div class="stats">
+      <div class="stat"><div class="value">📊</div><div class="label">每日学习时长</div></div>
+      <div class="stat"><div class="value">🔥</div><div class="label">连续打卡天数</div></div>
+      <div class="stat"><div class="value">💻</div><div class="label">电脑使用时长</div></div>
+      <div class="stat"><div class="value">☕</div><div class="label">休息时长统计</div></div>
+    </div>
+    <div class="note">✅ 数据本地存储，重启不丢失</div>
+  </div>
+  <div class="page">03 / 05</div>
+</div>
+</body></html>
