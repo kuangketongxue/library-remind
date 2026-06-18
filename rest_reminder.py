@@ -114,6 +114,7 @@ def _get_idle_seconds():
         millis = ctypes.windll.kernel32.GetTickCount() - lii.dwTime
         return millis // 1000
     except Exception:
+        log.warning('[空闲检测] Win32 API 失败')
         return 0
 
 
@@ -128,6 +129,7 @@ def _load_goal():
             if d.get('date') == today:
                 return d.get('goal', '')
         except Exception:
+            log.error("[LINE 131] 未捕获异常")
             pass
     return None
 
@@ -145,6 +147,7 @@ def _load_quotes_used():
             with open(path, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception:
+            log.error("[LINE 149] 未捕获异常")
             pass
     return []
 
@@ -332,6 +335,7 @@ class LocalSync:
                     cls._current_date = today
                     return cls._data
             except Exception:
+                log.error("[LINE 337] 未捕获异常")
                 pass
         cls._data = {'date': today, 'study_hours': 0, 'computer_hours': 0, 'break_minutes_today': 0}
         cls._current_date = today
@@ -392,6 +396,7 @@ class LocalSync:
                 with open(path, 'r', encoding='utf-8') as f:
                     return json.load(f)
             except Exception:
+                log.error("[LINE 398] 未捕获异常")
                 pass
         return {'reminder_mode': 'video'}  # 默认：打开B站
 
@@ -415,6 +420,7 @@ class LocalSync:
                 with open(path, 'r', encoding='utf-8') as f:
                     return json.load(f)
             except Exception:
+                log.error("[LINE 422] 未捕获异常")
                 pass
         return {'current_streak': 0, 'last_streak_date': '', 'best_streak': 0}
 
@@ -441,6 +447,7 @@ class LocalSync:
                 with open(path, 'r', encoding='utf-8') as f:
                     history = json.load(f)
             except Exception:
+                log.warning('[历史统计] 文件损坏，重新初始化')
                 history = {}
         history[today] = {
             'study': round(data.get('study_hours', 0), 1),
@@ -465,6 +472,7 @@ class LocalSync:
             with open(path, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception:
+            log.warning('[JSON] 文件解析失败')
             return {}
 
     @classmethod
@@ -489,6 +497,7 @@ class LocalSync:
                 if data.get('date') == today:
                     return data
             except Exception:
+                log.error("[LINE 498] 未捕获异常")
                 pass
         return None
 
@@ -547,6 +556,7 @@ class SingleInstanceChecker:
                     try:
                         os.remove(self.lock_path)
                     except Exception:
+                        log.error("[LINE 557] 未捕获异常")
                         pass
             with open(self.lock_path, 'w') as f:
                 f.write(str(os.getpid()))
@@ -564,12 +574,14 @@ class SingleInstanceChecker:
                     import msvcrt
                     msvcrt.locking(self.lock_handle.fileno(), msvcrt.LK_UNLCK, 1)
                 except Exception:
+                    log.error("[LINE 575] 未捕获异常")
                     pass
                 self.lock_handle.close()
                 self.lock_handle = None
             if self.lock_file and os.path.exists(self.lock_file):
                 os.remove(self.lock_file)
         except Exception:
+            log.error("[LINE 582] 未捕获异常")
             pass
 
 
@@ -617,6 +629,7 @@ class DraggableOverlay(QWidget):
             else:
                 self._saved_pos = None
         except Exception:
+            log.warning("[位置] 加载位置失败")
             self._saved_pos = None
 
     def _save_position(self):
@@ -766,6 +779,7 @@ class CountdownOverlay(DraggableOverlay):
                 if slp:
                     time.sleep(slp)
         except Exception:
+            log.error("[LINE 779] 未捕获异常")
             pass
 
     @staticmethod
@@ -1099,6 +1113,7 @@ class TrendWindow(QWidget):
             with open(path, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception:
+            log.warning('[JSON] 文件解析失败')
             return {}
 
     def _load_reviews(self):
@@ -1245,6 +1260,7 @@ class TrendWindow(QWidget):
                 months[key]['computer'] += data.get('computer', 0)
                 months[key]['count'] += 1
             except Exception:
+                log.warning("[趋势] 日期解析跳过")
                 continue
 
         if not months:
@@ -2017,6 +2033,7 @@ class RestReminderWidget(QWidget):
                         pythonw = real
                         break
         except Exception:
+            log.error('[自启动] WindowsApps 代理检测失败')
             pass
         return f'"{pythonw}" "{script}" --silent'
 
@@ -2653,7 +2670,7 @@ class RestReminderWidget(QWidget):
                                      QLineEdit, QPushButton, QHBoxLayout, QMessageBox)
         dialog = QDialog(self)
         dialog.setWindowTitle('⚙️ 设置')
-        dialog.setFixedSize(340, 340)
+        dialog.setFixedSize(340, 380)
         dialog.setStyleSheet("""
             QDialog { background-color: #141413; color: #faf9f5; border-radius: 12px; }
             QLabel { color: #e8e6e1; font-size: 12px; }
@@ -2716,12 +2733,36 @@ class RestReminderWidget(QWidget):
             def _do_test():
                 try:
                     import requests
-                    # 先测试收藏夹基本信息
+                    # 先测试收藏夹基本信息（短超时）
                     url = f'https://api.bilibili.com/x/v3/fav/folder/info?media_id={fid}'
                     h = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Referer': 'https://www.bilibili.com'}
-                    r = requests.get(url, headers=h, timeout=8)
-                    data = r.json()
-                    code = data.get('code', -1)
+                    try:
+                        r = requests.get(url, headers=h, timeout=5)
+                        data = r.json()
+                        code = data.get('code', -1)
+                    except requests.Timeout:
+                        # 超时则尝试兜底方案
+                        try:
+                            r2 = requests.get(f'https://api.bilibili.com/x/v3/fav/folder/info?media_id={fid}',
+                                headers=h, timeout=5)
+                            data = r2.json()
+                            code = data.get('code', -1)
+                        except Exception:
+                            QTimer.singleShot(0, lambda: (
+                                test_result.setText('⚠️ 网络超时，检查网络或稍后再试'),
+                                test_result.setStyleSheet('color: #ff8844; font-size: 11px; background: transparent;'),
+                                test_btn.setText('🔍 测试收藏夹连接'),
+                                test_btn.setEnabled(True)
+                            ))
+                            return
+                    except requests.ConnectionError:
+                        QTimer.singleShot(0, lambda: (
+                            test_result.setText('⚠️ 无法连接B站API（网络限制）'),
+                            test_result.setStyleSheet('color: #ff8844; font-size: 11px; background: transparent;'),
+                            test_btn.setText('🔍 测试收藏夹连接'),
+                            test_btn.setEnabled(True)
+                        ))
+                        return
                     if code == 0:
                         folder = data.get('data', {})
                         name = folder.get('title', '未命名收藏夹')
@@ -2756,6 +2797,22 @@ class RestReminderWidget(QWidget):
             threading.Thread(target=_do_test, daemon=True).start()
 
         test_btn.clicked.connect(test_bilibili)
+
+        layout.addSpacing(4)
+        layout.addWidget(QLabel('🔑 设备 ID'))
+
+        # 生成设备 ID
+        import hashlib, platform, uuid
+        dev_id = hashlib.md5(f"{platform.node()}-{uuid.getnode()}".encode()).hexdigest()[:12]
+
+        dev_id_label = QLineEdit(dev_id)
+        dev_id_label.setReadOnly(True)
+        dev_id_label.setStyleSheet('background: #1a1a22; color: #c96442; border: 1px solid rgba(201,100,66,0.2); border-radius: 6px; padding: 6px; font-size: 12px; font-family: monospace;')
+        layout.addWidget(dev_id_label)
+
+        bind_hint = QLabel('复制此 ID 到网站 Pro 页面绑定')
+        bind_hint.setStyleSheet('color: #888; font-size: 10px; background: transparent;')
+        layout.addWidget(bind_hint)
 
         btn_row = QHBoxLayout()
         save_btn = QPushButton('保存')
@@ -2802,10 +2859,21 @@ class RestReminderWidget(QWidget):
             return
 
         if not is_pro():
+            # 显示设备 ID，供注册用
+            try:
+                from pro_features import get_subscription_info
+                info = get_subscription_info()
+                dev_id = info.get('device_id', '未知')
+            except Exception:
+                log.warning("[Pro] 获取设备 ID 失败")
+                dev_id = '未知'
             from PyQt5.QtWidgets import QMessageBox
-            QMessageBox.information(self, '🤖 AI 报告',
-                'AI 学习报告需要 Pro 订阅。\n'
-                '请通过官方渠道升级后使用。')
+            box = QMessageBox(self)
+            box.setWindowTitle('🤖 AI 报告')
+            box.setText('AI 学习报告需要 Pro 订阅。\n\n'
+                        f'你的设备 ID：{dev_id}\n'
+                        '将此 ID 提供给管理员开通 Pro 即可。')
+            box.exec_()
             return
 
         # Pro 用户：选择报告类型
@@ -3384,6 +3452,7 @@ def main():
     try:
         ctypes.windll.user32.SetProcessDPIAware()
     except Exception:
+        log.error("[LINE 3450] 未捕获异常")
         pass
 
     app = QApplication(sys.argv)
