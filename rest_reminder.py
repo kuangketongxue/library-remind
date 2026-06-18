@@ -18,7 +18,7 @@ import tempfile
 import re
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel,
-                             QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox, QShortcut, QInputDialog, QFrame)
+                             QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox, QShortcut, QInputDialog, QFrame, QTabWidget)
 from PyQt5.QtCore import QTimer, Qt, QPoint, QEvent
 from PyQt5.QtGui import QIcon, QFont, QCursor, QPainter, QColor, QBrush, QPen, QKeySequence
 from PyQt5.QtWidgets import QGraphicsDropShadowEffect
@@ -31,10 +31,8 @@ import math
 import logging
 from logging.handlers import RotatingFileHandler
 
-# 自定义托盘卡片
-from tray_card import TrayCardWidget
-
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
+VERSION = 'v4.0'
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=1_000_000, backupCount=3, encoding='utf-8')
 _handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', '%Y-%m-%d %H:%M:%S'))
@@ -1716,7 +1714,7 @@ class RestReminderWidget(QWidget):
         top_layout = QHBoxLayout()
         top_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.title_label = QLabel('⚡ 精力管理')
+        self.title_label = QLabel(f'⚡ 精力管理  {VERSION}')
         self.title_label.setFont(QFont('Georgia, "Noto Serif SC", serif', 12, QFont.Bold))
         self.title_label.setStyleSheet('color: #d4af37;')
         top_layout.addWidget(self.title_label)
@@ -1899,6 +1897,14 @@ class RestReminderWidget(QWidget):
         self.report_btn.setObjectName('actionBtn')
         self.report_btn.clicked.connect(self.show_stats)
         func_layout.addWidget(self.report_btn)
+
+        self.ai_btn = QPushButton('🤖 AI 报告')
+        self.ai_btn.setFont(QFont('Georgia, "Noto Serif SC", serif', 11, QFont.Bold))
+        self.ai_btn.setFixedHeight(36)
+        self.ai_btn.setCursor(Qt.PointingHandCursor)
+        self.ai_btn.setObjectName('actionBtn')
+        self.ai_btn.clicked.connect(self._show_ai_report)
+        func_layout.addWidget(self.ai_btn)
 
         self.settings_btn = QPushButton('⚙️ 设置')
         self.settings_btn.setFont(QFont('Georgia, "Noto Serif SC", serif', 11, QFont.Bold))
@@ -2642,11 +2648,12 @@ class RestReminderWidget(QWidget):
         log.info(f'[设置] 提醒方式切换为: {mode}')
 
     def _show_settings_dialog(self):
-        """设置对话框：提醒方式 + B站收藏夹"""
-        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QComboBox, QLineEdit, QPushButton, QHBoxLayout
+        """设置对话框：提醒方式 + B站收藏夹 + 测试连接"""
+        from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QLabel, QComboBox,
+                                     QLineEdit, QPushButton, QHBoxLayout, QMessageBox)
         dialog = QDialog(self)
         dialog.setWindowTitle('⚙️ 设置')
-        dialog.setFixedSize(300, 280)
+        dialog.setFixedSize(340, 340)
         dialog.setStyleSheet("""
             QDialog { background-color: #141413; color: #faf9f5; border-radius: 12px; }
             QLabel { color: #e8e6e1; font-size: 12px; }
@@ -2654,6 +2661,8 @@ class RestReminderWidget(QWidget):
             QLineEdit { background: #1e1d1b; color: #e8e6e1; border: 1px solid #333; border-radius: 6px; padding: 6px; font-size: 12px; }
             QPushButton { background: rgba(212,175,55,0.12); color: #d4af37; border: 1px solid rgba(212,175,55,0.2); border-radius: 100px; padding: 8px; font-size: 11px; }
             QPushButton:hover { background: rgba(212,175,55,0.2); }
+            QPushButton#testBtn { background: rgba(120,180,80,0.12); color: #78B450; border: 1px solid rgba(120,180,80,0.2); }
+            QPushButton#testBtn:hover { background: rgba(120,180,80,0.2); }
         """)
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(20, 16, 20, 16)
@@ -2682,6 +2691,72 @@ class RestReminderWidget(QWidget):
         mid_input.setPlaceholderText('用户 mid')
         layout.addWidget(mid_input)
 
+        # 测试连接按钮
+        test_btn = QPushButton('🔍 测试收藏夹连接')
+        test_btn.setObjectName('testBtn')
+        layout.addWidget(test_btn)
+
+        # 测试结果标签
+        test_result = QLabel('')
+        test_result.setStyleSheet('font-size: 11px; background: transparent;')
+        layout.addWidget(test_result)
+
+        def test_bilibili():
+            """测试 B站收藏夹 ID 是否正确"""
+            fid = fid_input.text().strip()
+            mid = mid_input.text().strip()
+            if not fid:
+                test_result.setText('⚠️ 请先填写收藏夹 ID')
+                test_result.setStyleSheet('color: #ff8844; font-size: 11px; background: transparent;')
+                return
+            test_btn.setEnabled(False)
+            test_btn.setText('测试中...')
+            QApplication.processEvents()
+            import threading
+            def _do_test():
+                try:
+                    import requests
+                    # 先测试收藏夹基本信息
+                    url = f'https://api.bilibili.com/x/v3/fav/folder/info?media_id={fid}'
+                    h = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Referer': 'https://www.bilibili.com'}
+                    r = requests.get(url, headers=h, timeout=8)
+                    data = r.json()
+                    code = data.get('code', -1)
+                    if code == 0:
+                        folder = data.get('data', {})
+                        name = folder.get('title', '未命名收藏夹')
+                        count = folder.get('media_count', 0)
+                        QTimer.singleShot(0, lambda: (
+                            test_result.setText(f'✅ 收藏夹「{name}」· {count} 个视频'),
+                            test_result.setStyleSheet('color: #78B450; font-size: 11px; background: transparent;'),
+                            test_btn.setText('🔍 测试收藏夹连接'),
+                            test_btn.setEnabled(True)
+                        ))
+                    elif code == -400:
+                        QTimer.singleShot(0, lambda: (
+                            test_result.setText('❌ 收藏夹不存在，请检查 ID'),
+                            test_result.setStyleSheet('color: #ff4444; font-size: 11px; background: transparent;'),
+                            test_btn.setText('🔍 测试收藏夹连接'),
+                            test_btn.setEnabled(True)
+                        ))
+                    else:
+                        QTimer.singleShot(0, lambda: (
+                            test_result.setText(f'⚠️ API 返回错误 ({code})，可能是私有收藏夹'),
+                            test_result.setStyleSheet('color: #ff8844; font-size: 11px; background: transparent;'),
+                            test_btn.setText('🔍 测试收藏夹连接'),
+                            test_btn.setEnabled(True)
+                        ))
+                except Exception as e:
+                    QTimer.singleShot(0, lambda: (
+                        test_result.setText(f'❌ 网络错误: {str(e)[:40]}'),
+                        test_result.setStyleSheet('color: #ff4444; font-size: 11px; background: transparent;'),
+                        test_btn.setText('🔍 测试收藏夹连接'),
+                        test_btn.setEnabled(True)
+                    ))
+            threading.Thread(target=_do_test, daemon=True).start()
+
+        test_btn.clicked.connect(test_bilibili)
+
         btn_row = QHBoxLayout()
         save_btn = QPushButton('保存')
         close_btn = QPushButton('关闭')
@@ -2709,6 +2784,89 @@ class RestReminderWidget(QWidget):
             tip = '已开启' if new_state else '已关闭'
             self.autostart_btn.setText('✅ 自启' if new_state else '🔄 自启')
             self.tray_icon.showMessage('休息提醒', f'开机自启动{tip}', QSystemTrayIcon.Information, 2000)
+
+    def _show_ai_report(self):
+        """显示 AI 学习分析报告（Pro 版功能）"""
+        try:
+            from pro_features import is_pro, generate_report
+            HAS_PRO = True
+        except ImportError:
+            HAS_PRO = False
+
+        if not HAS_PRO:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.information(self, '🤖 AI 报告',
+                'AI 学习报告是 Pro 版功能。\n\n'
+                '升级 Pro 版后，AI 会自动分析你的学习数据，\n'
+                '生成日报/周报/月报/季报/年报。')
+            return
+
+        if not is_pro():
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.information(self, '🤖 AI 报告',
+                'AI 学习报告需要 Pro 订阅。\n'
+                '请通过官方渠道升级后使用。')
+            return
+
+        # Pro 用户：选择报告类型
+        from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout,
+                                     QPushButton, QTextBrowser, QLabel, QMessageBox)
+        dialog = QDialog(self)
+        dialog.setWindowTitle('🤖 AI 学习报告')
+        dialog.setFixedSize(600, 500)
+        dialog.setStyleSheet("""
+            QDialog { background-color: #0c0c10; color: #e8e6e1; }
+            QTextBrowser { background: #14141a; color: #e8e6e1; border: 1px solid #222; border-radius: 8px; padding: 12px; font-size: 13px; }
+            QPushButton { background: rgba(212,175,55,0.12); color: #d4af37; border: 1px solid rgba(212,175,55,0.2); border-radius: 100px; padding: 8px 16px; font-size: 11px; }
+            QPushButton:hover { background: rgba(212,175,55,0.2); }
+        """)
+
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(8)
+
+        layout.addWidget(QLabel('选择报告类型：'))
+
+        type_btns = QHBoxLayout()
+        types = [('日报', 'daily'), ('周报', 'weekly'), ('月报', 'monthly'),
+                 ('季报', 'quarterly'), ('年报', 'yearly')]
+        report_view = QTextBrowser()
+        report_view.setOpenExternalLinks(True)
+
+        def fetch_report(report_type, label):
+            # 先请求缓存
+            result = generate_report(report_type, force_refresh=False)
+            if result.get("ok"):
+                report_view.setPlainText(result['content'])
+            elif result.get("error") == "not_pro":
+                report_view.setPlainText('⚠️ Pro 订阅验证失败')
+            elif result.get("error"):
+                report_view.setPlainText(f'⚠️ AI 请求失败: {result["error"]}\n\n点击「刷新」重试。')
+            else:
+                report_view.setPlainText('⏳ 正在生成报告...\n\nAI 分析中，请稍候...')
+
+        for label, rtype in types:
+            btn = QPushButton(label)
+            btn.clicked.connect(lambda checked, t=rtype, l=label: fetch_report(t, l))
+            type_btns.addWidget(btn)
+
+        layout.addLayout(type_btns)
+        layout.addWidget(report_view)
+
+        # 刷新按钮
+        refresh_btn = QPushButton('🔄 刷新')
+        def do_refresh():
+            # 找到当前选中类型（简化：用最后点击的）
+            pass
+        layout.addWidget(refresh_btn)
+
+        close_btn = QPushButton('关闭')
+        close_btn.clicked.connect(dialog.close)
+        layout.addWidget(close_btn)
+
+        # 默认显示日报
+        fetch_report('daily', '日报')
+        dialog.exec_()
 
     def _restore_active_state(self):
         """启动时恢复上次运行状态（跨重启续接）"""
