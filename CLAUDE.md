@@ -30,25 +30,19 @@ dist/RestReminder.exe         — 打包 exe
 ## 持久化文件
 `.daily_log.json` · `.app_state.json` · `.computer_usage.json` · `.goal.json` · `.streak.json` · `.settings.json` · `.stats_history.json` · `.review_log.json`
 
-## 构建
+## 构建 & 部署
 ```bash
-# 开源版（中文路径问题已解：先 rm -rf build/__pycache__/ 再跑）
+# 开源版
 pyinstaller RestReminder.spec
 # Pro版
 pyinstaller RestReminderPro.spec
-```
-
-## 官网部署
-```bash
-# 必须在纯英文路径下构建（中文→Turbopack panic）
-cd D:\rest-reminder-site
-npm run build
-# 用 Cloudflare API Token 部署
+# 官网（纯英文路径下构建，否则Turbopack panic）
+cd D:\rest-reminder-site && npm run build
 CLOUDFLARE_API_TOKEN="cfut_..." wrangler pages deploy "D:\rest-reminder-site\out" --project-name "rest-reminder-app" --commit-dirty=true
 ```
 
 ## 搜索规则
-5 源并行：firecrawl × 3 + tavily × 2 + zhihu + global + opencli。额度用完自动跳过不永久停用。
+见全局 `~/.claude/CLAUDE.md`（firecrawl×3 + tavily×2 + zhihu + global + opencli 并行）。
 
 ## 踩坑记录（必读）
 - **Next.js 16 + 中文路径**：Turbopack panic `start byte index...` → 必须纯英文路径
@@ -57,6 +51,10 @@ CLOUDFLARE_API_TOKEN="cfut_..." wrangler pages deploy "D:\rest-reminder-site\out
 - **SingleInstanceChecker 模块级生命周期**：放 main() 局部变量会被 GC
 - **B站 test 按钮超时**：5s 超时 + 兜底方案，WARP 下会提示网络限制
 - **21 处 `except Exception:`** 添加了 `log.error` 但仍有少数 stateless 的 continue 未加日志
+- **`self.autostart_action` 未定义**：调用 `self.XXX` 前先 grep 确认属性存在（2026-06-19）
+- **`# 已移除UI` 残留**：v4.0 重构时注释了 16 处旧 UI 代码，应直接删除不注释（2026-06-19）
+- **DNS error flag 在方法内重置**：`get_bilibili_videos()` 开头重置 `_bilibili_dns_error_logged`，应在 `__init__` 中初始化一次（2026-06-19）
+- **`_load_json` 跨类共享**：无状态工具函数提取到模块级，不要放在某个类内部（2026-06-19）
 
 ## 禁止事项
 - 不创建庆祝/确认类临时文件

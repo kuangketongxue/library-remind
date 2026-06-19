@@ -20,14 +20,13 @@ from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel,
                              QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox, QShortcut, QInputDialog, QFrame, QTabWidget)
 from PyQt5.QtCore import QTimer, Qt, QPoint, QEvent
-from PyQt5.QtGui import QIcon, QFont, QCursor, QPainter, QColor, QBrush, QPen, QKeySequence
+from PyQt5.QtGui import QIcon, QFont, QPainter, QColor, QBrush, QPen, QKeySequence
 from PyQt5.QtWidgets import QGraphicsDropShadowEffect
 import psutil
 import atexit
 import winreg
 import traceback
 import winsound
-import math
 import logging
 from logging.handlers import RotatingFileHandler
 
@@ -1012,6 +1011,19 @@ class StatsWindow(QWidget):
             self.close()
 
 
+def _load_json(*path_parts):
+    """模块级 JSON 加载，供多个类共享"""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), *path_parts)
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        log.warning('[JSON] 文件解析失败')
+        return {}
+
+
 class TrendWindow(QWidget):
     """趋势分析窗口 — 5标签页：今日复盘时间线 | 周趋势 | 月趋势 | 季/年趋势 | 时段分析"""
     def __init__(self):
@@ -1103,25 +1115,6 @@ class TrendWindow(QWidget):
             log.error(f'[TrendWindow] 刷新标签页失败: {type(e).__name__}: {e}')
             traceback.print_exc()
 
-    # ── 数据加载 ──
-    @staticmethod
-    def _load_json(*path_parts):
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), *path_parts)
-        if not os.path.exists(path):
-            return {}
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception:
-            log.warning('[JSON] 文件解析失败')
-            return {}
-
-    def _load_reviews(self):
-        return self._load_json('.review_log.json')
-
-    def _load_stats(self):
-        return self._load_json('.stats_history.json')
-
     def _clear_tab(self, tab):
         """安全清除标签页内容"""
         old = tab.layout()
@@ -1140,7 +1133,7 @@ class TrendWindow(QWidget):
 
     # ── Tab 1: 今日复盘时间线 ──
     def _draw_review_timeline(self):
-        reviews = self._load_reviews()
+        reviews = _load_json(".review_log.json")
         today = datetime.now().date().isoformat()
         entries = reviews.get(today, [])
         layout = self._clear_tab(self._review_tab)
@@ -1199,7 +1192,7 @@ class TrendWindow(QWidget):
 
     # ── Tab 2: 周趋势 ──
     def _draw_weekly_trend(self):
-        stats = self._load_stats()
+        stats = _load_json(".stats_history.json")
         today = datetime.now().date()
         days = []
         for i in range(6, -1, -1):
@@ -1215,7 +1208,7 @@ class TrendWindow(QWidget):
 
     # ── Tab 3: 月趋势 ──
     def _draw_monthly_trend(self):
-        stats = self._load_stats()
+        stats = _load_json(".stats_history.json")
         today = datetime.now().date()
         # 最近30天按周聚合
         weeks = []
@@ -1246,7 +1239,7 @@ class TrendWindow(QWidget):
 
     # ── Tab 4: 季/年趋势 ──
     def _draw_quarterly_trend(self):
-        stats = self._load_stats()
+        stats = _load_json(".stats_history.json")
         today = datetime.now().date()
         # 按月聚合
         months = {}
@@ -1304,7 +1297,7 @@ class TrendWindow(QWidget):
 
     # ── Tab 5: 时段分析 ──
     def _draw_time_analysis(self):
-        reviews = self._load_reviews()
+        reviews = _load_json(".review_log.json")
         layout = self._clear_tab(self._time_tab)
 
         # ── 近7天日均评分对比（新增） ──
@@ -1567,6 +1560,7 @@ class RestReminderWidget(QWidget):
 
         # 提醒方式设置
         self.app_settings = LocalSync.load_settings()
+        self._bilibili_dns_error_logged = False  # DNS 错误只记一次，避免刷屏
 
         # 电脑使用时长监控（每 3 小时提醒一次）
         self.computer_usage_hours_today = 0
@@ -1574,7 +1568,7 @@ class RestReminderWidget(QWidget):
         self.last_computer_usage_check = datetime.now()
         self.computer_usage_reminder_given_at = None  # 记录上次提醒的周期数
         self.computer_3h_cycles_today = 0  # 今天已完成的 3 小时周期数
-        self._computer_usage_save_tick = 0  # 每 60 tick 保存一次
+        self._computer_usage_save_tick = 0  # 每 120 tick 保存一次（2 分钟）
         self._load_computer_usage()
 
         # 5分钟倒计时浮层状态
@@ -2063,11 +2057,7 @@ class RestReminderWidget(QWidget):
             return False
 
     def toggle_autostart(self):
-        new_state = not self.is_autostart_enabled()
-        if self.set_autostart(new_state):
-            self.autostart_action.setChecked(new_state)
-            tip = '已开启' if new_state else '已关闭'
-            self.tray_icon.showMessage('休息提醒', f'开机自启动{tip}', QSystemTrayIcon.Information, 2000)
+        self._toggle_autostart_btn()
 
     def init_tray(self):
         self.tray_icon = QSystemTrayIcon(self)
@@ -2404,7 +2394,8 @@ class RestReminderWidget(QWidget):
                    f'今日电脑使用：{computer_h} 小时 {computer_m} 分钟\n\n')
 
             # 加入复盘总结
-            today_reviews = self._load_today_reviews()
+            reviews_data = _load_json('.review_log.json')
+            today_reviews = reviews_data.get(datetime.now().date().isoformat(), [])
             if today_reviews:
                 scores = [e['score'] for e in today_reviews]
                 avg = sum(scores) / len(scores)
@@ -2414,7 +2405,7 @@ class RestReminderWidget(QWidget):
                 worst = min(today_reviews, key=lambda e: e['score'])
                 msg += f'🏆 最佳: {best["time"]}({best["score"]}⭐) · ⚠️ 待改进: {worst["time"]}({worst["score"]}⭐)\n'
                 # 昨日对比
-                yesterday_avg = self._load_yesterday_review_avg()
+                yesterday_avg = self._load_yesterday_review_avg(reviews_data)
                 if yesterday_avg is not None:
                     diff = avg - yesterday_avg
                     arrow = '📈' if diff > 0 else '📉' if diff < 0 else '➡️'
@@ -2428,17 +2419,12 @@ class RestReminderWidget(QWidget):
             # 检查连续打卡
             self._check_streak()
 
-    def _load_today_reviews(self):
-        """加载今日复盘数据"""
-        data = self._load_json('.review_log.json')
-        today = datetime.now().date().isoformat()
-        return data.get(today, [])
-
-    def _load_yesterday_review_avg(self):
-        """加载昨日平均评分（复用 _load_json，读取缓存内置）"""
-        data = self._load_json('.review_log.json')
+    def _load_yesterday_review_avg(self, reviews_data=None):
+        """加载昨日平均评分"""
+        if reviews_data is None:
+            reviews_data = _load_json('.review_log.json')
         yesterday = (datetime.now().date() - timedelta(days=1)).isoformat()
-        entries = data.get(yesterday, [])
+        entries = reviews_data.get(yesterday, [])
         if entries:
             scores = [e['score'] for e in entries]
             return sum(scores) / len(scores)
@@ -2625,7 +2611,7 @@ class RestReminderWidget(QWidget):
         if self.goal_text:
             return
         try:
-            pass
+            self._show_goal_dialog()
         except Exception as e:
             log.error(f'[目标] 提示异常: {e}')
 
@@ -2637,10 +2623,6 @@ class RestReminderWidget(QWidget):
             if ok and goal:
                 self.goal_text = goal
                 _save_goal(goal)
-                # self.goal_label.setText(f'🎯 {goal}')
-  # 已移除UI
-                # self.goal_label.setStyleSheet('color: #7a9bcc; background: transparent;')
-  # 已移除UI
                 self.update_study_display()
                 log.info(f'[目标] 设定为: {goal}')
         except Exception as e:
@@ -2935,19 +2917,28 @@ class RestReminderWidget(QWidget):
             else:
                 report_view.setPlainText('⏳ 正在生成报告...\n\nAI 分析中，请稍候...')
 
+        # 类型按钮 — 同时记录当前选中类型
         for label, rtype in types:
             btn = QPushButton(label)
-            btn.clicked.connect(lambda checked, t=rtype, l=label: fetch_report(t, l))
+            def _on_type(t=rtype, l=label):
+                _current_type['type'] = t
+                fetch_report(t, l)
+            btn.clicked.connect(_on_type)
             type_btns.addWidget(btn)
 
         layout.addLayout(type_btns)
         layout.addWidget(report_view)
 
-        # 刷新按钮
+        # 刷新按钮 — 刷新当前选中类型
         refresh_btn = QPushButton('🔄 刷新')
+        _current_type = {'type': 'daily'}
+
         def do_refresh():
-            # 找到当前选中类型（简化：用最后点击的）
-            pass
+            fetch_report(_current_type['type'],
+                         {'daily': '日报', 'weekly': '周报', 'monthly': '月报',
+                          'quarterly': '季报', 'yearly': '年报'}.get(_current_type['type'], '日报'))
+
+        refresh_btn.clicked.connect(do_refresh)
         layout.addWidget(refresh_btn)
 
         close_btn = QPushButton('关闭')
@@ -3136,8 +3127,6 @@ class RestReminderWidget(QWidget):
         # 更新标签：显示今天总使用时长（XXHXXmin 格式）
         total_h = int(self.computer_usage_hours_today)
         total_m = int((self.computer_usage_hours_today - total_h) * 60)
-        # self.computer_usage_label.setText(f'💻 今天电脑总使用：{total_h}H{total_m:02d}min')
-  # 已移除UI
 
         # 进度条倒计时：100%→0%（3 小时内）
         usage_pct = int((cycle_usage / 3) * 100)
@@ -3145,10 +3134,6 @@ class RestReminderWidget(QWidget):
         remaining_min = 3 - cycle_usage
         remaining_h = int(remaining_min)
         remaining_m = int((remaining_min - remaining_h) * 60)
-        # self.computer_usage_bar.setFormat(f'{remaining_h}H{remaining_m:02d}min')
-  # 已移除UI
-        # self.computer_usage_bar.setValue(countdown_pct)
-  # 已移除UI
 
         # 最后5分钟倒计时浮层 - 只在进入阈值时启动，不重复调
         remaining_seconds = remaining_min * 3600
@@ -3204,8 +3189,6 @@ class RestReminderWidget(QWidget):
         """更新电脑使用时长显示（XXHXXmin 格式）"""
         total_h = int(self.computer_usage_hours_today)
         total_m = int((self.computer_usage_hours_today - total_h) * 60)
-        # self.computer_usage_label.setText(f'💻 今天电脑总使用：{total_h}H{total_m:02d}min')
-  # 已移除UI
 
         # 进度条倒计时
         cycle_usage = self.computer_usage_hours_today % 3
@@ -3214,44 +3197,25 @@ class RestReminderWidget(QWidget):
         remaining_min = 3 - cycle_usage
         remaining_h = int(remaining_min)
         remaining_m = int((remaining_min - remaining_h) * 60)
-        # self.computer_usage_bar.setFormat(f'{remaining_h}H{remaining_m:02d}min')
-  # 已移除UI
-        # self.computer_usage_bar.setValue(countdown_pct)
-  # 已移除UI
 
     def update_battery_status(self):
         try:
             battery = psutil.sensors_battery()
 
             if battery is None:
-                # self.battery_label.setText('🖥️ 台式机（无电池）')
-  # 已移除UI
-                # self.battery_bar.setValue(100)
-  # 已移除UI
-                # self.battery_bar.setObjectName('battery_bar')
-  # 已移除UI
-                # self.battery_bar.setStyleSheet('')
-  # 已移除UI
                 return
 
             percent = battery.percent
             plugged = battery.power_plugged
 
-            # self.battery_bar.setValue(int(percent))
-  # 已移除UI
 
-            if percent <= 20:
-                pass
-            else:
-                pass
+
 
             if plugged:
                 if percent >= 100:
                     icon, status = '🔌', '已充满'
                 else:
                     icon, status = '⚡', '充电中'
-                # self.battery_label.setText(f'{icon} {status}')
-  # 已移除UI
 
                 if self.battery_notification_active:
                     self.tray_icon.showMessage('', '', QSystemTrayIcon.NoIcon, 1)
@@ -3265,8 +3229,6 @@ class RestReminderWidget(QWidget):
                     status = '电量中'
                 else:
                     status = '使用电池'
-                # self.battery_label.setText(f'{icon} {status}')
-  # 已移除UI
 
                 if self.last_charging_state is True and not plugged:
                     if not self.battery_warning_shown:
@@ -3277,8 +3239,6 @@ class RestReminderWidget(QWidget):
             self.last_charging_state = plugged
 
         except Exception as e:
-            # self.battery_label.setText('❌ 电池状态获取失败')
-  # 已移除UI
             log.error(f'获取电池状态失败：{e}')
 
     def show_battery_warning(self, percent):
@@ -3307,7 +3267,6 @@ class RestReminderWidget(QWidget):
             'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15',
         ]
 
-        self._bilibili_dns_error_logged = False  # DNS 错误只记一次，避免刷屏
 
         for attempt in range(3):
             headers = {
@@ -3468,7 +3427,7 @@ def main():
             from datetime import datetime
             f.write(f'[{datetime.now().isoformat()}] 未捕获异常：{exc_type.__name__}: {exc_value}\n')
             traceback.print_exception(exc_type, exc_value, exc_tb, file=f)
-        sys.exit(1)  # 正常退出，让 atime 清理
+        sys.exit(1)  # 异常退出，让 atexit 清理
     sys.excepthook = excepthook
 
     try:

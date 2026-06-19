@@ -259,3 +259,151 @@ Always use wrangler@3 for CF Pages. Before deploying, check for files >25MB and 
 - Source: best_practice
 - Related Files: ~/Desktop/休息提醒/PROGRESS.md
 - Tags: handoff, progress
+
+---
+
+## [LRN-20260619-001] correction
+
+**Logged**: 2026-06-19T14:00:00Z
+**Priority**: high
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+`self.autostart_action` 从未创建却在 `toggle_autostart()` 中调用 → 每次点托盘自启菜单必崩
+
+### Details
+`rest_reminder.py` 的 `toggle_autostart()` 调用 `self.autostart_action.setChecked(new_state)`，但 `autostart_action` 从未被定义。修复：改为调用 `self._toggle_autostart_btn()`。
+
+### Suggested Action
+在调用 `self.XXX` 之前，先 grep 确认该属性已定义。
+
+### Metadata
+- Source: conversation
+- Related Files: `rest_reminder.py`
+- Tags: pyqt5, tray-menu, crash
+- Pattern-Key: harden.undefined_attribute
+
+---
+
+## [LRN-20260619-002] correction
+
+**Logged**: 2026-06-19T14:00:00Z
+**Priority**: high
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+`_prompt_goal` 方法体只有 `pass` → 启动时永远不会弹出目标选择对话框
+
+### Details
+`_prompt_goal` 在 `init_ui` 中被调用，但方法体只有 `try: pass except: log`。修复：`pass` → `self._show_goal_dialog()`。
+
+### Metadata
+- Source: conversation
+- Related Files: `rest_reminder.py`
+
+---
+
+## [LRN-20260619-003] best_practice
+
+**Logged**: 2026-06-19T14:00:00Z
+**Priority**: medium
+**Status**: pending
+**Area**: frontend
+
+### Summary
+16 处 `# 已移除UI` 注释代码占用 60+ 行，增加认知负担
+
+### Details
+`update_battery_status`、`update_computer_usage` 等方法中有 16 处 `# 已移除UI` 标记的注释代码行。应该直接删除，如果需要参考可以查 git history。
+
+### Suggested Action
+在每次 UI 重构时，直接删除被移除的代码而不是注释掉。
+
+### Metadata
+- Source: conversation
+- Related Files: `rest_reminder.py`
+- Tags: dead-code, cleanup
+- Pattern-Key: simplify.commented_out_code
+
+---
+
+## [LRN-20260619-004] insight
+
+**Logged**: 2026-06-19T14:00:00Z
+**Priority**: medium
+**Status**: pending
+**Area**: frontend
+
+### Summary
+4 并行 agent 扫描比单 agent 发现更多问题（3 vs 12 个）
+
+### Details
+本次会话使用 4 个并行 agent（Reuse/Simplification/Efficiency/Altitude）扫描同一份 diff，总共发现了 12 个问题。Efficiency agent 发现的"重复读"问题是其他 agent 没发现的，因为它关注的是 I/O 模式而非代码结构。
+
+### Suggested Action
+对于重要的代码变更，使用 4 个并行 agent 从不同角度扫描。
+
+### Metadata
+- Source: conversation
+- Tags: code-review, multi-agent
+
+---
+
+## [LRN-20260619-005] correction
+
+**Logged**: 2026-06-19T14:00:00Z
+**Priority**: medium
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+`_bilibili_dns_error_logged` 在 `get_bilibili_videos()` 内部重置，每次调用都变为 False
+
+### Details
+注释说"DNS 错误只记一次"，但 `self._bilibili_dns_error_logged = False` 在方法开头重置。修复：将初始化移到 `__init__` 中。
+
+### Metadata
+- Source: conversation
+- Related Files: `rest_reminder.py`
+
+---
+
+## [LRN-20260619-006] best_practice
+
+**Logged**: 2026-06-19T14:00:00Z
+**Priority**: low
+**Status**: pending
+**Area**: frontend
+
+### Summary
+`_load_json` 从 TrendWindow 提取到模块级是正确的跨类共享模式
+
+### Details
+这个模式在代码库里已有先例：`_load_goal()`、`_save_goal()` 等都是模块级函数。当发现一个方法被多个类调用时，考虑将其提取到模块级。
+
+### Metadata
+- Source: conversation
+- Related Files: `rest_reminder.py`
+
+---
+
+## [LRN-20260619-007] insight
+
+**Logged**: 2026-06-19T14:00:00Z
+**Priority**: low
+**Status**: pending
+**Area**: frontend
+
+### Summary
+`update_display()` 每秒执行，但 `datetime.now()` 被调用 3 次
+
+### Details
+在 idle 状态下，`update_display()` 调用 `_handle_idle()` 和 `_update_break_display()`，这两个方法各自又调用 `datetime.now()`。可以通过传递 `now` 参数避免。对于每秒执行的热路径方法，避免重复计算相同的值。
+
+### Metadata
+- Source: conversation
+- Related Files: `rest_reminder.py`
+
+---
