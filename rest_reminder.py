@@ -12,7 +12,6 @@ import time
 import random
 import requests
 import ctypes
-import json
 import os
 import tempfile
 import re
@@ -29,6 +28,7 @@ import traceback
 import winsound
 import logging
 from logging.handlers import RotatingFileHandler
+from storage import JSONStore
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
 VERSION = 'v4.0'
@@ -38,6 +38,17 @@ _handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s
 log = logging.getLogger('rest_reminder')
 log.setLevel(logging.INFO)
 log.addHandler(_handler)
+
+# ── 存储层（统一 JSON IO） ──
+goal_store      = JSONStore('.goal.json',          default={},          ensure_ascii=False)
+quotes_store    = JSONStore('.wisdom_quotes.json',  default=[])
+daily_store     = JSONStore('.daily_log.json',      default={},          ensure_ascii=False)
+settings_store  = JSONStore('.settings.json',       default={'reminder_mode': 'video'}, ensure_ascii=False)
+streak_store    = JSONStore('.streak.json',         default={'current_streak': 0, 'last_streak_date': '', 'best_streak': 0}, ensure_ascii=False)
+history_store   = JSONStore('.stats_history.json',  default={})
+app_state_store = JSONStore('.app_state.json',      default=None,        ensure_ascii=False)
+review_store    = JSONStore('.review_log.json',     default={},          ensure_ascii=False)
+computer_store  = JSONStore('.computer_usage.json', default={}, ensure_ascii=False)
 
 
 def open_url(url):
@@ -95,8 +106,6 @@ STREAK_MILESTONE = {
     365:  ("长期主义", "365天——你已经不是一年前的你了"),
 }
 
-_GOAL_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.goal.json')
-_QUOTES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.wisdom_quotes.json')
 _GOAL_OPTIONS = ['学习/高考', '编程/开发', '写作/创作', '阅读/输入', '放松/无目标']
 
 # 活动检测结构体：模块级定义避免每15秒重新创建
@@ -117,55 +126,16 @@ def _get_idle_seconds():
         return 0
 
 
-def _load_goal():
-    """读取今日目标"""
-    path = _GOAL_FILE
-    today = datetime.now().date().isoformat()
-    if os.path.exists(path):
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                d = json.load(f)
-            if d.get('date') == today:
-                return d.get('goal', '')
-        except Exception:
-            log.error("[LINE 131] 未捕获异常")
-            pass
-    return None
-
-
-def _save_goal(goal):
-    """保存今日目标"""
-    with open(_GOAL_FILE, 'w', encoding='utf-8') as f:
-        json.dump({'date': datetime.now().date().isoformat(), 'goal': goal}, f, ensure_ascii=False)
-
-
-def _load_quotes_used():
-    path = _QUOTES_FILE
-    if os.path.exists(path):
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception:
-            log.error("[LINE 149] 未捕获异常")
-            pass
-    return []
-
-
-def _save_quotes_used(used):
-    with open(_QUOTES_FILE, 'w', encoding='utf-8') as f:
-        json.dump(used, f)
-
-
 def _pick_quote():
     """从金句库中选一条未在今天展示过的"""
-    used = _load_quotes_used()
+    used = quotes_store.load()
     available = [q for q in WISDOM_QUOTES if q[0] not in used]
     if not available:
         used.clear()
         available = list(WISDOM_QUOTES)
     picked = random.choice(available)
     used.append(picked[0])
-    _save_quotes_used(used)
+    quotes_store.save(used)
     return picked
 
 
@@ -316,35 +286,22 @@ class LocalSync:
     _current_date = None
 
     @classmethod
-    def _get_path(cls):
-        return os.path.join(os.path.dirname(os.path.abspath(__file__)), '.daily_log.json')
-
-    @classmethod
     def _load(cls):
         today = datetime.now().date().isoformat()
         if cls._data is not None and cls._current_date == today:
             return cls._data
-        path = cls._get_path()
-        if os.path.exists(path):
-            try:
-                with open(path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                if data.get('date') == today:
-                    cls._data = data
-                    cls._current_date = today
-                    return cls._data
-            except Exception:
-                log.error("[LINE 337] 未捕获异常")
-                pass
+        data = daily_store.load()
+        if data.get('date') == today:
+            cls._data = data
+            cls._current_date = today
+            return cls._data
         cls._data = {'date': today, 'study_hours': 0, 'computer_hours': 0, 'break_minutes_today': 0}
         cls._current_date = today
         return cls._data
 
     @classmethod
     def _save(cls):
-        path = cls._get_path()
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(cls._data, f, ensure_ascii=False)
+        daily_store.save(cls._data)
 
     @classmethod
     def increment_study_hour(cls, total_hours):
@@ -385,69 +342,41 @@ class LocalSync:
     # --- 设置文件 (.settings.json) ---
     @classmethod
     def _get_settings_path(cls):
-        return os.path.join(os.path.dirname(os.path.abspath(__file__)), '.settings.json')
+        return settings_store._path
 
     @classmethod
     def load_settings(cls):
-        path = cls._get_settings_path()
-        if os.path.exists(path):
-            try:
-                with open(path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except Exception:
-                log.error("[LINE 398] 未捕获异常")
-                pass
-        return {'reminder_mode': 'video'}  # 默认：打开B站
+        return settings_store.load()
 
     @classmethod
     def save_settings(cls, settings):
-        path = cls._get_settings_path()
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(settings, f, ensure_ascii=False)
+        settings_store.save(settings)
         log.info(f'[LocalSync] 设置已保存: {settings}')
 
     # --- 连续打卡 (.streak.json) ---
     @classmethod
     def _get_streak_path(cls):
-        return os.path.join(os.path.dirname(os.path.abspath(__file__)), '.streak.json')
+        return streak_store._path
 
     @classmethod
     def load_streak(cls):
-        path = cls._get_streak_path()
-        if os.path.exists(path):
-            try:
-                with open(path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except Exception:
-                log.error("[LINE 422] 未捕获异常")
-                pass
-        return {'current_streak': 0, 'last_streak_date': '', 'best_streak': 0}
+        return streak_store.load()
 
     @classmethod
     def save_streak(cls, streak_data):
-        path = cls._get_streak_path()
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(streak_data, f, ensure_ascii=False)
+        streak_store.save(streak_data)
         log.info(f'[LocalSync] 打卡记录: 连续{streak_data["current_streak"]}天, 最佳{streak_data["best_streak"]}天')
 
     @classmethod
     def _get_history_path(cls):
-        return os.path.join(os.path.dirname(os.path.abspath(__file__)), '.stats_history.json')
+        return history_store._path
 
     @classmethod
     def save_daily_stats(cls):
         """保存今日数据到历史记录（每次调用都更新今日数据）"""
         data = cls._load()
         today = datetime.now().date().isoformat()
-        path = cls._get_history_path()
-        history = {}
-        if os.path.exists(path):
-            try:
-                with open(path, 'r', encoding='utf-8') as f:
-                    history = json.load(f)
-            except Exception:
-                log.warning('[历史统计] 文件损坏，重新初始化')
-                history = {}
+        history = history_store.load()
         history[today] = {
             'study': round(data.get('study_hours', 0), 1),
             'computer': round(data.get('computer_hours', 0), 1),
@@ -458,21 +387,12 @@ class LocalSync:
         if len(dates) > 365:
             for old in dates[:len(dates) - 365]:
                 del history[old]
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(history, f, ensure_ascii=False)
+        history_store.save(history)
 
     @classmethod
     def load_weekly_stats(cls):
         """加载最近7天的统计数据"""
-        path = cls._get_history_path()
-        if not os.path.exists(path):
-            return {}
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception:
-            log.warning('[JSON] 文件解析失败')
-            return {}
+        return history_store.load()
 
     @classmethod
     def reset(cls):
@@ -482,31 +402,24 @@ class LocalSync:
     # --- 应用状态 (.app_state.json) ---
     @classmethod
     def _get_app_state_path(cls):
-        return os.path.join(os.path.dirname(os.path.abspath(__file__)), '.app_state.json')
+        return app_state_store._path
 
     @classmethod
     def load_app_state(cls):
         """加载今日应用状态（计时器、休息、播放记录）"""
-        path = cls._get_app_state_path()
         today = datetime.now().date().isoformat()
-        if os.path.exists(path):
-            try:
-                with open(path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                if data.get('date') == today:
-                    return data
-            except Exception:
-                log.error("[LINE 498] 未捕获异常")
-                pass
+        data = app_state_store.load()
+        if data is None:
+            return None
+        if data.get('date') == today:
+            return data
         return None
 
     @classmethod
     def save_app_state(cls, state):
         """保存应用状态"""
-        path = cls._get_app_state_path()
         state['date'] = datetime.now().date().isoformat()
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(state, f, ensure_ascii=False)
+        app_state_store.save(state)
 
 
 class SingleInstanceChecker:
@@ -614,9 +527,9 @@ class DraggableOverlay(QWidget):
 
     def _load_position(self):
         try:
-            if self._POS_FILE and os.path.exists(self._POS_FILE):
-                with open(self._POS_FILE, 'r') as f:
-                    pos = json.load(f)
+            if self._POS_FILE:
+                pos_store = JSONStore(os.path.basename(self._POS_FILE), default={'x': -1, 'y': -1})
+                pos = pos_store.load()
                 x, y = pos['x'], pos['y']
                 screen = QApplication.primaryScreen()
                 if screen:
@@ -634,8 +547,9 @@ class DraggableOverlay(QWidget):
     def _save_position(self):
         try:
             pos = self.frameGeometry().topLeft()
-            with open(self._POS_FILE, 'w') as f:
-                json.dump({'x': pos.x(), 'y': pos.y()}, f)
+            if self._POS_FILE:
+                pos_store = JSONStore(os.path.basename(self._POS_FILE), default={'x': -1, 'y': -1})
+                pos_store.save({'x': pos.x(), 'y': pos.y()})
         except Exception as e:
             log.error(f'[{type(self).__name__}] 保存位置失败: {e}')
 
@@ -1011,19 +925,6 @@ class StatsWindow(QWidget):
             self.close()
 
 
-def _load_json(*path_parts):
-    """模块级 JSON 加载，供多个类共享"""
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), *path_parts)
-    if not os.path.exists(path):
-        return {}
-    try:
-        with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception:
-        log.warning('[JSON] 文件解析失败')
-        return {}
-
-
 class TrendWindow(QWidget):
     """趋势分析窗口 — 5标签页：今日复盘时间线 | 周趋势 | 月趋势 | 季/年趋势 | 时段分析"""
     def __init__(self):
@@ -1133,7 +1034,7 @@ class TrendWindow(QWidget):
 
     # ── Tab 1: 今日复盘时间线 ──
     def _draw_review_timeline(self):
-        reviews = _load_json(".review_log.json")
+        reviews = review_store.load()
         today = datetime.now().date().isoformat()
         entries = reviews.get(today, [])
         layout = self._clear_tab(self._review_tab)
@@ -1192,7 +1093,7 @@ class TrendWindow(QWidget):
 
     # ── Tab 2: 周趋势 ──
     def _draw_weekly_trend(self):
-        stats = _load_json(".stats_history.json")
+        stats = history_store.load()
         today = datetime.now().date()
         days = []
         for i in range(6, -1, -1):
@@ -1208,7 +1109,7 @@ class TrendWindow(QWidget):
 
     # ── Tab 3: 月趋势 ──
     def _draw_monthly_trend(self):
-        stats = _load_json(".stats_history.json")
+        stats = history_store.load()
         today = datetime.now().date()
         # 最近30天按周聚合
         weeks = []
@@ -1239,7 +1140,7 @@ class TrendWindow(QWidget):
 
     # ── Tab 4: 季/年趋势 ──
     def _draw_quarterly_trend(self):
-        stats = _load_json(".stats_history.json")
+        stats = history_store.load()
         today = datetime.now().date()
         # 按月聚合
         months = {}
@@ -1297,7 +1198,7 @@ class TrendWindow(QWidget):
 
     # ── Tab 5: 时段分析 ──
     def _draw_time_analysis(self):
-        reviews = _load_json(".review_log.json")
+        reviews = review_store.load()
         layout = self._clear_tab(self._time_tab)
 
         # ── 近7天日均评分对比（新增） ──
@@ -1582,7 +1483,9 @@ class RestReminderWidget(QWidget):
         self._idle_check_tick = 0
 
         # 目标锚点
-        self.goal_text = _load_goal() or ''
+        today = datetime.now().date().isoformat()
+        d = goal_store.load()
+        self.goal_text = d.get('goal', '') if d.get('date') == today else ''
 
         # 快速复盘
         self._pending_review = False
@@ -2394,7 +2297,7 @@ class RestReminderWidget(QWidget):
                    f'今日电脑使用：{computer_h} 小时 {computer_m} 分钟\n\n')
 
             # 加入复盘总结
-            reviews_data = _load_json('.review_log.json')
+            reviews_data = review_store.load()
             today_reviews = reviews_data.get(datetime.now().date().isoformat(), [])
             if today_reviews:
                 scores = [e['score'] for e in today_reviews]
@@ -2422,7 +2325,7 @@ class RestReminderWidget(QWidget):
     def _load_yesterday_review_avg(self, reviews_data=None):
         """加载昨日平均评分"""
         if reviews_data is None:
-            reviews_data = _load_json('.review_log.json')
+            reviews_data = review_store.load()
         yesterday = (datetime.now().date() - timedelta(days=1)).isoformat()
         entries = reviews_data.get(yesterday, [])
         if entries:
@@ -2588,11 +2491,7 @@ class RestReminderWidget(QWidget):
     def _write_review(self, score):
         """写入复盘记录到文件（供正常复盘和补录共用）"""
         try:
-            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.review_log.json')
-            data = {}
-            if os.path.exists(path):
-                with open(path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
+            data = review_store.load()
             today = datetime.now().date().isoformat()
             if today not in data:
                 data[today] = []
@@ -2600,8 +2499,7 @@ class RestReminderWidget(QWidget):
                 'time': datetime.now().strftime('%H:%M'),
                 'score': score
             })
-            with open(path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+            review_store.save(data)
             log.info(f'[复盘] 已记录: {score}/5')
         except Exception as e:
             log.error(f'[复盘] 保存失败: {e}')
@@ -2622,7 +2520,7 @@ class RestReminderWidget(QWidget):
             goal, ok = QInputDialog.getItem(self, '设定今日目标', '今天主要做什么？', goals, 0, False)
             if ok and goal:
                 self.goal_text = goal
-                _save_goal(goal)
+                goal_store.save({'date': datetime.now().date().isoformat(), 'goal': goal})
                 self.update_study_display()
                 log.info(f'[目标] 设定为: {goal}')
         except Exception as e:
@@ -3083,16 +2981,14 @@ class RestReminderWidget(QWidget):
         log.info(f'[导出] 本周数据已复制到剪贴板')
 
     def _get_usage_cache_path(self):
-        return os.path.join(os.path.dirname(os.path.abspath(__file__)), '.computer_usage.json')
+        return computer_store._path
 
     def _load_computer_usage(self):
         """从本地文件恢复今天的电脑使用计数（跨重启持久化）"""
-        path = self._get_usage_cache_path()
-        if not os.path.exists(path):
-            return
         try:
-            with open(path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+            data = computer_store.load()
+            if not data:
+                return
             if data.get('date') == self.current_date.isoformat():
                 self.computer_usage_hours_today = data.get('hours', 0)
                 self.computer_usage_ticks = int(data.get('hours', 0) * 3600)
@@ -3105,13 +3001,12 @@ class RestReminderWidget(QWidget):
     def _save_computer_usage(self):
         """保存当前电脑使用计数到本地文件"""
         try:
-            with open(self._get_usage_cache_path(), 'w', encoding='utf-8') as f:
-                json.dump({
-                    'date': self.current_date.isoformat(),
-                    'hours': self.computer_usage_hours_today,
-                    'cycles': self.computer_3h_cycles_today,
-                    'last_cycle': self.computer_usage_reminder_given_at
-                }, f, ensure_ascii=False)
+            computer_store.save({
+                'date': self.current_date.isoformat(),
+                'hours': self.computer_usage_hours_today,
+                'cycles': self.computer_3h_cycles_today,
+                'last_cycle': self.computer_usage_reminder_given_at
+            })
         except Exception as e:
             log.error(f'[ComputerUsage] 保存缓存失败: {e}')
 
