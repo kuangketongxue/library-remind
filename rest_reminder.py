@@ -46,8 +46,8 @@ daily_store     = JSONStore('.daily_log.json',      default={},          ensure_
 settings_store  = JSONStore('.settings.json',       default={'reminder_mode': 'video'}, ensure_ascii=False)
 streak_store    = JSONStore('.streak.json',         default={'current_streak': 0, 'last_streak_date': '', 'best_streak': 0}, ensure_ascii=False)
 history_store   = JSONStore('.stats_history.json',  default={})
-app_state_store = JSONStore('.app_state.json',      default=None,        ensure_ascii=False)
-review_store    = JSONStore('.review_log.json',     default={},          ensure_ascii=False)
+app_state_store = JSONStore('.app_state.json')
+review_store    = JSONStore('.review_log.json',     default={},          ensure_ascii=False, indent=2)
 computer_store  = JSONStore('.computer_usage.json', default={}, ensure_ascii=False)
 
 
@@ -367,6 +367,7 @@ class LocalSync:
         streak_store.save(streak_data)
         log.info(f'[LocalSync] 打卡记录: 连续{streak_data["current_streak"]}天, 最佳{streak_data["best_streak"]}天')
 
+    # --- 历史统计 (.stats_history.json) ---
     @classmethod
     def _get_history_path(cls):
         return history_store._path
@@ -401,15 +402,12 @@ class LocalSync:
 
     # --- 应用状态 (.app_state.json) ---
     @classmethod
-    def _get_app_state_path(cls):
-        return app_state_store._path
-
-    @classmethod
     def load_app_state(cls):
         """加载今日应用状态（计时器、休息、播放记录）"""
         today = datetime.now().date().isoformat()
-        data = app_state_store.load()
-        if data is None:
+        try:
+            data = app_state_store.load()
+        except FileNotFoundError:
             return None
         if data.get('date') == today:
             return data
@@ -1436,6 +1434,8 @@ class RestReminderWidget(QWidget):
 
         # 视频相关
         self.video_list = []
+        self._video_cache_time = 0
+        self._video_cache_ttl = 300  # 5分钟缓存
         self.played_today = set()
 
         # 22:00 每日汇报标记（每天只弹一次）
@@ -1516,6 +1516,8 @@ class RestReminderWidget(QWidget):
         # 启动时先定位到屏幕右侧，再显示（避免左上角闪烁）
         self.position_to_right()
         self.show()
+        # 呼吸灯在窗口显示时才跑
+        self._glow_timer.start(50)
         # 恢复上次运行状态（跨重启续接）
         self._restore_active_state()
         # 启动时提示设目标
@@ -1839,12 +1841,11 @@ class RestReminderWidget(QWidget):
 
         self.setLayout(main_layout)
 
-        # ═══ 呼吸灯动画 ═══
+        # ═══ 呼吸灯动画 ═══（showEvent 中启动）
         self._glow_opacity = 0
         self._glow_dir = 1
         self._glow_timer = QTimer()
         self._glow_timer.timeout.connect(self._update_glow)
-        self._glow_timer.start(50)
 
         # 同步自启按钮状态
         self.autostart_btn.setText('✅ 自启' if self.is_autostart_enabled() else '🔄 自启')
@@ -2358,12 +2359,12 @@ class RestReminderWidget(QWidget):
                 self.countdown_overlay.hide_overlay()
                 self.current_date = now.date()
                 self._daily_report_shown_today = False
+                self._bilibili_dns_error_logged = False
                 LocalSync.reset()
                 self.break_minutes_today = 0
                 LocalSync.save_break_minutes(0)
                 self._save_computer_usage()
                 self.update_study_display()
-                self.update_computer_usage_display()
                 log.info(f'新的一天，数据已重置: {self.current_date}')
 
 
@@ -2681,8 +2682,7 @@ class RestReminderWidget(QWidget):
         layout.addSpacing(4)
         layout.addWidget(QLabel('🔑 设备 ID'))
 
-        # 生成设备 ID
-        import hashlib, platform, uuid
+        # 生成设备 ID（模块级已 import）
         dev_id = hashlib.md5(f"{platform.node()}-{uuid.getnode()}".encode()).hexdigest()[:12]
 
         dev_row = QHBoxLayout()
@@ -2980,9 +2980,6 @@ class RestReminderWidget(QWidget):
         self.tray_icon.showMessage('📋 已复制到剪贴板', f'最近7天数据已导出\n\n{text}', QSystemTrayIcon.Information, 5000)
         log.info(f'[导出] 本周数据已复制到剪贴板')
 
-    def _get_usage_cache_path(self):
-        return computer_store._path
-
     def _load_computer_usage(self):
         """从本地文件恢复今天的电脑使用计数（跨重启持久化）"""
         try:
@@ -3069,9 +3066,12 @@ class RestReminderWidget(QWidget):
                 self._save_computer_usage()
 
     def show_computer_usage_reminder(self, cycle=1):
-        """电脑使用 3 小时后提醒，打开护眼视频"""
+        """电脑使用 3 小时后提醒，从收藏夹随机打开视频"""
         total_h = int(self.computer_usage_hours_today)
-        video_url = 'https://www.bilibili.com/video/BV14Y4y1N7PW/?spm_id_from=333.1387.favlist.content.click'
+        if self.video_list:
+            video_url = random.choice(self.video_list)
+        else:
+            video_url = 'https://www.bilibili.com/video/BV14Y4y1N7PW/?spm_id_from=333.1387.favlist.content.click'
         open_url(video_url)
         self.tray_icon.showMessage(
             '💻 电脑使用时间过长',
@@ -3079,19 +3079,6 @@ class RestReminderWidget(QWidget):
             QSystemTrayIcon.Information,
             5000
         )
-
-    def update_computer_usage_display(self):
-        """更新电脑使用时长显示（XXHXXmin 格式）"""
-        total_h = int(self.computer_usage_hours_today)
-        total_m = int((self.computer_usage_hours_today - total_h) * 60)
-
-        # 进度条倒计时
-        cycle_usage = self.computer_usage_hours_today % 3
-        usage_pct = int((cycle_usage / 3) * 100)
-        countdown_pct = 100 - usage_pct
-        remaining_min = 3 - cycle_usage
-        remaining_h = int(remaining_min)
-        remaining_m = int((remaining_min - remaining_h) * 60)
 
     def update_battery_status(self):
         try:
@@ -3149,9 +3136,13 @@ class RestReminderWidget(QWidget):
             QTimer.singleShot(400, lambda: self.setWindowOpacity(0.5))
             QTimer.singleShot(600, lambda: self.setWindowOpacity(1.0))
 
-    def get_bilibili_videos(self):
-        """获取 B 站收藏夹视频列表（带重试，DNS 错误只记一次）"""
+    def get_bilibili_videos(self, force_refresh=False):
+        """获取 B 站收藏夹视频列表（带重试，DNS 错误只记一次，5分钟缓存）"""
         import re as _re  # 模块级 re 在 daemon 线程中偶尔不可用，本地导入兜底
+        # 5分钟缓存
+        now = time.time()
+        if not force_refresh and self.video_list and (now - self._video_cache_time) < self._video_cache_ttl:
+            return self.video_list
         # 从设置读取用户配置的收藏夹ID，兼容settings格式：{'bilibili_fid': 'xxx', 'bilibili_mid': 'xxx'}
         fid = self.app_settings.get('bilibili_fid', '3648313921')
         mid = self.app_settings.get('bilibili_mid', '529362421')
@@ -3202,6 +3193,8 @@ class RestReminderWidget(QWidget):
                     page += 1
 
                 if videos:
+                    self.video_list = videos
+                    self._video_cache_time = now
                     log.info(f'获取到 {len(videos)} 个收藏视频（{page} 页，第{attempt+1}次尝试）')
                     return videos
 
@@ -3285,10 +3278,15 @@ class RestReminderWidget(QWidget):
         except Exception as e:
             log.error(f'[mouseMoveEvent 异常] {type(e).__name__}: {e}')
 
+    def hideEvent(self, event):
+        self._glow_timer.stop()
+        super().hideEvent(event)
+
     def closeEvent(self, event):
         try:
             event.ignore()
             self._save_active_state()
+            self._glow_timer.stop()
             self.hide_to_edge()
         except Exception as e:
             log.error(f'[closeEvent 异常] {type(e).__name__}: {e}')
