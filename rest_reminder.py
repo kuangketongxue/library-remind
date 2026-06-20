@@ -10,6 +10,9 @@
 import sys
 import time
 import random
+import hashlib
+import uuid
+import platform
 import requests
 import ctypes
 import os
@@ -29,6 +32,11 @@ import winsound
 import logging
 from logging.handlers import RotatingFileHandler
 from storage import JSONStore
+
+# 子目录模块需显式加入 sys.path
+_PRO_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest-reminder-pro')
+if _PRO_DIR not in sys.path:
+    sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
 VERSION = 'v4.0'
@@ -95,16 +103,24 @@ WISDOM_QUOTES = [
     ("赚钱能力是养出来的——浸泡在搞钱里", "赚钱"),
 ]
 
+
+def _get_device_id():
+    """基于机器名+MAC地址生成稳定设备 ID（同一台机器始终相同）"""
+    return hashlib.md5(f"{platform.node()}-{uuid.getnode()}".encode()).hexdigest()[:12]
+
+
 STREAK_MILESTONE = {
     1:    ("耐心本身就是门槛", "大部分人在你今天就开始累积了"),
     3:    ("门槛前竞争", "3天——抢门槛的人已经甩开一批了"),
     7:    ("复利游戏", "7天——复利开始滚动"),
-    14:   ("反馈密度", "14天——你已经超过了大多数人的坚持极限"),
-    30:   ("门槛前竞争——耐心是真正的护城河", "30天——你不是临时起意，你是认真的"),
-    60:   ("习惯即命运", "60天——这已经是生活方式了"),
-    90:   ("你不需要跑得最快", "90天——只需要比躺平党快"),
-    365:  ("长期主义", "365天——你已经不是一年前的你了"),
+    14:   ("习惯成自然", "两周——你已经超过90%的人"),
+    30:   ("月度王者", "30天——坚持的力量"),
+    60:   ("二月不败", "60天——你已经是别人的榜样"),
+    90:   ("季度冠军", "90天——质的飞跃"),
+    365:  ("年度传奇", "365天——你改变了自己"),
 }
+
+STREAK_THRESHOLD_HOURS = 4  # 每日学习满此小时数才算打卡
 
 _GOAL_OPTIONS = ['学习/高考', '编程/开发', '写作/创作', '阅读/输入', '放松/无目标']
 
@@ -656,7 +672,7 @@ class CountdownOverlay(DraggableOverlay):
         self.timer_label.setText(f'{m:02d}:{s:02d}')
 
         pct = self._remaining * 100 // self._total_seconds
-        self.progress_bar.setValue(max(pct, 0))
+        self.progress_bar.setValue(max(int(pct), 0))
 
         if self._remaining <= 60 and self._remaining > 0:
             # 最后60秒红色闪烁（每250ms交替，减少setStyleSheet频率）
@@ -1463,24 +1479,17 @@ class RestReminderWidget(QWidget):
         self.app_settings = LocalSync.load_settings()
         self._bilibili_dns_error_logged = False  # DNS 错误只记一次，避免刷屏
 
-        # 电脑使用时长监控（每 3 小时提醒一次）
-        self.computer_usage_hours_today = 0
+        # 电脑使用时长（简单累计，无3小时提醒）
         self.computer_usage_ticks = 0  # 每秒+1，/3600=hours
-        self.last_computer_usage_check = datetime.now()
-        self.computer_usage_reminder_given_at = None  # 记录上次提醒的周期数
-        self.computer_3h_cycles_today = 0  # 今天已完成的 3 小时周期数
-        self._computer_usage_save_tick = 0  # 每 120 tick 保存一次（2 分钟）
-        self._load_computer_usage()
+        self._computer_save_tick = 0
 
         # 5分钟倒计时浮层状态
         self._study_countdown_active = False
-        self._computer_countdown_active = False
 
-        # 活动检测（密度感知）
-        self._idle_auto_paused = False
-        self._activity_interval = 60  # 当前有效间隔（分钟）
-        self._idle_seconds_cached = _get_idle_seconds()  # 当前系统空闲秒数
-        self._idle_check_tick = 0
+        # 计时规则：固定60分钟学习 → 5分钟倒计时 → 5分钟休息 → 固定B站URL
+        self._activity_interval = 60  # 固定60分钟
+        self._round_count = 0  # 已完成的学习轮数（每轮=1小时学习+5分钟休息）
+        self._rest_break_tick = 0
 
         # 目标锚点
         today = datetime.now().date().isoformat()
@@ -1511,11 +1520,12 @@ class RestReminderWidget(QWidget):
         self.floating_ball = FloatingBall(self)
         # 创建5分钟倒计时浮层
         self.countdown_overlay = CountdownOverlay()
-        # 创建20-20-20护眼提醒浮层
+        # 20-20-20 护眼提醒
         self.eye_rest_overlay = EyeRestOverlay()
-        # 启动时先定位到屏幕右侧，再显示（避免左上角闪烁）
+
+        # 启动时先定位到屏幕右侧，主窗口默认隐藏（只显示小浮球）
         self.position_to_right()
-        self.show()
+        self.hide()
         # 呼吸灯在窗口显示时才跑
         self._glow_timer.start(50)
         # 恢复上次运行状态（跨重启续接）
@@ -1525,8 +1535,8 @@ class RestReminderWidget(QWidget):
 
     def init_ui(self):
         self.setWindowTitle('休息提醒')
-        self.widget_width = 400
-        self.widget_height = 580
+        self.widget_width = 380
+        self.widget_height = 340
         self.setGeometry(100, 100, self.widget_width, self.widget_height)
 
         self.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.WindowMinimizeButtonHint)
@@ -1539,24 +1549,18 @@ class RestReminderWidget(QWidget):
         # ── 全局样式 ──
         self.setStyleSheet("""
             QWidget {
-                background-color: #08080c;
-                border-radius: 20px;
+                background-color: #0c0c10;
                 color: #e8e6e1;
             }
             QWidget#mainWindow {
-                background: qradialgradient(cx:0.5, cy:0.0, radius:0.8,
-                    stop:0 rgba(212, 175, 55, 0.05), stop:1 #08080c);
-                border: 1px solid rgba(212, 175, 55, 0.10);
+                background-color: #0c0c10;
+                border: 1px solid rgba(255, 255, 255, 0.06);
+                border-radius: 16px;
             }
             QLabel {
                 color: #e8e6e1;
                 font-size: 14px;
                 background: transparent;
-            }
-            QPushButton {
-                font-family: 'Georgia, "Noto Serif SC", serif';
-                font-size: 11px;
-                font-weight: 600;
             }
             QPushButton#closeBtn {
                 background-color: transparent;
@@ -1572,43 +1576,56 @@ class RestReminderWidget(QWidget):
                 color: #d4af37;
                 background: rgba(212, 175, 55, 0.10);
             }
-            QPushButton#actionBtn {
-                background-color: rgba(212, 175, 55, 0.10);
+            QPushButton#primaryBtn {
+                background-color: rgba(212, 175, 55, 0.12);
                 color: #d4af37;
-                border: 1px solid rgba(212, 175, 55, 0.20);
-                border-radius: 100px;
-                padding: 0 20px;
+                border: 1px solid rgba(212, 175, 55, 0.25);
+                border-radius: 10px;
+                padding: 12px;
                 font-family: 'Georgia, "Noto Serif SC", serif';
-                font-size: 11px;
+                font-size: 13px;
                 font-weight: 600;
             }
-            QPushButton#actionBtn:hover {
-                background-color: rgba(212, 175, 55, 0.18);
+            QPushButton#primaryBtn:hover {
+                background-color: rgba(212, 175, 55, 0.22);
                 border-color: #d4af37;
             }
-            QPushButton#actionBtn:disabled {
+            QPushButton#primaryBtn:disabled {
                 background-color: transparent;
                 color: #3a3835;
                 border-color: #2a2928;
             }
-            QPushButton#pauseBtn {
+            QPushButton#secondaryBtn {
                 background-color: rgba(255, 122, 80, 0.06);
                 color: #ff7a50;
                 border: 1px solid rgba(255, 122, 80, 0.15);
-                border-radius: 100px;
-                padding: 0 20px;
+                border-radius: 10px;
+                padding: 12px;
                 font-family: 'Georgia, "Noto Serif SC", serif';
-                font-size: 11px;
+                font-size: 13px;
                 font-weight: 600;
             }
-            QPushButton#pauseBtn:hover {
+            QPushButton#secondaryBtn:hover {
                 background-color: rgba(255, 122, 80, 0.12);
                 border-color: #ff7a50;
             }
-            QPushButton#pauseBtn:disabled {
+            QPushButton#secondaryBtn:disabled {
                 background-color: transparent;
                 color: #3a3835;
                 border-color: #2a2928;
+            }
+            QPushButton#toolBtn {
+                background-color: transparent;
+                color: #666;
+                border: 1px solid rgba(255, 255, 255, 0.06);
+                border-radius: 8px;
+                padding: 6px 12px;
+                font-size: 11px;
+            }
+            QPushButton#toolBtn:hover {
+                color: #d4af37;
+                background: rgba(212, 175, 55, 0.06);
+                border-color: rgba(212, 175, 55, 0.15);
             }
             QProgressBar {
                 border: none;
@@ -1622,148 +1639,37 @@ class RestReminderWidget(QWidget):
         """)
 
         main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(16, 14, 16, 14)
+        main_layout.setContentsMargins(20, 14, 20, 18)
         main_layout.setSpacing(0)
 
-        # ═══ 顶部：品牌 + 计时器 + 关闭 ═══
+        # ═══ 顶部：标题 + 关闭 ═══
         top_layout = QHBoxLayout()
         top_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.title_label = QLabel(f'⚡ 精力管理  {VERSION}')
-        self.title_label.setFont(QFont('Georgia, "Noto Serif SC", serif', 12, QFont.Bold))
-        self.title_label.setStyleSheet('color: #d4af37;')
-        top_layout.addWidget(self.title_label)
+        title_label = QLabel('⚡ 精力管理')
+        title_label.setFont(QFont('Georgia, "Noto Serif SC", serif', 11, QFont.Bold))
+        title_label.setStyleSheet('color: #555;')
+        top_layout.addWidget(title_label)
 
         top_layout.addStretch()
 
-        self.time_label = QLabel('续航 60:00')
-        self.time_label.setFont(QFont('Consolas, "SF Mono", monospace', 26, QFont.Bold))
-        self.time_label.setStyleSheet('color: #d4af37; letter-spacing: 2px;')
-        top_layout.addWidget(self.time_label)
-
-        self.close_btn = QPushButton('×')
-        self.close_btn.setObjectName('closeBtn')
-        self.close_btn.setFixedSize(24, 24)
-        self.close_btn.setCursor(Qt.PointingHandCursor)
-        self.close_btn.setToolTip('隐藏窗口')
-        self.close_btn.clicked.connect(self.hide)
-        top_layout.addWidget(self.close_btn)
+        close_btn = QPushButton('×')
+        close_btn.setObjectName('closeBtn')
+        close_btn.setFixedSize(24, 24)
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setToolTip('隐藏到托盘')
+        close_btn.clicked.connect(self.hide)
+        top_layout.addWidget(close_btn)
         main_layout.addLayout(top_layout)
 
-        # ═══ 卡片区：2×2 统计网格 ═══
-        main_layout.addSpacing(12)
+        # ═══ 22:00 倒计时（大字） ═══
+        main_layout.addSpacing(10)
 
-        grid = QHBoxLayout()
-        grid.setSpacing(10)
-
-        # 左列
-        left_col = QVBoxLayout()
-        left_col.setSpacing(10)
-
-        # 卡1: 今日产出（毛玻璃卡片）
-        card1 = QFrame()
-        card1.setObjectName('statCard')
-        card1.setStyleSheet("QFrame#statCard { background: rgba(20, 20, 24, 0.85); border: 1px solid rgba(212, 175, 55, 0.12); border-radius: 14px; padding: 12px 14px; }")
-        card1_layout = QVBoxLayout(card1)
-        card1_layout.setContentsMargins(12, 12, 12, 12)
-        card1_layout.setSpacing(4)
-
-        card1_label = QLabel('📚 今日产出')
-        card1_label.setFont(QFont('Georgia, "Noto Serif SC", serif', 9))
-        card1_label.setStyleSheet('color: #555; letter-spacing: 0.8px; background: transparent; border: none;')
-        card1_layout.addWidget(card1_label)
-
-        self.study_progress_label = QLabel('0h')
-        self.study_progress_label.setFont(QFont('Consolas, "SF Mono", monospace', 22, QFont.Bold))
-        self.study_progress_label.setStyleSheet('color: #d4af37; background: transparent; border: none;')
-        card1_layout.addWidget(self.study_progress_label)
-
-        self.study_sub_label = QLabel('')
-        self.study_sub_label.setFont(QFont('Georgia, "Noto Serif SC", serif', 11))
-        self.study_sub_label.setStyleSheet('color: #888; background: transparent; border: none;')
-        card1_layout.addWidget(self.study_sub_label)
-
-        self.study_progress_bar = QProgressBar()
-        self.study_progress_bar.setMaximum(14)
-        self.study_progress_bar.setValue(0)
-        self.study_progress_bar.setTextVisible(False)
-        self.study_progress_bar.setFixedHeight(3)
-        self.study_progress_bar.setStyleSheet("QProgressBar { background: rgba(255,255,255,0.04); border: none; border-radius: 2px; } QProgressBar::chunk { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #8b6914, stop:0.5 #d4af37, stop:1 #f0d060); border-radius: 2px; }")
-        card1_layout.addWidget(self.study_progress_bar)
-        left_col.addWidget(card1)
-
-        # 卡2: 连续打卡
-        card2 = QFrame()
-        card2.setObjectName('statCard')
-        card2.setStyleSheet("QFrame#statCard { background: rgba(20, 20, 24, 0.85); border: 1px solid rgba(212, 175, 55, 0.12); border-radius: 14px; padding: 12px 14px; }")
-        card2_layout = QVBoxLayout(card2)
-        card2_layout.setContentsMargins(12, 12, 12, 12)
-        card2_layout.setSpacing(4)
-
-        card2_label = QLabel('🔥 连续打卡')
-        card2_label.setFont(QFont('Georgia, "Noto Serif SC", serif', 9))
-        card2_label.setStyleSheet('color: #555; letter-spacing: 0.8px; background: transparent; border: none;')
-        card2_layout.addWidget(card2_label)
-
-        streak = self.streak_data
-        self.streak_label = QLabel(f'{streak["current_streak"]}' if streak['current_streak'] > 0 else '0')
-        self.streak_label.setFont(QFont('Consolas, "SF Mono", monospace', 22, QFont.Bold))
-        self.streak_label.setStyleSheet('color: #d97757; background: transparent; border: none;')
-        card2_layout.addWidget(self.streak_label)
-
-        streak_sub = QLabel('天')
-        streak_sub.setFont(QFont('Georgia, "Noto Serif SC", serif', 11))
-        streak_sub.setStyleSheet('color: #888; background: transparent; border: none;')
-        card2_layout.addWidget(streak_sub)
-        left_col.addWidget(card2)
-
-        grid.addLayout(left_col)
-
-        # 右列
-        right_col = QVBoxLayout()
-        right_col.setSpacing(10)
-
-        # 卡3: 今日休息
-        card3 = QFrame()
-        card3.setObjectName('statCard')
-        card3.setStyleSheet("QFrame#statCard { background: rgba(20, 20, 24, 0.85); border: 1px solid rgba(212, 175, 55, 0.12); border-radius: 14px; padding: 12px 14px; }")
-        card3_layout = QVBoxLayout(card3)
-        card3_layout.setContentsMargins(12, 12, 12, 12)
-        card3_layout.setSpacing(4)
-
-        card3_label = QLabel('☕ 今日休息')
-        card3_label.setFont(QFont('Georgia, "Noto Serif SC", serif', 9))
-        card3_label.setStyleSheet('color: #555; letter-spacing: 0.8px; background: transparent; border: none;')
-        card3_layout.addWidget(card3_label)
-
-        self.break_label = QLabel('0')
-        self.break_label.setFont(QFont('Consolas, "SF Mono", monospace', 22, QFont.Bold))
-        self.break_label.setStyleSheet('color: #78B450; background: transparent; border: none;')
-        card3_layout.addWidget(self.break_label)
-
-        break_sub = QLabel('分钟')
-        break_sub.setFont(QFont('Georgia, "Noto Serif SC", serif', 11))
-        break_sub.setStyleSheet('color: #888; background: transparent; border: none;')
-        card3_layout.addWidget(break_sub)
-        right_col.addWidget(card3)
-
-        # 卡4: 22:00倒计时
-        card4 = QFrame()
-        card4.setObjectName('statCard')
-        card4.setStyleSheet("QFrame#statCard { background: rgba(20, 20, 24, 0.85); border: 1px solid rgba(212, 175, 55, 0.12); border-radius: 14px; padding: 12px 14px; }")
-        card4_layout = QVBoxLayout(card4)
-        card4_layout.setContentsMargins(12, 12, 12, 12)
-        card4_layout.setSpacing(4)
-
-        card4_label = QLabel('⏳ 22:00倒计时')
-        card4_label.setFont(QFont('Georgia, "Noto Serif SC", serif', 9))
-        card4_label.setStyleSheet('color: #555; letter-spacing: 0.8px; background: transparent; border: none;')
-        card4_layout.addWidget(card4_label)
-
-        self.countdown_label = QLabel('8h 30m')
-        self.countdown_label.setFont(QFont('Consolas, "SF Mono", monospace', 18, QFont.Bold))
-        self.countdown_label.setStyleSheet('color: #6a9bcc; background: transparent; border: none;')
-        card4_layout.addWidget(self.countdown_label)
+        self.countdown_label = QLabel('⏳ 8h 30m')
+        self.countdown_label.setFont(QFont('Consolas, "SF Mono", monospace', 32, QFont.Bold))
+        self.countdown_label.setStyleSheet('color: #6a9bcc; letter-spacing: 2px;')
+        self.countdown_label.setAlignment(Qt.AlignCenter)
+        main_layout.addWidget(self.countdown_label)
 
         self.countdown_bar = QProgressBar()
         self.countdown_bar.setMaximum(100)
@@ -1771,80 +1677,98 @@ class RestReminderWidget(QWidget):
         self.countdown_bar.setTextVisible(False)
         self.countdown_bar.setFixedHeight(3)
         self.countdown_bar.setStyleSheet("QProgressBar { background: rgba(255,255,255,0.04); border: none; border-radius: 2px; } QProgressBar::chunk { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2a5a8a, stop:0.5 #6a9bcc, stop:1 #8ab8e0); border-radius: 2px; }")
-        card4_layout.addWidget(self.countdown_bar)
-        right_col.addWidget(card4)
+        main_layout.addWidget(self.countdown_bar)
 
-        grid.addLayout(right_col)
-        main_layout.addLayout(grid)
+        # ═══ 学习倒计时（距离休息还有多久） ═══
+        main_layout.addSpacing(14)
 
-        # ═══ 按钮区 ═══
+        self.timer_label = QLabel('续航 60:00')
+        self.timer_label.setFont(QFont('Consolas, "SF Mono", monospace', 18, QFont.Bold))
+        self.timer_label.setStyleSheet('color: #d4af37; letter-spacing: 1px;')
+        self.timer_label.setAlignment(Qt.AlignCenter)
+        main_layout.addWidget(self.timer_label)
+
+        # ═══ 今日电脑使用时长 ═══
+        main_layout.addSpacing(12)
+
+        computer_row = QHBoxLayout()
+        computer_row.setContentsMargins(4, 0, 4, 0)
+
+        computer_icon = QLabel('💻')
+        computer_icon.setFont(QFont('Segoe UI Emoji', 12))
+        computer_icon.setStyleSheet('background: transparent;')
+        computer_row.addWidget(computer_icon)
+
+        self.computer_label = QLabel('今日 0h 0m')
+        self.computer_label.setFont(QFont('Consolas, "SF Mono", monospace', 13))
+        self.computer_label.setStyleSheet('color: #888;')
+        computer_row.addWidget(self.computer_label)
+
+        computer_row.addStretch()
+        main_layout.addLayout(computer_row)
+
+        # ═══ 开始 / 暂停 按钮 ═══
         main_layout.addSpacing(12)
 
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(8)
 
         self.start_btn = QPushButton('▶ 开始学习')
-        self.start_btn.setFont(QFont('Georgia, "Noto Serif SC", serif', 11, QFont.Bold))
-        self.start_btn.setFixedHeight(38)
+        self.start_btn.setFont(QFont('Georgia, "Noto Serif SC", serif', 12, QFont.Bold))
+        self.start_btn.setFixedHeight(40)
         self.start_btn.setCursor(Qt.PointingHandCursor)
-        self.start_btn.setObjectName('actionBtn')
+        self.start_btn.setObjectName('primaryBtn')
         self.start_btn.clicked.connect(self.on_start_clicked)
         btn_layout.addWidget(self.start_btn)
 
         self.pause_btn = QPushButton('⏸ 暂停')
-        self.pause_btn.setFont(QFont('Georgia, "Noto Serif SC", serif', 11, QFont.Bold))
-        self.pause_btn.setFixedHeight(38)
+        self.pause_btn.setFont(QFont('Georgia, "Noto Serif SC", serif', 12, QFont.Bold))
+        self.pause_btn.setFixedHeight(40)
         self.pause_btn.setCursor(Qt.PointingHandCursor)
         self.pause_btn.setEnabled(False)
-        self.pause_btn.setObjectName('pauseBtn')
+        self.pause_btn.setObjectName('secondaryBtn')
         self.pause_btn.clicked.connect(self.on_pause_clicked)
         btn_layout.addWidget(self.pause_btn)
+
         main_layout.addLayout(btn_layout)
 
-        # 功能按钮行
-        func_layout = QHBoxLayout()
-        func_layout.setSpacing(8)
+        # ═══ 底部工具按钮 ═══
+        main_layout.addSpacing(10)
 
-        self.report_btn = QPushButton('📊 报告分析')
-        self.report_btn.setFont(QFont('Georgia, "Noto Serif SC", serif', 11, QFont.Bold))
-        self.report_btn.setFixedHeight(36)
-        self.report_btn.setCursor(Qt.PointingHandCursor)
-        self.report_btn.setObjectName('actionBtn')
-        self.report_btn.clicked.connect(self.show_stats)
-        func_layout.addWidget(self.report_btn)
+        tool_layout = QHBoxLayout()
+        tool_layout.setSpacing(6)
+        tool_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.ai_btn = QPushButton('🤖 AI 报告')
-        self.ai_btn.setFont(QFont('Georgia, "Noto Serif SC", serif', 11, QFont.Bold))
-        self.ai_btn.setFixedHeight(36)
-        self.ai_btn.setCursor(Qt.PointingHandCursor)
-        self.ai_btn.setObjectName('actionBtn')
-        self.ai_btn.clicked.connect(self._show_ai_report)
-        func_layout.addWidget(self.ai_btn)
+        for text, slot in [
+            ('📊 趋势', self.show_stats),
+            ('🤖 AI报告', self._show_ai_report),
+            ('⚙️ 设置', self._show_settings_dialog),
+        ]:
+            btn = QPushButton(text)
+            btn.setObjectName('toolBtn')
+            btn.setFixedHeight(28)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.clicked.connect(slot)
+            tool_layout.addWidget(btn)
 
-        self.settings_btn = QPushButton('⚙️ 设置')
-        self.settings_btn.setFont(QFont('Georgia, "Noto Serif SC", serif', 11, QFont.Bold))
-        self.settings_btn.setFixedHeight(36)
-        self.settings_btn.setCursor(Qt.PointingHandCursor)
-        self.settings_btn.setObjectName('actionBtn')
-        self.settings_btn.clicked.connect(self._show_settings_dialog)
-        func_layout.addWidget(self.settings_btn)
+        tool_layout.addStretch()
 
+        # 自启按钮
         self.autostart_btn = QPushButton('🔄 自启')
-        self.autostart_btn.setFont(QFont('Georgia, "Noto Serif SC", serif', 11, QFont.Bold))
-        self.autostart_btn.setFixedHeight(36)
+        self.autostart_btn.setObjectName('toolBtn')
+        self.autostart_btn.setFixedHeight(28)
         self.autostart_btn.setCursor(Qt.PointingHandCursor)
-        self.autostart_btn.setObjectName('actionBtn')
         self.autostart_btn.clicked.connect(self._toggle_autostart_btn)
-        func_layout.addWidget(self.autostart_btn)
+        tool_layout.addWidget(self.autostart_btn)
 
-        main_layout.addLayout(func_layout)
+        main_layout.addLayout(tool_layout)
 
         self.setLayout(main_layout)
 
-        # ═══ 呼吸灯动画 ═══（showEvent 中启动）
+        # ═══ 呼吸灯动画 ═══
         self._glow_opacity = 0
         self._glow_dir = 1
-        self._glow_timer = QTimer()
+        self._glow_timer = QTimer(self)
         self._glow_timer.timeout.connect(self._update_glow)
 
         # 同步自启按钮状态
@@ -1854,7 +1778,7 @@ class RestReminderWidget(QWidget):
         """呼吸灯：运行时计时器颜色脉动"""
         if not self.timer.isActive():
             self._glow_opacity = 0
-            self.time_label.setStyleSheet('color: #d4af37; letter-spacing: 4px;')
+            self.timer_label.setStyleSheet('color: #d4af37; letter-spacing: 1px;')
             return
         self._glow_opacity += self._glow_dir * 2
         if self._glow_opacity >= 30:
@@ -1864,13 +1788,12 @@ class RestReminderWidget(QWidget):
         o = self._glow_opacity
         r = 180 + o * 2
         g = 140 + o
-        self.time_label.setStyleSheet(
-            f'color: rgb({r},{g},30); letter-spacing: 4px;')
+        self.timer_label.setStyleSheet(
+            f'color: rgb({r},{g},30); letter-spacing: 1px;')
 
     def show_stats(self):
         """显示趋势分析窗口（每次重建，避免 WA_DeleteOnClose 后引用失效）"""
         log.info('[show_stats] 用户点击了趋势分析')
-        LocalSync.save_daily_stats()
         try:
             # 检查旧窗口是否还活着
             if hasattr(self, '_trend_window'):
@@ -1888,7 +1811,6 @@ class RestReminderWidget(QWidget):
             import traceback
             log.error(f'[show_stats] 失败: {type(e).__name__}: {e}')
             traceback.print_exc()
-            from PyQt5.QtWidgets import QMessageBox
             QMessageBox.warning(self, '提示', f'无法打开报告窗口: {e}')
 
     def position_to_right(self):
@@ -2039,6 +1961,7 @@ class RestReminderWidget(QWidget):
         'idle':    {'start_en': True,  'start_txt': '▶ 开始', 'pause_en': False, 'pause_txt': '⏸ 暂停'},
         'running': {'start_en': False, 'start_txt': '▶ 开始', 'pause_en': True,  'pause_txt': '⏸ 暂停'},
         'paused':  {'start_en': True,  'start_txt': '▶ 继续', 'pause_en': False, 'pause_txt': '⏸ 已暂停'},
+        'resting': {'start_en': False, 'start_txt': '▶ 开始', 'pause_en': False, 'pause_txt': '⏸ 暂停'},
     }
 
 
@@ -2057,8 +1980,6 @@ class RestReminderWidget(QWidget):
         remaining = self._activity_interval * 60 - (datetime.now() - self.start_time).total_seconds()
         self.remaining_when_paused = max(remaining, 0)
         self.timer_state = 'paused'
-        if not auto_paused:
-            self._idle_auto_paused = False
         self._sync_buttons()
 
     def _resume_timer(self):
@@ -2070,7 +1991,6 @@ class RestReminderWidget(QWidget):
         self.start_time = datetime.now() - timedelta(seconds=(self._activity_interval * 60 - self.remaining_when_paused))
         self.remaining_when_paused = None
         self.timer_state = 'running'
-        self._idle_seconds_cached = 0
         self._sync_buttons()
 
     def on_start_clicked(self):
@@ -2078,18 +1998,7 @@ class RestReminderWidget(QWidget):
             if self.timer_state not in ('idle', 'paused'):
                 return
             if self.timer_state == 'idle':
-                # 休息时长追踪：如果有 break_start，计算休息时长
-                if self.break_start is not None:
-                    break_duration = (datetime.now() - self.break_start).total_seconds()
-                    break_mins = round(break_duration / 60, 1)
-                    self.break_minutes_today += break_mins
-                    LocalSync.save_break_minutes(self.break_minutes_today)
-                    log.info(f'[休息追踪] 本次休息 {break_mins:.1f} 分钟，今日累计 {self.break_minutes_today:.1f} 分钟')
-                    self.break_start = None
-                    self._update_break_display()
                 self.start_time = datetime.now()
-                self._idle_auto_paused = False
-                self._idle_seconds_cached = 0
                 self._activity_interval = 60
             else:
                 log.info(f'[on_start_clicked] 用户点击继续（剩余{int(self.remaining_when_paused//60)}分{int(self.remaining_when_paused%60)}秒）')
@@ -2126,9 +2035,7 @@ class RestReminderWidget(QWidget):
             self.start_time = None
             self.remaining_when_paused = None
             self._study_countdown_active = False
-            # 学习倒计时结束，但电脑使用倒计时可能还在运行
-            if not self._computer_countdown_active:
-                self.countdown_overlay.hide_overlay()
+            self.countdown_overlay.hide_overlay()
             self._sync_buttons()
         except Exception as e:
             log.error(f'[_reset_timer_to_idle 异常] {type(e).__name__}: {e}')
@@ -2138,129 +2045,101 @@ class RestReminderWidget(QWidget):
         if self.break_start is not None:
             # 休息中，实时显示休息时长
             elapsed_mins = (datetime.now() - self.break_start).total_seconds() / 60
-            self.time_label.setText(f'☕ {int(elapsed_mins)}m')
+            self.timer_label.setText(f'☕ {int(elapsed_mins)}m')
             self._update_break_display()
             self.tray_icon.setToolTip(f'⚡ 精力管理 · ☕ 休息中 {int(elapsed_mins)}m')
         else:
-            self.time_label.setText(f'续航 {self._activity_interval:02d}:00')
+            self.timer_label.setText(f'续航 {self._activity_interval:02d}:00')
             self.tray_icon.setToolTip(f'⚡ 精力管理 · 续航 {self._activity_interval}min')
 
     def _handle_running(self, now):
-        """处理运行状态 - 倒计时 + 活动密度感知"""
+        """处理运行状态 - 固定60分钟倒计时 -> 5分钟请辨 -> 5分钟休息"""
         elapsed = (now - self.start_time).total_seconds()
-        # 动态间隔：高密度→45min，普通→60min
-        self._idle_check_tick += 1
-        if self._idle_check_tick >= 15:
-            self._idle_check_tick = 0
-            idle = _get_idle_seconds()
-            # idle > 上次值 → 无新输入，用户在空闲
-            # idle < 上次值 → idle计时器重置了，用户有输入
-            if idle > self._idle_seconds_cached:  # 空闲持续增长
-                consecutive_idle = idle
-                if consecutive_idle > 300 and not self._idle_auto_paused:
-                    self._idle_auto_paused = True
-                    self._pause_timer(auto_paused=True)
-                    self.tray_icon.showMessage('⏸ 检测到空闲', '已自动暂停（连续5分钟无操作）', QSystemTrayIcon.Information, 2000)
-                    log.info(f'[活动检测] 连续空闲{idle}s, 自动暂停')
-                elif consecutive_idle < 30 and elapsed > 600:
-                    self._activity_interval = 60  # 空闲中保持60min
-                else:
-                    self._activity_interval = 60
-            else:  # idle 重置了 → 用户有操作，缩间隔
-                if elapsed > 600:
-                    self._activity_interval = 45  # 活跃用户缩到45min高密度模式
-            self._idle_seconds_cached = idle
-
-        total_seconds = self._activity_interval * 60
+        total_seconds = 60 * 60  # 固定60分钟
         remaining = max(total_seconds - elapsed, 0)
 
-        # 更新显示
         mins = int(remaining // 60)
         secs = int(remaining % 60)
-        # 加上活动指标
-        busy_indicator = '🔥' if self._activity_interval < 60 else '⚡'
-        self.time_label.setText(f'{busy_indicator} {mins:02d}:{secs:02d}')
-        # 托盘提示
-        self.tray_icon.setToolTip(f'⚡ 精力管理 · 剩余 {mins}:{secs:02d}')
+        self.timer_label.setText(f'\u26a1 {mins:02d}:{secs:02d}')
+        self.tray_icon.setToolTip(f'\u26a1 精力管理 · 剩余 {mins}:{secs:02d}')
 
-        # 最后5分钟倒计时浮层 - 只在进入阈值时启动，不重复调
+        # 最后5分钟倒计时浮层
         if remaining <= 300 and remaining > 0 and not self._study_countdown_active:
             self._study_countdown_active = True
+            quote, tag = _pick_quote()
             self.countdown_overlay.show_countdown(
-                remaining,
-                '📚 学习即将结束',
-                random.choice([
-                    '还剩不到5分钟，准备休息一下~',
-                    '快到休息时间了，站起来活动活动~',
-                    '还有一小会儿，准备喝口水~',
-                    '即将休息，眼睛可以放松一下了~',
-                ]),
-                total_seconds=300
+                remaining, '\ud83d\udcda 学习即将结束', quote, total_seconds=300
             )
-        # 还在阈值外 → 清理浮层状态
+
         if remaining > 300 and self._study_countdown_active:
             self._study_countdown_active = False
             self.countdown_overlay.hide_overlay()
-        # 倒计时结束
+
+        # 倒计时结束 -> 进入休息状态
         if remaining <= 0:
             self._study_countdown_active = False
-            self._activity_interval = 60
-            self._reset_eye_rest()
-            # 不直接隐藏浮层：电脑使用倒计时可能还在运行
-            if not self._computer_countdown_active:
-                self.countdown_overlay.hide_overlay()
-            # 记录休息开始时间（用于追踪休息时长）
-            self.break_start = datetime.now()
-            self._rest_break_tick = 0      # 重置休息5分钟计数
-            log.info(f'[休息追踪] 倒计时结束，break_start={self.break_start.strftime("%H:%M:%S")}')
-            # 根据提醒方式设置决定动作
-            reminder_mode = self.app_settings.get('reminder_mode', 'video')
-            if reminder_mode == 'video':
-                self.open_random_video()
-            elif reminder_mode == 'notify':
-                self.tray_icon.showMessage(
-                    '休息时间到！',
-                    '倒计时结束，记得放松一下哦~',
-                    QSystemTrayIcon.Information,
-                    3000
-                )
-            elif reminder_mode == 'quote':
-                quote, tag = _pick_quote()
-                self.tray_icon.showMessage(
-                    '💡 请辨 · 休息思辨',
-                    f'{quote}\n——{tag}',
-                    QSystemTrayIcon.Information,
-                    6000
-                )
-            else:  # 'none'
-                log.info('[提醒方式] 无操作模式，不弹通知不打开视频')
-            # 按实际倒计时周期计算学习时长（排除暂停时间）
-            study_add = round(self._activity_interval / 60, 2)
+            self.countdown_overlay.hide_overlay()
+            self.timer_state = 'resting'
+            self._rest_start_time = now
+            self._rest_end_time = now + timedelta(minutes=5)
+            self._pending_review = True
+            self._prompt_review()
+            self._sync_buttons()
+            log.info('[计时] 学习60分钟结束，进入5分钟休息')
+
+
+    def _handle_resting(self, now):
+        """处理休息状态 - 5分钟休息倒计时"""
+        if now >= self._rest_end_time:
+            # 休息结束
+            self._round_count += 1
+            study_add = 1.0
             self.study_hours_today = round(self.study_hours_today + study_add, 2)
             self.update_study_display()
             LocalSync.increment_study_hour(self.study_hours_today)
+            log.info(f'[计时] 休息结束，第{self._round_count}轮完成')
 
-            # 快速复盘弹窗：休息前问"这小时产出自评"
-            self._pending_review = True
-            self._prompt_review()
+            # 每3轮后（第3、6、9...轮）打开护眼视频，否则打开收藏夹
+            if self._round_count % 3 == 0:
+                eye_url = 'https://www.bilibili.com/video/BV14Y4y1N7PW/?spm_id_from=333.1387.favlist.content.click'
+                open_url(eye_url)
+                self.tray_icon.showMessage(
+                    '👁️ 护眼时间',
+                    '每3轮休息，看看护眼视频放松眼睛~',
+                    QSystemTrayIcon.Information,
+                    4000
+                )
+            else:
+                fav_url = 'https://space.bilibili.com/529362421/favlist?fid=3648313921&ftype=create&spm_id_from=333.788.0.0'
+                open_url(fav_url)
 
-            self._reset_timer_to_idle()
+            self.break_start = None
+            self.timer_state = 'idle'
+            self._sync_buttons()
+            self.tray_icon.showMessage(
+                '▶ 下一轮',
+                '休息结束，准备开始下一轮学习~',
+                QSystemTrayIcon.Information,
+                3000
+            )
+        else:
+            # 显示休息倒计时
+            remaining = (self._rest_end_time - now).total_seconds()
+            mins = int(remaining // 60)
+            secs = int(remaining % 60)
+            self.timer_label.setText(f'☕ {mins:02d}:{secs:02d}')
+            self.tray_icon.setToolTip(f'⚡ 精力管理 · 休息中 {mins}:{secs:02d}')
 
     def _handle_paused(self, now):
         """处理暂停状态 - 显示暂停时间"""
-        if self._idle_auto_paused:
-            self.time_label.setText('⏸ 空闲暂停')
-            self.tray_icon.setToolTip('⚡ 精力管理 · ⏸ 空闲暂停')
-        elif self.remaining_when_paused is None:
-            self.time_label.setText('⏸ 已暂停')
+        if self.remaining_when_paused is None:
+            self.timer_label.setText('⏸ 已暂停')
             self.tray_icon.setToolTip('⚡ 精力管理 · ⏸ 已暂停')
             return
-        else:
-            mins = int(self.remaining_when_paused // 60)
-            secs = int(self.remaining_when_paused % 60)
-            self.time_label.setText(f'⏸ 已暂停：{mins:02d}:{secs:02d}')
-            self.tray_icon.setToolTip(f'⚡ 精力管理 · ⏸ 剩余 {mins}:{secs:02d}')
-        # 暂停时隐藏倒计时浮层，避免冻结显示
+        mins = int(self.remaining_when_paused // 60)
+        secs = int(self.remaining_when_paused % 60)
+        self.timer_label.setText(f'⏸ 已暂停：{mins:02d}:{secs:02d}')
+        self.tray_icon.setToolTip(f'⚡ 精力管理 · ⏸ 剩余 {mins}:{secs:02d}')
         if self._study_countdown_active:
             self._study_countdown_active = False
             self.countdown_overlay.hide_overlay()
@@ -2291,11 +2170,7 @@ class RestReminderWidget(QWidget):
         if now.hour >= 22 and not self._daily_report_shown_today:
             self._daily_report_shown_today = True
             study = self.study_hours_today
-            computer = self.computer_usage_hours_today
-            computer_h = int(computer)
-            computer_m = int((computer - computer_h) * 60)
-            msg = (f'今日学习：{study} 小时\n'
-                   f'今日电脑使用：{computer_h} 小时 {computer_m} 分钟\n\n')
+            msg = (f'今日学习：{study} 小时\n\n')
 
             # 加入复盘总结
             reviews_data = review_store.load()
@@ -2345,17 +2220,12 @@ class RestReminderWidget(QWidget):
                 # 重置数据
                 self.played_today = set()
                 self.study_hours_today = 0
-                self.computer_usage_hours_today = 0
                 self.computer_usage_ticks = 0
-                self.computer_3h_cycles_today = 0
-                self.computer_usage_reminder_given_at = None
-                self._activity_interval = 60  # 新的一天重置为60min
-                self._idle_auto_paused = False
-                self.break_start = None  # 跨天重置休息状态
+                self._round_count = 0
+                self._activity_interval = 60
+                self.break_start = None
                 self._rest_break_tick = 0
                 self._study_countdown_active = False
-                self._computer_countdown_active = False
-                self._reset_eye_rest()
                 self.countdown_overlay.hide_overlay()
                 self.current_date = now.date()
                 self._daily_report_shown_today = False
@@ -2373,31 +2243,10 @@ class RestReminderWidget(QWidget):
                 self._handle_idle()
             elif self.timer_state == 'running':
                 self._handle_running(now)
+            elif self.timer_state == 'resting':
+                self._handle_resting(now)
             elif self.timer_state == 'paused':
                 self._handle_paused(now)
-
-            # --- 20-20-20 护眼提醒（仅在学习计时器运行时） ---
-            if self.timer_state == 'running':
-                self.eye_rest_elapsed += 1
-                if self.eye_rest_elapsed >= self.eye_rest_interval:
-                    self.eye_rest_elapsed = 0
-                    self._show_eye_rest_reminder()
-            elif self.timer_state == 'idle' and self.break_start is not None:
-                # 休息期间重置计数，下次学习重新开始 20 分钟
-                self._reset_eye_rest()
-
-            # --- 休息5分钟提示音提醒 ---
-            if self.timer_state == 'idle' and self.break_start is not None:
-                self._rest_break_tick += 1
-                if self._rest_break_tick % 300 == 0:  # 每5分钟
-                    elapsed_rest_mins = int(self._rest_break_tick // 60)
-                    CountdownOverlay._play_rest_chime()
-                    self.tray_icon.showMessage(
-                        '☕ 休息提醒',
-                        f'已休息 {elapsed_rest_mins} 分钟，该回去学习啦~',
-                        QSystemTrayIcon.Information,
-                        3000
-                    )
 
             # --- 22:00 倒计时（统一更新，避免重复请求） ---
             self._update_countdown(now)
@@ -2420,7 +2269,7 @@ class RestReminderWidget(QWidget):
                 self._state_save_tick = 0
                 self._save_active_state()
 
-            # --- 电脑使用时长累加与提醒 ---
+            # --- 电脑使用时长简单累计 ---
             self.update_computer_usage(now)
 
         except Exception as e:
@@ -2428,24 +2277,14 @@ class RestReminderWidget(QWidget):
             traceback.print_exc()
 
     def update_study_display(self):
-        """更新学习时长显示（卡片布局）"""
-        h = self.study_hours_today
-        self.study_progress_label.setText(f'{h}h')
-        self.study_sub_label.setText(f'🎯 {self.goal_text}' if self.goal_text else '')
-        self.study_progress_bar.setValue(int(h))
+        """更新电脑使用时长显示"""
+        total_h = int(self.computer_usage_hours_today)
+        total_m = int((self.computer_usage_hours_today - total_h) * 60)
+        self.computer_label.setText(f'今日 {total_h}h {total_m}m')
 
     def _update_break_display(self):
-        """更新休息时长显示（卡片: 大号数字）- 显示累计总数"""
-        if self.break_start is not None:
-            elapsed = (datetime.now() - self.break_start).total_seconds() / 60
-            total = round(self.break_minutes_today + elapsed, 1)
-            self.break_label.setText(f'☕ {total:.0f}')
-        elif self.break_minutes_today > 0:
-            self.break_label.setText(f'☕ {self.break_minutes_today:.0f}')
-        else:
-            self.break_label.setText('☕ 0')
-
-    @staticmethod
+        """休息时长在 _handle_idle 的 timer_label 中实时显示"""
+        pass
     def _build_review_dialog(parent, title, label):
         """构建复盘评分对话框（共享 UI 代码）"""
         scores = ['1⭐ 摸鱼', '2⭐ 一般', '3⭐ 还行', '4⭐ 不错', '5⭐ 专注']
@@ -2528,14 +2367,15 @@ class RestReminderWidget(QWidget):
             log.error(f'[目标] 对话框异常: {e}')
 
     def _show_eye_rest_reminder(self):
-        """显示 20-20-20 护眼提醒浮窗"""
+        # 20-20-20 护眼提醒：每20分钟弹出，15秒自动消失
+        if self.timer_state in ('idle',):
+            return
         self.eye_rest_overlay.show_reminder()
-        log.info('[EyeRest] 20-20-20 护眼提醒触发')
+        log.info('[护眼] 20-20-20 提醒触发')
 
     def _reset_eye_rest(self):
-        """重置护眼计时器（每次学习周期结束/日期切换时调用）"""
+        # 重置护眼计时（休息/暂停时重置）
         self.eye_rest_elapsed = 0
-        self.eye_rest_overlay.hide_overlay()
 
     def _set_reminder_mode(self, mode):
         """设置提醒方式"""
@@ -2551,7 +2391,7 @@ class RestReminderWidget(QWidget):
                                      QLineEdit, QPushButton, QHBoxLayout, QMessageBox)
         dialog = QDialog(self)
         dialog.setWindowTitle('⚙️ 设置')
-        dialog.setFixedSize(340, 450)
+        dialog.setFixedSize(360, 400)
         dialog.setStyleSheet("""
             QDialog { background-color: #141413; color: #faf9f5; border-radius: 12px; }
             QLabel { color: #e8e6e1; font-size: 12px; }
@@ -2564,7 +2404,7 @@ class RestReminderWidget(QWidget):
         """)
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(20, 16, 20, 16)
-        layout.setSpacing(10)
+        layout.setSpacing(8)
 
         layout.addWidget(QLabel('📢 提醒方式'))
         mode_combo = QComboBox()
@@ -2589,23 +2429,23 @@ class RestReminderWidget(QWidget):
         mid_input.setPlaceholderText('用户 mid')
         layout.addWidget(mid_input)
 
-        # 测试连接按钮
         test_btn = QPushButton('🔍 测试收藏夹连接')
         test_btn.setObjectName('testBtn')
         layout.addWidget(test_btn)
-
-        # 测试结果标签
         test_result = QLabel('')
         test_result.setStyleSheet('font-size: 11px; background: transparent;')
         layout.addWidget(test_result)
 
+        def _set_result(text, color):
+            test_result.setText(text)
+            test_result.setStyleSheet(f'color: {color}; font-size: 11px; background: transparent;')
+            test_btn.setText('🔍 测试收藏夹连接')
+            test_btn.setEnabled(True)
+
         def test_bilibili():
-            """测试 B站收藏夹 ID 是否正确"""
             fid = fid_input.text().strip()
-            mid = mid_input.text().strip()
             if not fid:
-                test_result.setText('⚠️ 请先填写收藏夹 ID')
-                test_result.setStyleSheet('color: #ff8844; font-size: 11px; background: transparent;')
+                _set_result('⚠️ 请先填写收藏夹 ID', '#ff8844')
                 return
             test_btn.setEnabled(False)
             test_btn.setText('测试中...')
@@ -2614,107 +2454,31 @@ class RestReminderWidget(QWidget):
             def _do_test():
                 try:
                     import requests
-                    # 先测试收藏夹基本信息（短超时）
                     url = f'https://api.bilibili.com/x/v3/fav/folder/info?media_id={fid}'
-                    h = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Referer': 'https://www.bilibili.com'}
+                    h = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://www.bilibili.com'}
                     try:
                         r = requests.get(url, headers=h, timeout=5)
                         data = r.json()
                         code = data.get('code', -1)
                     except requests.Timeout:
-                        # 超时则尝试兜底方案
-                        try:
-                            r2 = requests.get(f'https://api.bilibili.com/x/v3/fav/folder/info?media_id={fid}',
-                                headers=h, timeout=5)
-                            data = r2.json()
-                            code = data.get('code', -1)
-                        except Exception:
-                            QTimer.singleShot(0, lambda: (
-                                test_result.setText('⚠️ 网络超时，检查网络或稍后再试'),
-                                test_result.setStyleSheet('color: #ff8844; font-size: 11px; background: transparent;'),
-                                test_btn.setText('🔍 测试收藏夹连接'),
-                                test_btn.setEnabled(True)
-                            ))
-                            return
+                        QTimer.singleShot(0, lambda: _set_result('⚠️ 网络超时', '#ff8844'))
+                        return
                     except requests.ConnectionError:
-                        QTimer.singleShot(0, lambda: (
-                            test_result.setText('⚠️ 无法连接B站API（网络限制）'),
-                            test_result.setStyleSheet('color: #ff8844; font-size: 11px; background: transparent;'),
-                            test_btn.setText('🔍 测试收藏夹连接'),
-                            test_btn.setEnabled(True)
-                        ))
+                        QTimer.singleShot(0, lambda: _set_result('⚠️ 无法连接B站API', '#ff8844'))
                         return
                     if code == 0:
-                        folder = data.get('data', {})
-                        name = folder.get('title', '未命名收藏夹')
-                        count = folder.get('media_count', 0)
-                        QTimer.singleShot(0, lambda: (
-                            test_result.setText(f'✅ 收藏夹「{name}」· {count} 个视频'),
-                            test_result.setStyleSheet('color: #78B450; font-size: 11px; background: transparent;'),
-                            test_btn.setText('🔍 测试收藏夹连接'),
-                            test_btn.setEnabled(True)
-                        ))
+                        d = data.get('data', {})
+                        QTimer.singleShot(0, lambda: _set_result(f'✅ 收藏夹「{d.get("title","?")}」· {d.get("media_count",0)} 个视频', '#78B450'))
                     elif code == -400:
-                        QTimer.singleShot(0, lambda: (
-                            test_result.setText('❌ 收藏夹不存在，请检查 ID'),
-                            test_result.setStyleSheet('color: #ff4444; font-size: 11px; background: transparent;'),
-                            test_btn.setText('🔍 测试收藏夹连接'),
-                            test_btn.setEnabled(True)
-                        ))
+                        QTimer.singleShot(0, lambda: _set_result('❌ 收藏夹不存在', '#ff4444'))
                     else:
-                        QTimer.singleShot(0, lambda: (
-                            test_result.setText(f'⚠️ API 返回错误 ({code})，可能是私有收藏夹'),
-                            test_result.setStyleSheet('color: #ff8844; font-size: 11px; background: transparent;'),
-                            test_btn.setText('🔍 测试收藏夹连接'),
-                            test_btn.setEnabled(True)
-                        ))
+                        QTimer.singleShot(0, lambda: _set_result(f'⚠️ API 错误 ({code})', '#ff8844'))
                 except Exception as e:
-                    QTimer.singleShot(0, lambda: (
-                        test_result.setText(f'❌ 网络错误: {str(e)[:40]}'),
-                        test_result.setStyleSheet('color: #ff4444; font-size: 11px; background: transparent;'),
-                        test_btn.setText('🔍 测试收藏夹连接'),
-                        test_btn.setEnabled(True)
-                    ))
+                    QTimer.singleShot(0, lambda: _set_result(f'❌ 错误: {str(e)[:30]}', '#ff4444'))
             threading.Thread(target=_do_test, daemon=True).start()
 
         test_btn.clicked.connect(test_bilibili)
-
-        layout.addSpacing(4)
-        layout.addWidget(QLabel('🔑 设备 ID'))
-
-        # 生成设备 ID（模块级已 import）
-        dev_id = hashlib.md5(f"{platform.node()}-{uuid.getnode()}".encode()).hexdigest()[:12]
-
-        dev_row = QHBoxLayout()
-        dev_row.setSpacing(6)
-        dev_id_label = QLineEdit(dev_id)
-        dev_id_label.setReadOnly(True)
-        dev_id_label.setStyleSheet('background: #1a1a22; color: #c96442; border: 1px solid rgba(201,100,66,0.2); border-radius: 6px; padding: 6px; font-size: 12px; font-family: monospace;')
-        dev_id_label.setFixedWidth(200)
-        dev_row.addWidget(dev_id_label)
-
-        copy_btn = QPushButton('📋 复制')
-        copy_btn.setObjectName('testBtn')
-        copy_btn.setFixedWidth(70)
-        def do_copy():
-            clip = QApplication.clipboard()
-            clip.setText(dev_id)
-            old = copy_btn.text()
-            copy_btn.setText('✅ 已复制')
-            QTimer.singleShot(2000, lambda: copy_btn.setText(old))
-        copy_btn.clicked.connect(do_copy)
-        dev_row.addWidget(copy_btn)
-        dev_row.addStretch()
-        layout.addLayout(dev_row)
-
-        bind_hint = QLabel('复制此 ID 到网站 Pro 页面绑定')
-        bind_hint.setStyleSheet('color: #888; font-size: 10px; background: transparent;')
-        layout.addWidget(bind_hint)
-
-        open_login_btn = QPushButton('🌐  打开 Pro 登录界面')
-        open_login_btn.setObjectName('testBtn')
-        open_login_btn.clicked.connect(lambda: open_url('https://master.rest-reminder-app.pages.dev/account'))
-        layout.addWidget(open_login_btn)
+        layout.addSpacing(6)
 
         btn_row = QHBoxLayout()
         save_btn = QPushButton('保存')
@@ -2724,13 +2488,13 @@ class RestReminderWidget(QWidget):
         layout.addLayout(btn_row)
 
         def save_settings():
-            mode_key = mode_combo.currentText()
-            new_mode = mode_map.get(mode_key, 'video')
-            self._set_reminder_mode(new_mode)
+            self.app_settings['reminder_mode'] = mode_map.get(mode_combo.currentText(), 'video')
             self.app_settings['bilibili_fid'] = fid_input.text().strip()
             self.app_settings['bilibili_mid'] = mid_input.text().strip()
             LocalSync.save_settings(self.app_settings)
+            mode_names = {'video': '打开B站', 'quote': '💡 请辨金句', 'notify': '只弹通知', 'none': '无操作'}
             self.tray_icon.showMessage('设置', '设置已保存', QSystemTrayIcon.Information, 1500)
+            log.info(f'[设置] 提醒方式切换为: {self.app_settings["reminder_mode"]}')
             dialog.close()
 
         save_btn.clicked.connect(save_settings)
@@ -2745,40 +2509,15 @@ class RestReminderWidget(QWidget):
             self.tray_icon.showMessage('休息提醒', f'开机自启动{tip}', QSystemTrayIcon.Information, 2000)
 
     def _show_ai_report(self):
-        """显示 AI 学习分析报告（Pro 版功能）"""
+        """显示 AI 学习分析报告"""
         try:
-            from pro_features import is_pro, generate_report
-            HAS_PRO = True
+            from pro_features import generate_report
         except ImportError:
-            HAS_PRO = False
-
-        if not HAS_PRO:
-            from PyQt5.QtWidgets import QMessageBox
             QMessageBox.information(self, '🤖 AI 报告',
-                'AI 学习报告是 Pro 版功能。\n\n'
-                '升级 Pro 版后，AI 会自动分析你的学习数据，\n'
-                '生成日报/周报/月报/季报/年报。')
+                'AI 模块加载失败，请检查 rest-reminder-pro/ 目录是否存在。')
             return
 
-        if not is_pro():
-            # 显示设备 ID，供注册用
-            try:
-                from pro_features import get_subscription_info
-                info = get_subscription_info()
-                dev_id = info.get('device_id', '未知')
-            except Exception:
-                log.warning("[Pro] 获取设备 ID 失败")
-                dev_id = '未知'
-            from PyQt5.QtWidgets import QMessageBox
-            box = QMessageBox(self)
-            box.setWindowTitle('🤖 AI 报告')
-            box.setText('AI 学习报告需要 Pro 订阅。\n\n'
-                        f'你的设备 ID：{dev_id}\n'
-                        '将此 ID 提供给管理员开通 Pro 即可。')
-            box.exec_()
-            return
-
-        # Pro 用户：选择报告类型
+        # 选择报告类型
         from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout,
                                      QPushButton, QTextBrowser, QLabel, QMessageBox)
         dialog = QDialog(self)
@@ -2808,17 +2547,15 @@ class RestReminderWidget(QWidget):
             result = generate_report(report_type, force_refresh=False)
             if result.get("ok"):
                 report_view.setPlainText(result['content'])
-            elif result.get("error") == "not_pro":
-                report_view.setPlainText('⚠️ Pro 订阅验证失败')
             elif result.get("error"):
                 report_view.setPlainText(f'⚠️ AI 请求失败: {result["error"]}\n\n点击「刷新」重试。')
             else:
                 report_view.setPlainText('⏳ 正在生成报告...\n\nAI 分析中，请稍候...')
 
-        # 类型按钮 — 同时记录当前选中类型
+        # 类型按钮 — 用 *args 吸收 clicked 信号的 bool 参数
         for label, rtype in types:
             btn = QPushButton(label)
-            def _on_type(t=rtype, l=label):
+            def _on_type(*args, t=rtype, l=label):
                 _current_type['type'] = t
                 fetch_report(t, l)
             btn.clicked.connect(_on_type)
@@ -2891,9 +2628,8 @@ class RestReminderWidget(QWidget):
                 log.warning(f'[恢复] break_start 解析失败: {e}')
 
         self.played_today = set(state.get('played_today', []))
-        self.eye_rest_elapsed = state.get('eye_rest_elapsed', 0)
+        self._round_count = state.get('round_count', 0)
         self.update_study_display()
-        self._update_break_display()
 
     def _save_active_state(self):
         """保存当前运行状态到本地文件（防崩溃丢失）"""
@@ -2909,50 +2645,58 @@ class RestReminderWidget(QWidget):
             'break_start': self.break_start.isoformat() if self.break_start else None,
             'break_minutes': self.break_minutes_today,
             'played_today': list(self.played_today),
-            'eye_rest_elapsed': self.eye_rest_elapsed,
             'activity_interval': self._activity_interval,
+            'round_count': self._round_count,
         }
         LocalSync.save_app_state(state)
 
     def _check_streak(self):
-        """检查连续打卡：学习时长>=4小时则打卡，带里程碑金句"""
+        """检查今日打卡 + 从历史数据自动恢复被清零的连续打卡"""
         today = datetime.now().date().isoformat()
         streak = self.streak_data
-        if self.study_hours_today >= 4:
-            if streak.get('last_streak_date') != today:
-                streak['current_streak'] = streak.get('current_streak', 0) + 1
-                streak['last_streak_date'] = today
-                if streak['current_streak'] > streak.get('best_streak', 0):
-                    streak['best_streak'] = streak['current_streak']
-                log.info(f'[打卡] 今日学习{self.study_hours_today}h >= 4h，连续打卡 {streak["current_streak"]} 天')
-                # 里程碑金句
-                milestone = _get_streak_milestone(streak['current_streak'])
-                if milestone:
-                    msg, sub = milestone
-                    self.tray_icon.showMessage(
-                        f'🏆 连续打卡 {streak["current_streak"]} 天！',
-                        f'「{msg}」\n——{sub}',
-                        QSystemTrayIcon.Information,
-                        6000
-                    )
-                    log.info(f'[打卡里程碑] 第{streak["current_streak"]}天: {msg}')
-        else:
-            if streak.get('last_streak_date') != today:
-                streak['current_streak'] = 0
-                log.info(f'[打卡] 今日学习{self.study_hours_today}h < 4h，打卡中断')
+
+        # 没达标就不需要查历史
+        if self.study_hours_today < STREAK_THRESHOLD_HOURS:
+            self.streak_data = streak
+            LocalSync.save_streak(streak)
+            self._update_streak_display()
+            return
+
+        # 如果 streak 被清零但历史数据显示昨天达标，自动恢复
+        if streak['current_streak'] == 0 and streak.get('best_streak', 0) > 0:
+            yesterday = (datetime.now().date() - timedelta(days=1)).isoformat()
+            hist = history_store.load()
+            y_data = hist.get(yesterday, {})
+            y_study = y_data.get('study', 0) if isinstance(y_data, dict) else 0
+            if y_study >= STREAK_THRESHOLD_HOURS:
+                streak['current_streak'] = 1
+                streak['last_streak_date'] = yesterday
+                log.info(f'[打卡] 从历史恢复：昨日{y_study}h >= {STREAK_THRESHOLD_HOURS}h，连续 {streak["current_streak"]} 天')
+
+        if streak.get('last_streak_date') != today:
+            streak['current_streak'] = streak.get('current_streak', 0) + 1
+            streak['last_streak_date'] = today
+            if streak['current_streak'] > streak.get('best_streak', 0):
+                streak['best_streak'] = streak['current_streak']
+            log.info(f'[打卡] 今日学习{self.study_hours_today}h >= {STREAK_THRESHOLD_HOURS}h，连续打卡 {streak["current_streak"]} 天')
+            # 里程碑金句
+            milestone = _get_streak_milestone(streak['current_streak'])
+            if milestone:
+                msg, sub = milestone
+                self.tray_icon.showMessage(
+                    f'🏆 连续打卡 {streak["current_streak"]} 天！',
+                    f'「{msg}」\n——{sub}',
+                    QSystemTrayIcon.Information,
+                    6000
+                )
+                log.info(f'[打卡里程碑] 第{streak["current_streak"]}天: {msg}')
         self.streak_data = streak
         LocalSync.save_streak(streak)
         self._update_streak_display()
 
     def _update_streak_display(self):
-        """更新连续打卡显示"""
-        streak = self.streak_data
-        days = streak.get('current_streak', 0)
-        if days > 0:
-            self.streak_label.setText(f'{days}')
-        else:
-            self.streak_label.setText('0')
-
+        """打卡数据后台追踪，主界面不再显示"""
+        pass
     def export_weekly_data(self):
         """导出最近7天数据到剪贴板"""
         history = LocalSync.load_weekly_stats()
@@ -2987,11 +2731,8 @@ class RestReminderWidget(QWidget):
             if not data:
                 return
             if data.get('date') == self.current_date.isoformat():
-                self.computer_usage_hours_today = data.get('hours', 0)
-                self.computer_usage_ticks = int(data.get('hours', 0) * 3600)
-                self.computer_3h_cycles_today = data.get('cycles', 0)
-                self.computer_usage_reminder_given_at = data.get('last_cycle', None)
-                log.info(f'[ComputerUsage] 恢复今日计数: {self.computer_usage_hours_today:.2f}h, {self.computer_3h_cycles_today} 个周期')
+                self.computer_usage_ticks = int(data.get('ticks', 0))
+                log.info(f'[ComputerUsage] 恢复今日计数: {self.computer_usage_ticks / 3600:.2f}h')
         except Exception as e:
             log.error(f'[ComputerUsage] 加载缓存失败: {e}')
 
@@ -3000,85 +2741,20 @@ class RestReminderWidget(QWidget):
         try:
             computer_store.save({
                 'date': self.current_date.isoformat(),
-                'hours': self.computer_usage_hours_today,
-                'cycles': self.computer_3h_cycles_today,
-                'last_cycle': self.computer_usage_reminder_given_at
+                'ticks': self.computer_usage_ticks
             })
         except Exception as e:
             log.error(f'[ComputerUsage] 保存缓存失败: {e}')
 
     def update_computer_usage(self, now):
-        """更新电脑使用时长（倒计时模式：3 小时→0），tick计数避免浮点误差"""
-        # 每秒+1 tick，累计/3600 = 小时
+        """更新电脑使用时长（简单累计）"""
         self.computer_usage_ticks += 1
-        self.computer_usage_hours_today = self.computer_usage_ticks / 3600.0
-
-        # 计算当前 3 小时周期内的已用时长（取模循环）
-        cycle_usage = self.computer_usage_hours_today % 3
-
-        # 更新标签：显示今天总使用时长（XXHXXmin 格式）
-        total_h = int(self.computer_usage_hours_today)
-        total_m = int((self.computer_usage_hours_today - total_h) * 60)
-
-        # 进度条倒计时：100%→0%（3 小时内）
-        usage_pct = int((cycle_usage / 3) * 100)
-        countdown_pct = 100 - usage_pct
-        remaining_min = 3 - cycle_usage
-        remaining_h = int(remaining_min)
-        remaining_m = int((remaining_min - remaining_h) * 60)
-
-        # 最后5分钟倒计时浮层 - 只在进入阈值时启动，不重复调
-        remaining_seconds = remaining_min * 3600
-        if remaining_seconds <= 300 and remaining_seconds > 0 and not self._computer_countdown_active:
-            self._computer_countdown_active = True
-            self.countdown_overlay.show_countdown(
-                remaining_seconds,
-                '💻 电脑使用即将到期',
-                random.choice([
-                    '还剩不到5分钟，准备休息眼睛~',
-                    '用电脑太久啦，待会儿远眺一下~',
-                    '马上到时间了，起来走走吧~',
-                    '快到休息时间，让眼睛放个假~',
-                ]),
-                total_seconds=300
-            )
-        elif self._computer_countdown_active and (remaining_seconds > 300 or remaining_seconds <= 0):
-            self._computer_countdown_active = False
-            if not self._study_countdown_active:
-                self.countdown_overlay.hide_overlay()
-
-        # 每 3 小时触发一次（跨重启持久化计数）
-        current_cycle = int(self.computer_usage_hours_today / 3)
-        if current_cycle > self.computer_3h_cycles_today:
-            self.computer_3h_cycles_today = current_cycle
-            self.computer_usage_reminder_given_at = current_cycle
-            self._computer_countdown_active = False
-            self.countdown_overlay.hide_overlay()
-            self.show_computer_usage_reminder(cycle=current_cycle)
-            LocalSync.increment_computer_hour(self.computer_usage_hours_today)
+        # 每2分钟保存一次
+        self._computer_save_tick += 1
+        if self._computer_save_tick >= 120:
+            self._computer_save_tick = 0
             self._save_computer_usage()
-            log.info(f'[ComputerUsage] 触发第 {current_cycle} 个 3 小时周期')
-        else:
-            # 每 120 秒（2分钟）保存一次计数（防止重启丢失），用 tick 计数器避免浮点精度问题
-            self._computer_usage_save_tick += 1
-            if self._computer_usage_save_tick >= 120:
-                self._computer_usage_save_tick = 0
-                self._save_computer_usage()
 
-    def show_computer_usage_reminder(self, cycle=1):
-        """电脑使用 3 小时后提醒，从收藏夹随机打开视频"""
-        total_h = int(self.computer_usage_hours_today)
-        if self.video_list:
-            video_url = random.choice(self.video_list)
-        else:
-            video_url = 'https://www.bilibili.com/video/BV14Y4y1N7PW/?spm_id_from=333.1387.favlist.content.click'
-        open_url(video_url)
-        self.tray_icon.showMessage(
-            '💻 电脑使用时间过长',
-            f'今天累计 {total_h} 小时（第 {cycle} 个周期），看看护眼视频休息一下眼睛吧~',
-            QSystemTrayIcon.Information,
-            5000
-        )
 
     def update_battery_status(self):
         try:
@@ -3136,131 +2812,8 @@ class RestReminderWidget(QWidget):
             QTimer.singleShot(400, lambda: self.setWindowOpacity(0.5))
             QTimer.singleShot(600, lambda: self.setWindowOpacity(1.0))
 
-    def get_bilibili_videos(self, force_refresh=False):
-        """获取 B 站收藏夹视频列表（带重试，DNS 错误只记一次，5分钟缓存）"""
-        import re as _re  # 模块级 re 在 daemon 线程中偶尔不可用，本地导入兜底
-        # 5分钟缓存
-        now = time.time()
-        if not force_refresh and self.video_list and (now - self._video_cache_time) < self._video_cache_ttl:
-            return self.video_list
-        # 从设置读取用户配置的收藏夹ID，兼容settings格式：{'bilibili_fid': 'xxx', 'bilibili_mid': 'xxx'}
-        fid = self.app_settings.get('bilibili_fid', '3648313921')
-        mid = self.app_settings.get('bilibili_mid', '529362421')
-
-        user_agents = [
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0',
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15',
-        ]
 
 
-        for attempt in range(3):
-            headers = {
-                'User-Agent': user_agents[attempt % len(user_agents)],
-                'Referer': 'https://www.bilibili.com',
-                'Accept': 'application/json, text/plain, */*',
-                'Origin': 'https://www.bilibili.com',
-            }
-
-            videos = []
-            page = 1
-            page_size = 20
-
-            try:
-                while True:
-                    url = f'https://api.bilibili.com/x/v3/fav/resource/list?media_id={fid}&pn={page}&ps={page_size}'
-                    response = requests.get(url, headers=headers, timeout=10)
-                    if response.status_code != 200:
-                        break
-
-                    data = response.json()
-                    code = data.get('code')
-                    if code != 0:
-                        log.error(f'B 站 API 返回错误 code={code}, msg={data.get("message")} (尝试 {attempt+1}/3)')
-                        break
-
-                    medias = data.get('data', {}).get('medias') or []
-                    if not medias:
-                        break
-
-                    for media in medias:
-                        bvid = media.get('bvid')
-                        if bvid and _re.match(r'^BV[a-zA-Z0-9]{10}$', bvid):
-                            videos.append(f'https://www.bilibili.com/video/{bvid}')
-
-                    if len(medias) < page_size:
-                        break
-                    page += 1
-
-                if videos:
-                    self.video_list = videos
-                    self._video_cache_time = now
-                    log.info(f'获取到 {len(videos)} 个收藏视频（{page} 页，第{attempt+1}次尝试）')
-                    return videos
-
-            except Exception as e:
-                # DNS 错误只记一次，避免 WARP 下每次轮询都刷屏
-                if not self._bilibili_dns_error_logged:
-                    log.error(f'获取视频列表异常 (尝试 {attempt+1}/3): {e}')
-                    self._bilibili_dns_error_logged = True
-                elif 'getaddrinfo failed' not in str(e):
-                    log.error(f'获取视频列表异常 (尝试 {attempt+1}/3): {e}')
-
-            if attempt < 2:
-                time.sleep(2)
-
-        # 兜底方案
-        if not self._bilibili_dns_error_logged:
-            log.info('API 3 次全部失败，尝试从收藏夹页面提取视频链接...')
-        try:
-            page_url = f'https://space.bilibili.com/{mid}/favlist?fid={fid}&ftype=create'
-            resp = requests.get(page_url, headers={'User-Agent': user_agents[0], 'Referer': 'https://www.bilibili.com'}, timeout=10)
-            bvids = _re.findall(r'BV[a-zA-Z0-9]{10}', resp.text)
-            seen = set()
-            unique = []
-            for bv in bvids:
-                if bv not in seen:
-                    seen.add(bv)
-                    unique.append(bv)
-            if unique:
-                log.info(f'从页面兜底提取到 {len(unique)} 个视频')
-                return [f'https://www.bilibili.com/video/{bv}' for bv in unique]
-        except Exception as e:
-            log.error(f'页面兜底也失败了：{e}')
-
-        return []
-
-    def open_random_video(self):
-        """从B站收藏夹中打开随机视频"""
-        import threading as _t
-        def _fetch_and_open():
-            try:
-                videos = self.get_bilibili_videos()
-                if videos:
-                    picked = random.choice(videos)
-                    log.info(f'[open_random_video] 随机选中: {picked}')
-                    # 用 QTimer.singleShot 回到主线程打开URL
-                    QTimer.singleShot(0, lambda: self._do_open_video(picked))
-                    return
-            except Exception as e:
-                log.error(f'[open_random_video] 获取视频列表失败: {e}')
-            # 兜底：打开收藏夹页
-            mid = self.app_settings.get('bilibili_mid', '529362421')
-            fid = self.app_settings.get('bilibili_fid', '3648313921')
-            QTimer.singleShot(0, lambda: self._do_open_video(
-                f'https://space.bilibili.com/{mid}/favlist?fid={fid}&ftype=create'
-            ))
-        _t.Thread(target=_fetch_and_open, daemon=True).start()
-
-    def _do_open_video(self, url):
-        """打开视频URL并显示托盘通知"""
-        open_url(url)
-        self.tray_icon.showMessage(
-            '休息时间到！',
-            '已为您打开随机视频，记得放松一下哦~',
-            QSystemTrayIcon.Information,
-            3000
-        )
 
     def mousePressEvent(self, event):
         try:
@@ -3326,7 +2879,7 @@ def main():
     try:
         ctypes.windll.user32.SetProcessDPIAware()
     except Exception:
-        log.error("[LINE 3450] 未捕获异常")
+        log.error("[DPIAware] 设置失败")
         pass
 
     app = QApplication(sys.argv)

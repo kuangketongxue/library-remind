@@ -2,6 +2,104 @@
 
 所有重要版本更新记录。
 
+## v4.3.0 (2026-06-21)
+
+### 🎯 核心变更：计时规则重构
+- **v4.3 产品规格**：新增 `产品规格-v4.3.md` 完整记录
+- **固定60分钟学习**：移除活动密度感知/空闲自动暂停，统一60分钟
+- **5分钟请辨倒计时**：最后5分钟弹出浮层显示请辨金句
+- **5分钟休息状态**：新增 `_handle_resting()`，休息期间显示 ☕ 倒计时
+- **固定B站收藏夹URL**：休息后自动打开固定收藏夹（非随机）
+- **每3轮护眼视频**：第3/6/9...轮休息后打开护眼视频 `BV14Y4y1N7PW`
+- **复盘在休息期间弹出**：进入休息状态时弹出 1-5⭐ 复盘选择题
+
+### 🗑️ 删除的功能
+- 电脑使用3小时周期提醒（保留简单累计显示）
+- 20-20-20 护眼浮窗
+- 活动密度感知（空闲自动暂停）
+- 随机视频选择（改为固定URL）
+- 4个死函数：`get_bilibili_videos` / `open_random_video` / `_do_open_video` / `show_computer_usage_reminder`
+
+### 🎨 UI 重构（v4.2延续）
+- **挂件即主界面**：挂件点击显示倒计时+学习时长+电脑时长+开始/结束按钮
+- **主窗口默认隐藏**：启动后只显示浮球，点击浮球打开主界面
+- **ccswitch风格**：380×340 深炭黑+金色极简面板
+
+### 🐛 Bug 修复
+- **P0** 修复趋势分析数据丢失（`show_stats` 冗余写入）
+- **P1** 修复 float→int（`setValue` 不接受 float）
+- **P1** 修复 `_handle_running` 残留旧活动密度代码
+
+## v4.2.0 (2026-06-21)
+
+### 🎨 UI 重构
+- **主窗口大面板**：参考 ccswitch 风格，从 400×580 2×2 卡片网格改为 380×340 纵向列表
+- 顶部：22:00 大字倒计时 + 进度条
+- 中部：学习倒计时（Consolas 32px）+ 电脑使用时长行
+- 主按钮：▶ 开始学习 / ⏸ 暂停（更大更清晰）
+- 底部：📊🤖⚙️ 工具按钮行 + 自启按钮
+- 移除：打卡卡片、学习产出卡片、休息时长卡片（数据后台追踪，UI 不显示）
+
+### 🐛 Bug 修复
+- **P0** 修复 `show_stats()` 每次调用写 `save_daily_stats()` 导致数据丢失
+- **P0** 修复设置对话框双重写入（`save_settings` + `_set_reminder_mode` 都调 `save_settings`）
+- **P1** 修复 `_glow_timer` 无 parent 导致 GC 回收
+- **P1** 移除 2 处冗余 inline import（QMessageBox 已在模块级导入）
+
+### 📋 文档
+- 删除 `Pro收费逻辑设计.md`（246行，产品决策已变）
+- 清理 README Pro 绑定段落
+- 更新 docs/ARCHITECTURE.md 设计系统（颜色/字体/尺寸）
+- 更新 AGENTS.md 窗口尺寸配置
+
+## v4.1.1 (2026-06-20)
+
+### 🐛 Bug 修复
+- **P0** 修复 TrendWindow 反复 crash（`'NoneType' object has no attribute 'deleteLater'`）— `_clear_tab` 加 `sip.isdeleted()` 检查，`_refresh_active_tab` 加 `AttributeError` catch
+- **P0** 修复设置对话框 `NameError: save_btn` — 遗漏按钮定义导致点击设置即闪退
+- **P0** 修复 AI 报告 `ModuleNotFoundError: pro_features` — 子目录模块路径验证
+- **P1** 修复单实例锁文件 `Permission denied` — `cleanup()` tolerant 处理 Windows 文件锁定竞争
+- **P1** 修复 12 处 `except Exception: pass` 反模式 — 全部改为 `log.error/warning(...)`
+- **P1** 移除 5 处 `[LINE xxx]` 旧调试标记
+- **P2** `excepthook` 补 `log.error`（之前只写 crash.log 不进日志文件）
+- **P2** TTS API key 改为环境变量 `STEPFUN_API_KEY`
+
+### 🔧 改进
+- QTimer 统一加 parent（`QTimer(self)`），防止 GC 提前回收
+- 呼吸灯 `_update_glow` 加 early return（未运行时直接返回，不 setStyleSheet）
+- `showEvent`/`hideEvent` 管理呼吸灯 timer 生命周期
+
+## v4.1.0 (2026-06-19)
+
+### 🎨 设计重构
+- **Claude 风格**：深炭黑背景 + 珊瑚色 accent + Inter 字体 + 极简线条
+- 主窗口：去掉径向渐变光晕，改为纯色 + 1px 边框
+- 卡片：border-radius 14→8px，毛玻璃→纯色
+- 按钮：金色→珊瑚色，pause 橙色→冷灰
+- 计时器：金色→冷白，Consolas→JetBrains Mono
+
+### 🏗️ 架构改进
+- **新增 `storage.py`**：统一 JSONStore 类，消除 5 处重复 JSON IO 代码
+- **新增 `docs/ARCHITECTURE.md`**：系统架构、状态机、数据流、设计系统文档
+- **新增 `.env.example`**：环境变量配置模板
+- **RestReminder.spec**：添加 `hiddenimports=['storage']`，修复 exe 启动崩溃
+
+### 🐛 修复（P0-P2）
+- **P0** 修复 `update_computer_usage_display` 死方法（计算但不 setText）
+- **P0** 修复 `_bilibili_dns_error_logged` 永不重置（WARP 恢复后静默失败）
+- **P1** 修复呼吸灯 50ms 始终运行（隐藏时停止，节省 CPU）
+- **P2** 添加 B站视频 5 分钟缓存（避免每次休息都请求网络）
+- **P2** 3 小时提醒改为收藏夹随机视频（不再硬编码 URL）
+- **P2** 清理 4 个死函数（`_load_goal`/`_save_goal`/`_load_quotes_used`/`_save_quotes_used`）
+- **P2** 清理冗余 import + 死代码
+
+### 📋 其他
+- 清理 3.6MB 临时文件（搜索缓存、旧脚本、重复目录）
+- 更新 AGENTS.md（修正过时引用）
+- 更新 README.md（修复截图引用、更新项目结构）
+- 更新 CLAUDE.md（合并踩坑记录、添加新规则）
+- 新增 6 条 learnings + 2 条 errors 记录
+
 ## v4.0.0 (2026-06-18)
 
 ### 🎉 新功能

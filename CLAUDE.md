@@ -29,41 +29,40 @@
 - B站收藏夹功能 → B站用户直接共鸣
 
 ## 项目概述
-PyQt5 桌面挂件，品牌名「⚡ 精力管理」。开源 MIT，Pro 版 AI 分析。
+PyQt5 桌面挂件，品牌名「⚡ 精力管理」。开源 MIT，AI 学习分析。
 
 ## 技术栈
 Python 3.7+ / PyQt5 / requests / psutil / Win32 API (ctypes)
 
 ## 关键文件
 ```
-rest_reminder.py              — 主程序（开源版·~3300行）
-rest-reminder-pro/            — Pro版（闭源·gitignored·含 AI key）
-  pro_features/__init__.py    — AI 分析 + 日报/周报/月报/季报/年报
-  backend.py                  — Supabase 订阅验证 + 设备指纹
-RestReminder.spec             — 开源版 PyInstaller 配置
-RestReminderPro.spec          — Pro版 PyInstaller 配置
+rest_reminder.py              — 主程序（~3340行，含所有 UI + 逻辑）
+storage.py                    — 统一 JSON 存储层（JSONStore 类）
+tray_card.py                  — 托盘弹出卡片
+rest-reminder-pro/            — AI 分析模块
+  pro_features/__init__.py    — AI 报告生成（agnes-2.0-flash，日报/周报/月报/季报/年报）
+  backend.py                  — 已废弃（原 Supabase 订阅验证）
+RestReminder.spec             — PyInstaller 配置（含 hiddenimports=['storage']）
 D:\rest-reminder-site\        — 官网 Next.js 源码（纯英文路径避坑）
 dist/RestReminder.exe         — 打包 exe
 ```
 
-## 订阅系统（2026-06-18 更新）
-- **Pro 仅 AI 分析**：Agnes agnes-2.0-flash API，日报/周报/月报/季报/年报
-- **无限免期**：付费即用，19.9元/月
-- **验证**：Supabase `subscriptions` 表（device_id + clerk_user_id + expires_at + active）
-- **设备绑定**：网站 /account → 输入 device_id → Supabase 写入（每账号限 2 台）
-- **Clerk**：已配置 `pk_test_...`，WARP 阻断时降级 Supabase Auth
-- **RLS**：已启用
-- **缓存**：本地 `.pro_cache.json`，1h 过期
+## AI 学习分析
+- **无需订阅**：AI 报告直接可用，无 Pro 验证
+- **主 API**：SenseNova agnes-2.0-flash（`token.sensenova.cn/v1`）
+- **备用 API**：Agnes agnes-2.0-flash（`apihub.agnes-ai.com/v1`），自动降级链 + 指数退避
+- **TTS 语音**：StepFun stepaudio-2.5-tts（`api.stepfun.com/v1/audio/speech`），异步线程播放
+- **功能**：日报/周报/月报/季报/年报
+- **缓存**：`.report_cache/` 目录，每个报告类型一个 JSON
+- **数据源**：`.stats_history.json` + `.review_log.json`
+- **报告生成异步化**：子线程调用 generate_report，QTimer.singleShot 回主线程更新 UI，防止阻塞崩溃
 
 ## 持久化文件
 `.daily_log.json` · `.app_state.json` · `.computer_usage.json` · `.goal.json` · `.streak.json` · `.settings.json` · `.stats_history.json` · `.review_log.json`
 
 ## 构建 & 部署
 ```bash
-# 开源版
 pyinstaller RestReminder.spec
-# Pro版
-pyinstaller RestReminderPro.spec
 # 官网（纯英文路径下构建，否则Turbopack panic）
 cd D:\rest-reminder-site && npm run build
 CLOUDFLARE_API_TOKEN="cfut_..." wrangler pages deploy "D:\rest-reminder-site\out" --project-name "rest-reminder-app" --commit-dirty=true
@@ -73,18 +72,19 @@ CLOUDFLARE_API_TOKEN="cfut_..." wrangler pages deploy "D:\rest-reminder-site\out
 见全局 `~/.claude/CLAUDE.md`（firecrawl×3 + tavily×2 + zhihu + global + opencli 并行）。
 
 ## 踩坑记录（必读）
-- **Next.js 16 + 中文路径**：Turbopack panic `start byte index...` → 必须纯英文路径
-- **CF Pages 25MB 限制**：部署前删 out/ 中 RestReminder.exe
-- **Clerk 静态导出**：不能用 `@clerk/nextjs` 服务端组件 → 用 `@clerk/clerk-react` 纯客户端
-- **SingleInstanceChecker 模块级生命周期**：放 main() 局部变量会被 GC
-- **B站 test 按钮超时**：5s 超时 + 兜底方案，WARP 下会提示网络限制
-- **21 处 `except Exception:`** 添加了 `log.error` 但仍有少数 stateless 的 continue 未加日志
-- **`self.autostart_action` 未定义**：调用 `self.XXX` 前先 grep 确认属性存在（2026-06-19）
-- **`# 已移除UI` 残留**：v4.0 重构时注释了 16 处旧 UI 代码，应直接删除不注释（2026-06-19）
-- **DNS error flag 在方法内重置**：`get_bilibili_videos()` 开头重置 `_bilibili_dns_error_logged`，应在 `__init__` 中初始化一次（2026-06-19）
-- **`_load_json` 跨类共享**：无状态工具函数提取到模块级，不要放在某个类内部（2026-06-19）
+- **子目录模块需显式加入 sys.path**：`rest-reminder-pro/` 等子目录不会被 Python 自动发现，启动时 `sys.path.insert(0, subdir)`（2026-06-20）
+- **setWindowFlags 必须在 setGeometry 之前**：`FramelessWindowHint` 重建窗口导致几何尺寸丢失，窗口变 48x48（2026-06-20）
+- **WA_DeleteOnClose 后操作 C++ 对象**：关闭后 C++ 对象销毁，_clear_tab 用 `sip.isdeleted()` 检查，_refresh_active_tab 加 `AttributeError` catch（2026-06-20）
+- **读数据时不要写文件**：UI 展示方法不应触发 save_daily_stats() 写入（2026-06-20）
+- **Next.js 16 + 中文路径**：Turbopack panic → 必须纯英文路径（2026-06-19）
+- **CF Pages 25MB 限制**：部署前删 out/ 中 RestReminder.exe（2026-06-19）
+- **except Exception: pass 是反模式**：必须至少加 log，唯一允许 pass 的是 WA_DeleteOnClose 后的 RuntimeError（2026-06-20）
+- **状态机新状态三连更新**：新增状态时同步改 `_BTN_CONFIG` + `_handle_*` 方法 + 主循环路由分支（2026-06-21）
+- **PyQt 数值 API 类型安全**：`setValue()`/`setMaximum()` 只接受 int，float `//` 地板除返回 float，必须显式 `int()`（2026-06-21）
 
 ## 禁止事项
 - 不创建庆祝/确认类临时文件
 - 不写重复修复报告
 - 不向 GitHub 推送 rest-reminder-pro/（含 Agnes AI key）
+- 不区分 Pro/普通用户，所有功能直接可用（2026-06-20）
+- 不把 Pro 收费逻辑写在代码里，收费功能以后单独加（2026-06-20）

@@ -4,8 +4,14 @@
 """
 import json
 import os
+import sys
 
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if getattr(sys, 'frozen', False):
+    # PyInstaller 打包：数据文件放在 exe 所在目录
+    _BASE_DIR = os.path.dirname(sys.executable)
+else:
+    # 源码运行：数据文件放在 storage.py 所在目录
+    _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 _NO_DEFAULT = object()  # sentinel：区分"未传 default" 和 "显式 default=None"
 
 

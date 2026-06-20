@@ -8,60 +8,49 @@
 [![Python](https://img.shields.io/badge/python-3.7+-yellow.svg)](https://python.org)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010/11-lightgrey.svg)]()
 
-[📥 免费下载](https://github.com/kuangketongxue/library-remind/releases/latest) · [🌐 官网](https://024f119c.rest-reminder-app.pages.dev/) · [💬 反馈](https://github.com/kuangketongxue/library-remind/issues)
+[📥 免费下载](https://github.com/kuangketongxue/library-remind/releases/latest) · [🌐 官网](https://master.rest-reminder-app.pages.dev/) · [💬 反馈](https://github.com/kuangketongxue/library-remind/issues)
 
 </div>
 
 ---
 
-## 📸 截图
-
-| 主界面 | 学习统计 | 系统托盘 |
-|:---:|:---:|:---:|
-| ![主界面](public/screenshot-main.png) | ![统计](public/screenshot-stats.png) | ![菜单](public/screenshot-menu.png) |
-
 ## ✨ 功能一览
 
-| 功能 | 🆓 免费版 | 💎 Pro（限免中） |
-|------|:---------:|:--------:|
-| 60分钟循环休息提醒 | ✅ | ✅ |
-| **20-20-20 护眼提醒**（每 20 分钟看远处） | ✅ | ✅ |
-| **活动密度感知**（活跃→45min，空闲自动暂停） | ✅ | ✅ |
-| **趋势分析**（5 标签页：今日/周/月/季年/时段） | ✅ | ✅ |
-| **请辨金句模式**（休息时展示思辨金句） | ✅ | ✅ |
-| **里程碑金句**（打卡 1/3/7/14/30/60/90/365 天） | ✅ | ✅ |
-| **每小时复盘**（1-5⭐ 自评，数据落盘） | ✅ | ✅ |
-| B站护眼/放松视频自动播放 | ✅ | ✅ |
-| 用户自定义收藏夹和视频 | ✅ | ✅ |
-| 学习时长追踪 + 连续打卡 | ✅ | ✅ |
-| 电脑使用时长监控（每3小时提醒） | ✅ | ✅ |
-| 开机自启（注册表直启） | ✅ | ✅ |
-| 🤖 **AI 学习分析**（数据报告+个性化建议） | ❌ | ✅ |
-
-**Pro = 免费版 + AI 学习分析。19.9元/月。**
+| 功能 | 说明 |
+|------|------|
+| 60分钟循环休息提醒 | 学习→休息→自动开B站收藏夹 |
+| **20-20-20 护眼提醒** | 每20分钟浮窗，15秒自动消失 |
+| **趋势分析**（5标签页） | 今日复盘/周/月/季/时段分析 |
+| **请辨金句模式** | 休息时展示思辨金句，每日不重复 |
+| **复盘记录** | 每小时1-5⭐ 自评，数据落盘 |
+| B站收藏夹视频 | 固定收藏夹（每3轮护眼视频） |
+| 学习时长追踪 + 复盘记录 | 本地持久化 |
+| 🤖 **AI 学习分析** | 日报/周报/月报/季报/年报 |
+| 开机自启 + 托盘 + 浮球 | 后台常驻 |
 
 ## 🚀 快速开始
 
 ```
 双击 dist/RestReminder.exe
-```
-
-## 🔗 一键绑定设备
-
-```
-应用内 ⚙️ 设置 → 复制设备 ID → 打开 Pro 登录界面
-→ 官网用邮箱/Clerk 注册 → 粘贴设备 ID → 绑定成功 → 重启应用 → Pro 激活
+# 或
+python rest_reminder.py
 ```
 
 ## 📁 项目结构
 
 ```
 ├── rest_reminder.py        # 主程序
+├── storage.py              # 统一 JSON 存储层
 ├── cute_icon.png/ico       # 图标
 ├── requirements.txt        # 依赖
+├── RestReminder.spec       # PyInstaller 配置
 ├── 一键安装.bat             # 安装+自启动
 └── dist/RestReminder.exe   # 打包好的 exe
 ```
+
+## 🎨 设计
+
+Claude 风格：深炭黑背景 + 珊瑚色 accent + Inter 字体 + 极简线条。
 
 ## 🔒 隐私声明
 
@@ -73,15 +62,10 @@
 
 ## 🙏 贡献者
 
-感谢以下贡献者让这个项目变得更好：
-
 | 贡献者 | 角色 |
 |--------|------|
-| **binlo** (冬之街) | 项目所有者 · 产品设计 · 核心功能 |
+| **binlo** | 项目所有者 · 产品设计 · 核心功能 |
 | **Claude (Anthropic)** | AI 开发助手 · 代码生成 · 架构设计 |
-| **Codex (OpenAI)** | AI 开发助手 · 界面设计 · 代码优化 |
-| **DeepSeek** | AI 开发助手 · 数据分析 · 功能测试 |
-| **LongCat** | AI 开发助手 · 文档 · 测试 |
 
 ---
 
