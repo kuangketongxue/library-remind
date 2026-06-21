@@ -1,7 +1,7 @@
 # 休息提醒 — AGENTS.md
 
 ## 项目概述
-PyQt5 桌面挂件：60 分钟学习 → 5 分钟请辨倒计时 → 5 分钟休息 → 固定 B 站收藏夹（每 3 轮开护眼视频）→ 自动循环。浮球（点击显示主界面）+ 主面板（380×340 ccswitch 风格）。AI 学习分析 + 趋势分析（5 标签页）+ 复盘 1-5⭐。
+PyQt5 桌面挂件：浮球（⏰ 60×60，点击弹出倒计时+学习时长+开始/暂停）+ 主面板（560×480 CC Switch 风格，5 tab：今日/AI报告/趋势/关于）。60 分钟学习 → 5 分钟请辨倒计时 → 5 分钟休息 → 固定 B 站收藏夹。AI 学习分析 + 趋势分析 + 复盘 1-5⭐。
 
 ## 技术栈
 Python 3.7+ / PyQt5 / requests / psutil / Win32 API (ctypes)
@@ -37,7 +37,7 @@ dist/RestReminder.exe   — 打包 exe
 | 请辨金句 | `_pick_quote()` | quotes_store |
 | 复盘分数 | `.review_log.json` | 1-5⭐ |
 | 学习时长 | `.daily_log.json` | LocalSync |
-| 窗口尺寸 | `init_ui()` | 380×340 |
+| 窗口尺寸 | `init_ui()` | 560×480 |
 | 浮球尺寸 | `FloatingBall` | 60×60 |
 
 ## 运行和验证

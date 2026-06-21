@@ -90,5 +90,16 @@ LARK_CLI使用说明.md
 # 本地用户数据
 .review_log.json
 
+# 内部开发笔记（不进入开源）
+.learnings/
+.wolf/
+
+# 版本记录（内部）
+版本记录.md
+
+# 网站构建产物
+rest-reminder-site/public/RestReminder.exe
+rest-reminder-site/.firecrawl/
+
 # Pro 版（闭源，含AI KEY）
 rest-reminder-pro/
