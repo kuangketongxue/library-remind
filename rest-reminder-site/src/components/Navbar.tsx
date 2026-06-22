@@ -13,9 +13,6 @@ export default function Navbar() {
           <a href="#features" className="text-[13px] text-[var(--fg-dim)] hover:text-[var(--fg)] transition-colors hidden sm:block">
             功能
           </a>
-          <a href="#pricing" className="text-[13px] text-[var(--fg-dim)] hover:text-[var(--fg)] transition-colors hidden sm:block">
-            定价
-          </a>
           <a href="#changelog" className="text-[13px] text-[var(--fg-dim)] hover:text-[var(--fg)] transition-colors hidden md:block">
             更新日志
           </a>

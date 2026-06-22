@@ -8,17 +8,14 @@ Python 3.7+ / PyQt5 / requests / psutil / Win32 API (ctypes)
 
 ## 关键文件
 ```
-rest_reminder.py              — 主程序（~3100行，含所有 UI + 逻辑）
+rest_reminder.py              — 主程序（~3900行，含所有 UI + 逻辑）
 storage.py                    — 统一 JSON 存储层（JSONStore 类）
-tray_card.py                  — 托盘弹出卡片
-rest-reminder-pro/            — AI 分析模块
-  pro_features/__init__.py    — AI 报告生成（agnes-2.0-flash，日报/周报/月报/季报/年报）
 RestReminder.spec             — PyInstaller 配置（含 hiddenimports=['storage']）
 产品规格-v4.3.md              — v4.3 完整产品规格
 ```
 
 ## AI 学习分析
-- **无需订阅**：AI 报告直接可用，无 Pro 验证
+- **无需付费**：AI 报告直接可用
 - **主 API**：SenseNova `sensenova-6.7-flash-lite`（`token.sensenova.cn/v1/chat/completions`）
 - **备用 API**：Agnes `agnes-2.0-flash`（`apihub.agnes-ai.com/v1/chat/completions`），自动降级链 + 指数退避
 - **TTS 语音**：StepFun `stepaudio-2.5-tts`（`api.stepfun.com/v1/audio/speech`），异步线程播放
@@ -55,5 +52,5 @@ pyinstaller RestReminder.spec
 - 不创建庆祝/确认类临时文件
 - 不写重复修复报告
 - 不向 GitHub 推送 rest-reminder-pro/（含 Agnes AI key）
-- 不区分 Pro/普通用户，所有功能直接可用（2026-06-20）
 - 不把 Pro 收费逻辑写在代码里，收费功能以后单独加（2026-06-20）
+- 活动密度感知已删除，不在任何文档/代码中引用（2026-06-23）

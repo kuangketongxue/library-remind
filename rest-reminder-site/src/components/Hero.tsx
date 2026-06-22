@@ -20,7 +20,7 @@ export default function Hero() {
         {/* Left: Text */}
         <div>
           <motion.div {...fade(0)} className="inline-flex items-center gap-2 mb-8">
-            <span className="tag">v4.0</span>
+            <span className="tag">v4.4</span>
             <span className="text-sm text-[var(--fg-dim)]">开源免费 · MIT协议</span>
           </motion.div>
 
@@ -37,16 +37,16 @@ export default function Hero() {
             {...fade(0.2)}
             className="text-lg text-[var(--fg-dim)] max-w-md leading-relaxed mb-10"
           >
-            每小时自动提醒休息，追踪学习数据，AI 深度分析你的学习模式。
-            <span className="block text-sm mt-3 text-[var(--accent)] font-medium">免费使用 · Pro 版仅 19.9元/月 解锁 AI 分析</span>
+            每小时自动提醒休息，追踪学习数据，AI 自动生成多维度学习报告。
+            <span className="block text-sm mt-3 text-[var(--accent)] font-medium">完全免费 · MIT 开源 · 无隐藏收费</span>
           </motion.p>
 
           <motion.div {...fade(0.3)} className="flex flex-col sm:flex-row gap-4">
             <a href="#download" className="btn-primary btn-shine px-8 py-3.5 text-base inline-flex items-center justify-center gap-2">
               ↓ 立即下载
             </a>
-            <a href="#pricing" className="btn-ghost px-8 py-3.5 text-base inline-flex items-center justify-center">
-              了解 Pro →
+            <a href="#features" className="btn-ghost px-8 py-3.5 text-base inline-flex items-center justify-center">
+              查看功能 →
             </a>
           </motion.div>
 

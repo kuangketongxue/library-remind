@@ -70,7 +70,6 @@ export default function Home() {
       <HowItWorks />
       <WhyChoose />
       <Testimonials />
-      <Pricing />
       <Changelog />
       <FAQ />
       <Download />

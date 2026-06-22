@@ -42,7 +42,6 @@ export default function Footer() {
             <div className="footer-col">
               <h4>产品</h4>
               <a href="#features">功能</a>
-              <a href="#pricing">定价</a>
               <a href="#download">下载</a>
             </div>
             <div className="footer-col">

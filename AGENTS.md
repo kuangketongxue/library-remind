@@ -8,14 +8,9 @@ Python 3.7+ / PyQt5 / requests / psutil / Win32 API (ctypes)
 
 ## 关键文件
 ```
-rest_reminder.py        — 主程序（~3100行，含所有 UI + 逻辑）
+rest_reminder.py        — 主程序（~3900行，含所有 UI + 逻辑）
 storage.py              — 统一 JSON 存储层（JSONStore 类）
-tray_card.py            — 托盘弹出卡片（已弃用，保留兼容）
-rest-reminder-pro/      — AI 分析模块
-  pro_features/__init__.py — AI 报告生成（agnes-2.0-flash，日报/周报/月报/季报/年报）
 RestReminder.spec       — PyInstaller 配置（含 hiddenimports=['storage']）
-D:\rest-reminder-site\  — 官网 Next.js 源码（纯英文路径避坑）
-dist/RestReminder.exe   — 打包 exe
 产品规格-v4.3.md        — v4.3 完整产品规格（计时规则/URL/功能清单）
 ```
 

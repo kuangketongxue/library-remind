@@ -2,6 +2,30 @@
 
 所有重要版本更新记录。
 
+## v4.4.0 (2026-06-23)
+
+### 🎨 UI 重构：5标签页主界面
+- **今日**：直接展示学习时长、当前轮次、休息状态（含倒计时）、复盘摘要、连续天数
+- **AI 报告**：日报/周报/月报/季报/年报 5个按钮直接展示，无需额外点击
+- **趋势**：图表直接渲染（修复 paintEvent 不触发空白问题）
+- **设置**：从今日页拆分出独立标签页，含开关自启/静默启动/关闭最小化/学习统计/复盘提醒/声音提醒
+- **关于**：版本信息 + 开源声明
+
+### 🗑️ 移除
+- **Pro 订阅系统**：完全移除，所有功能免费可用
+- `rest-reminder-pro/` 不再需要，AI 报告通过 `pro_features` 直接调用
+- `tray_card.py`：旧版托盘卡片（已弃用）
+
+### 🐛 Bug 修复
+- **修复** `Qt.Popup` 浮层按钮不可点击（focus loss 自动关闭）→ 改用 `Qt.Tool | Qt.FramelessWindowHint`
+- **修复** `closeEvent` 用 `hide_to_edge()` 导致关闭后无法重新打开 → 改用 `hide()`
+- **修复** 5个 `_toggle_*` 回调只写内存不写磁盘 → 设置持久化到 `app_settings` + `LocalSync.save_settings()`
+- **修复** 趋势图 `paintEvent` 赋值后不自动触发 → 显式调用 `.update()`
+- **修复** PyInstaller exe 日志输出到 `%TEMP%/_MEI*/` 而非项目目录
+- **修复**  stale 锁文件导致新 exe 无法启动
+- **修复** `_clear_tab` / `_refresh_active_tab` WA_DeleteOnClose 后操作 C++ 对象崩溃
+- **清理** 4个死函数、模块级 inline import 副作用
+
 ## v4.3.0 (2026-06-21)
 
 ### 🎯 核心变更：计时规则重构

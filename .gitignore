@@ -100,6 +100,9 @@ LARK_CLI使用说明.md
 # 网站构建产物
 rest-reminder-site/public/RestReminder.exe
 rest-reminder-site/.firecrawl/
+rest-reminder-site/out/
 
-# Pro 版（闭源，含AI KEY）
-rest-reminder-pro/
+# 本地临时文件
+*.png
+TODO-*.md
+cleanup.bat
