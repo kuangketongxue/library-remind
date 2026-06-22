@@ -19,13 +19,12 @@ RestReminder.spec             — PyInstaller 配置（含 hiddenimports=['stora
 
 ## AI 学习分析
 - **无需订阅**：AI 报告直接可用，无 Pro 验证
-- **主 API**：SenseNova agnes-2.0-flash（`token.sensenova.cn/v1`）
-- **备用 API**：Agnes agnes-2.0-flash（`apihub.agnes-ai.com/v1`），自动降级链 + 指数退避
-- **TTS 语音**：StepFun stepaudio-2.5-tts（`api.stepfun.com/v1/audio/speech`），异步线程播放
+- **主 API**：SenseNova `sensenova-6.7-flash-lite`（`token.sensenova.cn/v1/chat/completions`）
+- **备用 API**：Agnes `agnes-2.0-flash`（`apihub.agnes-ai.com/v1/chat/completions`），自动降级链 + 指数退避
+- **TTS 语音**：StepFun `stepaudio-2.5-tts`（`api.stepfun.com/v1/audio/speech`），异步线程播放
 - **功能**：日报/周报/月报/季报/年报
 - **缓存**：`.report_cache/` 目录，每个报告类型一个 JSON
 - **数据源**：`.stats_history.json` + `.review_log.json`
-- **报告生成异步化**：子线程调用 generate_report，QTimer.singleShot 回主线程更新 UI，防止阻塞崩溃
 
 ## 持久化文件
 `.daily_log.json` · `.app_state.json` · `.computer_usage.json` · `.goal.json` · `.streak.json` · `.settings.json` · `.stats_history.json` · `.review_log.json`
