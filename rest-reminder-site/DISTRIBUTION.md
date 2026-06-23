@@ -23,7 +23,7 @@
 技术栈：Python + PyQt5，单文件 exe，46MB，开箱即用。
 
 GitHub：https://github.com/kuangketongxue/library-remind
-下载：https://024f119c.rest-reminder-app.pages.dev/
+下载：https://crazy-rest-reminder.pages.dev/
 
 MIT 开源，欢迎 star 和 PR。
 
@@ -85,7 +85,7 @@ AI 学习分析 —— 自动分析你的学习数据，生成报告和个性化
 
 **开源地址：**
 GitHub：https://github.com/kuangketongxue/library-remind
-官网：https://024f119c.rest-reminder-app.pages.dev/
+官网：https://crazy-rest-reminder.pages.dev/
 
 MIT 协议，欢迎使用和贡献。
 

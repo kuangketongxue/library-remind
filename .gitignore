@@ -89,6 +89,19 @@ LARK_CLI使用说明.md
 
 # 本地用户数据
 .review_log.json
+.daily_log.json
+.app_state.json
+.computer_usage.json
+
+# AI 模块（含 API key，不进入开源）
+rest-reminder-pro/
+
+# 图片识别脚本（含 API key）
+sensenova_vision.py
+
+# 目标 & 金句本地数据
+.goal.json
+.wisdom_quotes.json
 
 # 内部开发笔记（不进入开源）
 .learnings/

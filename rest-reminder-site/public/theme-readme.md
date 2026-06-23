@@ -62,5 +62,5 @@ background: radial-gradient(circle, rgba(212,175,55,0.04), #0a0a0c);
 
 ## 下载
 
-- [RestReminder.exe](https://024f119c.rest-reminder-app.pages.dev/RestReminder.exe) — 内置此主题
+- [RestReminder.exe](https://crazy-rest-reminder.pages.dev/RestReminder.exe) — 内置此主题
 - [GitHub](https://github.com/kuangketongxue/rest-reminder) — 开源 MIT

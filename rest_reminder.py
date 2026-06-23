@@ -20,7 +20,7 @@ import tempfile
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel,
                              QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox, QShortcut, QFrame, QTabWidget, QStackedWidget, QComboBox, QLineEdit, QScrollArea, QDialog, QSlider, QSpinBox, QGroupBox)
-from PyQt5.QtCore import QTimer, Qt, QPoint, QEvent
+from PyQt5.QtCore import QTimer, Qt, QPoint, QEvent, QThread, pyqtSignal
 from PyQt5.QtGui import QIcon, QFont, QPainter, QColor, QBrush, QPen, QKeySequence
 from PyQt5.QtWidgets import QGraphicsDropShadowEffect
 from tray_card import TrayCardWidget
@@ -39,7 +39,7 @@ if _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v4.3'
+VERSION = 'v4.4'
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=1_000_000, backupCount=3, encoding='utf-8')
 _handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', '%Y-%m-%d %H:%M:%S'))
@@ -368,8 +368,46 @@ class FloatingBall(QWidget):
         popup.show()
         popup.raise_()
 
+    @staticmethod
+    def _md_to_html(text):
+        """轻量 markdown → HTML（只处理常用语法，不引入第三方库）"""
+        lines = text.split('\n')
+        out = []
+        in_code = False
+        code_buf = []
+        for line in lines:
+            if line.strip().startswith('```'):
+                if in_code:
+                    out.append('</pre>')
+                    in_code = False
+                else:
+                    out.append('<pre style="background:#18181f;border:1px solid #252530;border-radius:8px;padding:10px;font-size:12px;font-family:Consolas,monospace;color:#e8e4dc;overflow-x:auto;">')
+                    in_code = True
+                continue
+            if in_code:
+                code_buf.append(line)
+                continue
+            # 标题
+            if line.startswith('# '):
+                out.append(f'<h1 style="color:#e8e6e1;font-size:18px;font-weight:bold;margin:16px 0 8px;">{line[2:]}</h1>')
+            elif line.startswith('## '):
+                out.append(f'<h2 style="color:#d4af37;font-size:15px;font-weight:bold;margin:12px 0 6px;">{line[3:]}</h2>')
+            elif line.startswith('### '):
+                out.append(f'<h3 style="color:#c4b8a0;font-size:13px;font-weight:bold;margin:10px 0 4px;">{line[4:]}</h3>')
+            elif line.startswith('- '):
+                out.append(f'<li style="margin-left:16px;color:#b8b4ac;line-height:1.8;">{line[2:]}</li>')
+            elif line.strip().startswith('> '):
+                out.append(f'<blockquote style="border-left:3px solid #d4af37;padding-left:10px;color:#888;margin:6px 0;">{line.strip()[2:]}</blockquote>')
+            elif line.strip() == '---':
+                out.append('<hr style="border:none;border-top:1px solid #252530;margin:12px 0;">')
+            elif line.strip():
+                out.append(f'<p style="color:#b8b4ac;line-height:1.7;margin:4px 0;">{line}</p>')
+        if in_code:
+            out.append('</pre>')
+        return '\n'.join(out)
+
     def _update_popup_text(self):
-        """只更新 popup 的文字内容（不重建 widget）"""
+        """只更新 popup 的文字内容（不重建 widget，带文本缓存避免重复 setText）"""
         mw = self.main_window
         popup = getattr(mw, '_info_popup', None)
         if not popup or not hasattr(popup, '_timer_lbl'):
@@ -404,27 +442,37 @@ class FloatingBall(QWidget):
             study = '📚 0h'
             computer = '💻 0h0m'
 
-        popup._timer_lbl.setText(timer_text)
-        popup._study_lbl.setText(study)
-        popup._comp_lbl.setText(computer)
-        # 目标
+        # 文本缓存：跳过无变化的 setText 避免 repaint storm
+        prev = getattr(popup, '_prev_texts', {})
+        if prev.get('timer') != timer_text:
+            popup._timer_lbl.setText(timer_text)
+            prev['timer'] = timer_text
+        if prev.get('study') != study:
+            popup._study_lbl.setText(study)
+            prev['study'] = study
+        if prev.get('computer') != computer:
+            popup._comp_lbl.setText(computer)
+            prev['computer'] = computer
         if hasattr(popup, '_goal_lbl'):
             goal = mw.goal_text or '🎯 未设目标'
-            popup._goal_lbl.setText(goal)
-            popup._goal_lbl.setToolTip(goal)
-        # 轮次
+            if prev.get('goal') != goal:
+                popup._goal_lbl.setText(goal)
+                popup._goal_lbl.setToolTip(goal)
+                prev['goal'] = goal
         if hasattr(popup, '_round_lbl'):
-            popup._round_lbl.setText(f'第{mw._round_count + 1}轮')
+            round_text = f'第{mw._round_count + 1}轮'
+            if prev.get('round') != round_text:
+                popup._round_lbl.setText(round_text)
+                prev['round'] = round_text
+        popup._prev_texts = prev
 
         # 更新按钮文字
-        if mw.timer_state == 'running':
-            popup._action_btn.setText('⏸ 暂停')
-        elif mw.timer_state in ('idle', 'paused'):
-            popup._action_btn.setText('▶ 开始学习')
-        elif mw.timer_state == 'resting':
-            popup._action_btn.setText('休息中...')
-        else:
-            popup._action_btn.setText('▶ 开始学习')
+        btn_map = {'running': 'pause', 'idle': 'start', 'paused': 'start', 'resting': 'rest'}
+        btn_text_map = {'running': '⏸ 暂停', 'idle': '▶ 开始学习', 'paused': '▶ 开始学习', 'resting': '休息中...'}
+        key = btn_map.get(mw.timer_state, 'start')
+        if prev.get('btn') != key:
+            popup._action_btn.setText(btn_text_map.get(mw.timer_state, '▶ 开始学习'))
+            prev['btn'] = key
 
     def _on_popup_btn_clicked(self):
         """popup 按钮点击：开始/暂停切换"""
@@ -505,7 +553,7 @@ class FloatingBall(QWidget):
 
     def open_website(self):
         """打开官方网站"""
-        open_url("https://rest-reminder-app.pages.dev")
+        open_url("https://crazy-rest-reminder.pages.dev")
 
     def quit_app(self):
         """退出应用"""
@@ -1696,6 +1744,25 @@ class TrendWindow(QWidget):
             self.close()
 
 
+class _ReportWorker(QThread):
+    """后台线程：生成 AI 报告，不阻塞 UI"""
+    finished = pyqtSignal(dict)
+
+    def __init__(self, report_type, force_refresh=False):
+        super().__init__()
+        self.report_type = report_type
+        self.force_refresh = force_refresh
+
+    def run(self):
+        try:
+            from pro_features import generate_report
+        except ImportError:
+            self.finished.emit({"ok": False, "error": "AI 模块加载失败"})
+            return
+        result = generate_report(self.report_type, force_refresh=self.force_refresh)
+        self.finished.emit(result)
+
+
 class RestReminderWidget(QWidget):
     TAB_NAMES = ['今日', 'AI 报告', '趋势', '设置', '关于']  # 单一来源
 
@@ -1793,7 +1860,7 @@ class RestReminderWidget(QWidget):
         self._prompt_goal()
 
     def init_ui(self):
-        self.setWindowTitle('休息提醒')
+        self.setWindowTitle('休息提醒 v4.4')
         self.widget_width = 960
         self.widget_height = 680
         self.setGeometry(100, 100, self.widget_width, self.widget_height)
@@ -1814,7 +1881,7 @@ class RestReminderWidget(QWidget):
                 border: 1px solid rgba(255, 255, 255, 0.05);
                 border-radius: 14px;
             }
-            QLabel { color: #e8e4dc; font-size: 13px; background: transparent; }
+            QLabel { color: #e8e4dc; font-size: 13px; background: transparent; font-family: 'Segoe UI Emoji', 'Microsoft YaHei', sans-serif; }
             /* ── 侧边栏 ── */
             QFrame#sidebar {
                 background: #111116;
@@ -2103,11 +2170,14 @@ class RestReminderWidget(QWidget):
         return row
 
     def _switch_tab(self, name):
-        """切换 tab（侧边栏按钮选中 + stacked widget 切换）"""
+        """切换 tab（侧边栏按钮选中 + stacked widget 切换 + 更新窗口标题）"""
         for n, btn in self._tab_buttons.items():
             btn.setChecked(n == name)
         idx = self.TAB_NAMES.index(name)
         self._tab_content.setCurrentIndex(idx)
+        # 更新窗口标题以反映当前 tab
+        title_map = {'今日': '📊 今日', 'AI 报告': '🤖 AI 学习报告', '趋势': '📈 学习趋势', '设置': '⚙️ 设置', '关于': 'ℹ️ 关于'}
+        self.setWindowTitle(f'休息提醒 v4.4 — {title_map.get(name, name)}')
 
     def _build_general_tab(self):
         """今日 tab：学习概览 + 今日数据"""
@@ -2197,7 +2267,6 @@ class RestReminderWidget(QWidget):
         # ── 连续打卡 ──
         streak = LocalSync.load_streak()
         streak_card = self._make_stat_card('🔥', '连续打卡', f'{streak["current_streak"]} 天（最佳 {streak["best_streak"]} 天）', '#d4af37')
-        streak_card.setMaximumHeight(56)
         layout.addWidget(streak_card)
 
         layout.addStretch()
@@ -2406,22 +2475,27 @@ class RestReminderWidget(QWidget):
         # 默认选中日报
         QTimer.singleShot(100, lambda: self._load_report('daily'))
 
-    def _load_report(self, report_type):
-        """加载并显示 AI 报告"""
+    def _load_report(self, report_type, force_refresh=False):
+        """加载并显示 AI 报告（后台线程，不阻塞 UI）"""
         for t, b in self._report_buttons.items():
             b.setChecked(t == report_type)
-        self._report_view.setPlainText('⏳ 正在生成报告...\n\nAI 分析中，请稍候...')
+        self._report_view.setHtml('<p style="color:#888;">⏳ 正在生成报告...</p>')
         QApplication.processEvents()
-        try:
-            from pro_features import generate_report
-        except ImportError:
-            self._report_view.setPlainText('⚠️ AI 模块加载失败，请检查 rest-reminder-pro/ 目录。')
-            return
-        result = generate_report(report_type, force_refresh=False)
-        if result.get("ok"):
-            self._report_view.setPlainText(result['content'])
-        elif result.get("error"):
-            self._report_view.setPlainText(f'⚠️ AI 请求失败: {result["error"]}\n\n点击「刷新」重试。')
+
+        # 禁用按钮防止重复点击
+        for b in self._report_buttons.values():
+            b.setEnabled(False)
+
+        worker = _ReportWorker(report_type, force_refresh)
+        def _on_done(result):
+            for b in self._report_buttons.values():
+                b.setEnabled(True)
+            if result.get("ok"):
+                self._report_view.setHtml(self._md_to_html(result['content']))
+            elif result.get("error"):
+                self._report_view.setHtml(f'<p style="color:#c95454;">⚠️ AI 请求失败: {result["error"]}</p><p style="color:#888;">点击「刷新」重试。</p>')
+        worker.finished.connect(_on_done)
+        worker.start()
 
     def _build_trend_tab(self):
         """趋势 tab：内嵌趋势图（不弹窗）"""
@@ -2501,16 +2575,6 @@ class RestReminderWidget(QWidget):
         summary.setStyleSheet('color: #6a8cbb; font-size: 11px; background: transparent;')
         tc_layout.addWidget(summary)
         layout.addWidget(trend_card)
-
-        # 详细趋势按钮
-        detail_btn = QPushButton('📊 查看详细趋势分析')
-        detail_btn.clicked.connect(self.show_stats)
-        layout.addWidget(detail_btn)
-
-        # 复盘时间线按钮
-        review_btn = QPushButton('📋 查看今日复盘时间线')
-        review_btn.clicked.connect(self.show_stats)
-        layout.addWidget(review_btn)
 
         layout.addStretch()
         scroll.setWidget(container)
@@ -2730,7 +2794,7 @@ class RestReminderWidget(QWidget):
 
     # ── About 页辅助方法 ──
     def _open_website(self):
-        open_url('https://rest-reminder-app.pages.dev')
+        open_url('https://crazy-rest-reminder.pages.dev')
 
     def _open_github(self):
         open_url('https://github.com/kuangketongxue/library-remind')
@@ -2777,7 +2841,7 @@ v4.1 (2026-06-17)
 
     def _check_update(self):
         """检查更新（打开官网查看最新版本）"""
-        open_url('https://rest-reminder-app.pages.dev')
+        open_url('https://crazy-rest-reminder.pages.dev')
         self.tray_icon.showMessage('检查更新', '请在浏览器中查看最新版本', QSystemTrayIcon.Information, 3000)
 
     # ── 环境检查辅助方法 ──
@@ -2970,7 +3034,7 @@ v4.1 (2026-06-17)
         self.raise_()
 
     def _tray_open_website(self):
-        open_url("https://rest-reminder-app.pages.dev")
+        open_url("https://crazy-rest-reminder.pages.dev")
 
     def toggle_visibility(self):
         """切换窗口可见性（不停止后台计时器——电池监控、电脑使用追踪等需持续运行）"""
@@ -3340,29 +3404,35 @@ v4.1 (2026-06-17)
             self.computer_info_label.setText(f'{total_h}h {total_m}m')
 
     def _build_review_dialog(self, title, label):
-        """构建复盘评分对话框：学科6选1 + 标签5选1 + 评分滑块1-100，30秒自动提交"""
+        """构建复盘评分对话框：学科6选1 + 标签5选1 + 评分滑块1-100，15秒自动提交，金色选中态"""
         parent = self.window() or self
         dialog = QDialog(parent)
         dialog.setWindowTitle(title)
-        dialog.setFixedSize(420, 380)
+        dialog.setFixedSize(480, 420)
         dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(20, 16, 20, 16)
-        layout.setSpacing(10)
+        layout.setSpacing(12)
 
         # 标签
         layout.addWidget(QLabel(label))
-        layout.addSpacing(4)
+        layout.addSpacing(6)
 
-        # 学科按钮组
+        # 学科按钮组（大按钮，金色选中态）
+        layout.addWidget(QLabel('📚 学科：'))
         subject_layout = QHBoxLayout()
-        subject_layout.setSpacing(4)
+        subject_layout.setSpacing(6)
         subject_btns = []
         subject_val = ['未记录']
         for subj in _SUBJECTS:
             btn = QPushButton(subj)
             btn.setCheckable(True)
-            btn.setFixedSize(42, 32)
+            btn.setFixedSize(56, 36)
+            btn.setStyleSheet("""
+                QPushButton { background: #1e1e26; color: #b8b4ac; border: 1px solid #252530; border-radius: 8px; font-size: 12px; }
+                QPushButton:checked { background: #d4a853; color: #0d0d12; border: none; font-weight: bold; }
+                QPushButton:hover:!checked { background: #2a2a35; }
+            """)
             subject_btns.append(btn)
             subject_layout.addWidget(btn)
             def _make_subj_handler(s, sv, b):
@@ -3381,15 +3451,21 @@ v4.1 (2026-06-17)
             btn.clicked.connect(_make_subj_handler(subj, subject_val, btn))
         layout.addLayout(subject_layout)
 
-        # 标签按钮组
+        # 标签按钮组（金色选中态）
+        layout.addWidget(QLabel('🏷️ 标签：'))
         label_layout = QHBoxLayout()
-        label_layout.setSpacing(4)
+        label_layout.setSpacing(6)
         label_btns = []
         label_val = ['未记录']
         for lbl in _LABELS:
             btn = QPushButton(lbl)
             btn.setCheckable(True)
-            btn.setFixedSize(52, 32)
+            btn.setFixedSize(56, 36)
+            btn.setStyleSheet("""
+                QPushButton { background: #1e1e26; color: #b8b4ac; border: 1px solid #252530; border-radius: 8px; font-size: 12px; }
+                QPushButton:checked { background: #d4a853; color: #0d0d12; border: none; font-weight: bold; }
+                QPushButton:hover:!checked { background: #2a2a35; }
+            """)
             label_btns.append(btn)
             label_layout.addWidget(btn)
             def _make_lbl_handler(l, lv, b):
@@ -3422,10 +3498,32 @@ v4.1 (2026-06-17)
         slider_layout.addWidget(score_label, 0)
         layout.addLayout(slider_layout)
 
+        # 信息栏 + 倒计时
+        info_bar = QWidget()
+        info_bar.setStyleSheet('background: #16161c; border-radius: 6px;')
+        info_layout = QHBoxLayout(info_bar)
+        info_layout.setContentsMargins(10, 6, 10, 6)
+        info_lbl = QLabel('⏳ 15秒后自动提交')
+        info_lbl.setStyleSheet('color: #666; font-size: 11px; background: transparent;')
+        info_layout.addWidget(info_lbl)
+        layout.addWidget(info_bar)
+
         # 提交按钮
         submit_btn = QPushButton('提交复盘')
         submit_btn.clicked.connect(dialog.accept)
         layout.addWidget(submit_btn)
+
+        # 15秒倒计时自动提交
+        remaining = [15]
+        def _countdown():
+            remaining[0] -= 1
+            if remaining[0] > 0:
+                info_lbl.setText(f'⏳ {remaining[0]}秒后自动提交')
+                QTimer.singleShot(1000, _countdown)
+            else:
+                info_lbl.setText('⏳ 自动提交中...')
+                dialog.accept()
+        QTimer.singleShot(1000, _countdown)
 
         dialog._subject_val = subject_val
         dialog._label_val = label_val
@@ -3545,28 +3643,34 @@ v4.1 (2026-06-17)
             log.error(f'[目标] 对话框异常: {e}')
 
     def _prompt_round_goal(self):
-        """休息结束后弹出本轮目标：学科6选1 + 目标文本 + 3秒自动提交"""
+        """休息结束后弹出本轮目标：学科6选1 + 目标文本 + 15秒倒计时自动提交，金色选中态"""
         try:
             saved = [False]
             dialog = QDialog(self)
             dialog.setWindowTitle('🎯 本轮目标')
-            dialog.setFixedSize(380, 200)
+            dialog.setFixedSize(480, 300)
             dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
             layout = QVBoxLayout(dialog)
             layout.setContentsMargins(20, 16, 20, 16)
-            layout.setSpacing(10)
+            layout.setSpacing(12)
 
             layout.addWidget(QLabel(f'第{self._round_count + 1}轮：这轮学什么？'))
 
-            # 学科按钮
+            # 学科按钮（大按钮，金色选中态）
+            layout.addWidget(QLabel('📚 学科：'))
             subject_layout = QHBoxLayout()
-            subject_layout.setSpacing(4)
+            subject_layout.setSpacing(6)
             subject_btns = []
             subject_val = ['未选']
             for subj in _SUBJECTS:
                 btn = QPushButton(subj)
                 btn.setCheckable(True)
-                btn.setFixedSize(42, 32)
+                btn.setFixedSize(56, 36)
+                btn.setStyleSheet("""
+                    QPushButton { background: #1e1e26; color: #b8b4ac; border: 1px solid #252530; border-radius: 8px; font-size: 12px; }
+                    QPushButton:checked { background: #d4a853; color: #0d0d12; border: none; font-weight: bold; }
+                    QPushButton:hover:!checked { background: #2a2a35; }
+                """)
                 subject_btns.append(btn)
                 subject_layout.addWidget(btn)
                 def _make_handler(s, sv, b):
@@ -3590,10 +3694,15 @@ v4.1 (2026-06-17)
             goal_input.setPlaceholderText('可选：这轮的具体内容')
             layout.addWidget(goal_input)
 
-            # 提示
-            hint = QLabel('💡 3秒后自动提交')
-            hint.setStyleSheet('color: #888; font-size: 11px;')
-            layout.addWidget(hint)
+            # 信息栏 + 倒计时
+            info_bar = QWidget()
+            info_bar.setStyleSheet('background: #16161c; border-radius: 6px;')
+            info_layout = QHBoxLayout(info_bar)
+            info_layout.setContentsMargins(10, 6, 10, 6)
+            info_lbl = QLabel('⏳ 15秒后自动提交')
+            info_lbl.setStyleSheet('color: #666; font-size: 11px; background: transparent;')
+            info_layout.addWidget(info_lbl)
+            layout.addWidget(info_bar)
 
             # 提交按钮
             submit_btn = QPushButton('提交')
@@ -3615,11 +3724,17 @@ v4.1 (2026-06-17)
 
             dialog.accepted.connect(_do_save)
 
-            # 3秒定时器
-            timer = QTimer(dialog)
-            timer.setSingleShot(True)
-            timer.timeout.connect(dialog.accept)
-            timer.start(3000)
+            # 15秒倒计时自动提交
+            remaining = [15]
+            def _countdown():
+                remaining[0] -= 1
+                if remaining[0] > 0:
+                    info_lbl.setText(f'⏳ {remaining[0]}秒后自动提交')
+                    QTimer.singleShot(1000, _countdown)
+                else:
+                    info_lbl.setText('⏳ 自动提交中...')
+                    dialog.accept()
+            QTimer.singleShot(1000, _countdown)
 
             dialog.exec_()
         except Exception as e:
@@ -4132,7 +4247,6 @@ def main():
             from datetime import datetime
             f.write(f'[{datetime.now().isoformat()}] 未捕获异常：{exc_type.__name__}: {exc_value}\n')
             traceback.print_exception(exc_type, exc_value, exc_tb, file=f)
-        sys.exit(1)  # 异常退出，让 atexit 清理
     sys.excepthook = excepthook
 
     try:

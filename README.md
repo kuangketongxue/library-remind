@@ -8,7 +8,7 @@
 [![Python](https://img.shields.io/badge/python-3.7+-yellow.svg)](https://python.org)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010/11-lightgrey.svg)]()
 
-[📥 免费下载](https://github.com/kuangketongxue/library-remind/releases/latest) · [🌐 官网](https://master.rest-reminder-app.pages.dev/) · [💬 反馈](https://github.com/kuangketongxue/library-remind/issues)
+[📥 免费下载](https://github.com/kuangketongxue/library-remind/releases/latest) · [🌐 官网](https://crazy-rest-reminder.pages.dev/) · [💬 反馈](https://github.com/kuangketongxue/library-remind/issues)
 
 </div>
 
