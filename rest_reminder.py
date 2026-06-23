@@ -19,7 +19,7 @@ import os
 import tempfile
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel,
-                             QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox, QShortcut, QFrame, QTabWidget, QStackedWidget, QComboBox, QLineEdit, QScrollArea, QDialog, QSlider, QSpinBox, QGroupBox)
+                             QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox, QShortcut, QFrame, QTabWidget, QStackedWidget, QComboBox, QLineEdit, QScrollArea, QDialog, QSlider, QSpinBox, QGroupBox, QTextBrowser)
 from PyQt5.QtCore import QTimer, Qt, QPoint, QEvent, QThread, pyqtSignal
 from PyQt5.QtGui import QIcon, QFont, QPainter, QColor, QBrush, QPen, QKeySequence
 from PyQt5.QtWidgets import QGraphicsDropShadowEffect
