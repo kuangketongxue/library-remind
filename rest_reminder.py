@@ -1207,7 +1207,7 @@ class TrendWindow(QWidget):
         super().__init__()
         log.info('[TrendWindow] 构造中...')
         self.setWindowTitle('📊 趋势分析')
-        self.setFixedSize(520, 480)
+        self.setFixedSize(560, 520)
         self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.Tool)
         self.setAttribute(Qt.WA_DeleteOnClose)
         self._refreshing = False  # 防并发刷新
@@ -1519,6 +1519,9 @@ class TrendWindow(QWidget):
         summary.setStyleSheet('color: #6a8cbb; font-size: 11px; background: transparent; padding: 6px 0;')
         layout.addWidget(summary)
 
+        # 饼图（学习 vs 电脑占比）
+        self._draw_pie_chart(layout, total_study, total_computer)
+
     # ── Tab 5: 时段分析 ──
     def _draw_time_analysis(self):
         reviews = review_store.load()
@@ -1660,13 +1663,28 @@ class TrendWindow(QWidget):
 
             layout.addLayout(row)
 
+        layout.addSpacing(12)
+
+        # ── 热力图：一周各时段学习强度 ──
+        hm_data = [[0] * 24 for _ in range(7)]
+        stats = history_store.load()
+        for d_str, ddata in stats.items():
+            try:
+                dt = datetime.strptime(d_str, '%Y-%m-%d')
+                dow = dt.weekday()  # 0=Mon
+                hm_data[dow][dt.hour] += ddata.get('study', 0)
+            except Exception:
+                continue
+        day_names = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+        self._draw_heatmap(layout, hm_data, [f'{h}h' for h in range(24)], day_names, '一周学习热力图（时段×星期）')
+
         layout.addStretch()
 
-    # ── 双柱状图绘制（复用 ──
+    # ── 双柱状图绘制（复用） ──
     def _draw_dual_bar(self, layout, data):
         """在 layout 中绘制学习(绿)+电脑(橙)双柱图"""
         chart = QWidget()
-        chart.setFixedHeight(260)
+        chart.setFixedHeight(220)
         chart.setStyleSheet('background: transparent;')
 
         def paint_chart(painter, chart_widget):
@@ -1679,9 +1697,9 @@ class TrendWindow(QWidget):
             w = chart_widget.width()
             h = chart_widget.height()
             chart_top = 10
-            chart_bottom = h - 40
+            chart_bottom = h - 36
             chart_height = chart_bottom - chart_top
-            bar_w = min(20, int((w - 60) / (n * 2 + 1)))
+            bar_w = min(18, int((w - 60) / (n * 2 + 1)))
             gap = int((w - 60 - n * bar_w * 2) / (n + 1))
 
             for i, d in enumerate(data):
@@ -1701,9 +1719,9 @@ class TrendWindow(QWidget):
                 # 日期
                 painter.setPen(QColor('#888'))
                 painter.setFont(QFont('Microsoft YaHei', 8))
-                painter.drawText(x, chart_bottom + 16, d['label'])
+                painter.drawText(x, chart_bottom + 14, d['label'])
 
-                # 数值
+                # 数值（仅非零时显示）
                 if d['study'] > 0:
                     painter.setPen(QColor('#78B450'))
                     painter.drawText(x, chart_bottom - h_study - 4, f"{d['study']:.1f}")
@@ -1715,9 +1733,120 @@ class TrendWindow(QWidget):
         layout.addWidget(chart)
 
         # 图例
-        legend = QLabel('🟢 学习 · 🟠 电脑使用')
+        legend = QLabel('🟢 学习  🟠 电脑使用')
         legend.setStyleSheet('color: #888; font-size: 11px; background: transparent;')
         layout.addWidget(legend)
+
+    # ── 饼图绘制 ──
+    def _draw_pie_chart(self, layout, study_total, computer_total, title='学习 vs 电脑'):
+        """在 layout 中绘制饼图（学习 vs 电脑使用占比）"""
+        from math import pi as PI
+        total = study_total + computer_total
+        card = QFrame()
+        card.setObjectName('statCard')
+        cl = QVBoxLayout(card)
+        cl.setContentsMargins(16, 14, 16, 14)
+        cl.setSpacing(8)
+
+        t = QLabel(f'📊 {title}')
+        t.setStyleSheet('color: #b0aea5; font-size: 12px; background: transparent;')
+        cl.addWidget(t)
+
+        pie_widget = QWidget()
+        pie_widget.setFixedSize(200, 200)
+        pie_widget.setStyleSheet('background: transparent;')
+
+        def paint_pie(e):
+            p = QPainter(pie_widget)
+            p.setRenderHint(QPainter.Antialiasing)
+            cx, cy = 100, 100
+            r = 80
+            if total > 0:
+                # 学习扇区
+                study_angle = (study_total / total) * 360
+                p.setBrush(QBrush(QColor('#78B450')))
+                p.setPen(Qt.NoPen)
+                p.drawPie(int(cx - r), int(cy - r), int(r * 2), int(r * 2), 0, int(study_angle * 16))
+                # 电脑扇区
+                p.setBrush(QBrush(QColor('#d97757')))
+                comp_angle = (computer_total / total) * 360
+                p.drawPie(int(cx - r), int(cy - r), int(r * 2), int(r * 2), int(study_angle * 16), int(comp_angle * 16))
+            # 中心文字
+            p.setPen(QColor('#e8e6e1'))
+            p.setFont(QFont('Georgia', 14, QFont.Bold))
+            if total > 0:
+                pct = int(study_total / total * 100)
+                p.drawText(int(cx - 20), int(cy + 5), f'{pct}%')
+            else:
+                p.drawText(int(cx - 30), int(cy + 5), '无数据')
+
+        pie_widget.paintEvent = paint_pie
+        cl.addWidget(pie_widget, 0, Qt.AlignCenter)
+
+        # 图例 + 统计
+        study_pct = f'{study_total / total * 100:.0f}%' if total > 0 else '0%'
+        comp_pct = f'{computer_total / total * 100:.0f}%' if total > 0 else '0%'
+        info = QLabel(f'🟢 学习 {study_total:.1f}h ({study_pct})  🟠 电脑 {computer_total:.1f}h ({comp_pct})')
+        info.setStyleSheet('color: #b0aea5; font-size: 11px; background: transparent;')
+        cl.addWidget(info, 0, Qt.AlignCenter)
+        layout.addWidget(card)
+
+    # ── 热力图绘制 ──
+    def _draw_heatmap(self, layout, data, x_labels, y_labels, title='时段热力图'):
+        """在 layout 中绘制热力图（7天 x 24小时）"""
+        from math import floor
+        card = QFrame()
+        card.setObjectName('statCard')
+        cl = QVBoxLayout(card)
+        cl.setContentsMargins(16, 14, 16, 14)
+        cl.setSpacing(8)
+
+        t = QLabel(f'🔥 {title}')
+        t.setStyleSheet('color: #b0aea5; font-size: 12px; background: transparent;')
+        cl.addWidget(t)
+
+        hm = QWidget()
+        rows = len(y_labels)
+        cols = len(x_labels)
+        cell_size = 28
+        hm.setFixedSize(cols * cell_size + 50, rows * cell_size + 10)
+        hm.setStyleSheet('background: transparent;')
+
+        def paint_hm(e):
+            p = QPainter(hm)
+            p.setRenderHint(QPainter.Antialiasing)
+            # 找最大值用于归一化
+            vals = [data[y][x] for y in range(rows) for x in range(cols)]
+            mx = max(vals) if vals and max(vals) > 0 else 1
+
+            for y in range(rows):
+                for x in range(cols):
+                    v = data[y][x]
+                    intensity = v / mx
+                    # 从深色到琥珀金
+                    r = int(20 + intensity * 192)
+                    g = int(20 + intensity * 147)
+                    b = int(30 + intensity * 25)
+                    p.setBrush(QBrush(QColor(f'rgb({r},{g},{b})')))
+                    p.setPen(Qt.NoPen)
+                    px = 50 + x * cell_size
+                    py = y * cell_size
+                    p.drawRoundedRect(px + 1, py + 1, cell_size - 2, cell_size - 2, 3, 3)
+                    # 数值（仅非零）
+                    if v > 0:
+                        p.setPen(QColor('#fff' if intensity > 0.5 else '#888'))
+                        p.setFont(QFont('Consolas', 7))
+                        p.drawText(px + 6, py + 17, str(int(v)))
+
+            # Y 轴标签（小时）
+            for y, lbl in enumerate(y_labels):
+                p.setPen(QColor('#666'))
+                p.setFont(QFont('Consolas', 7))
+                p.drawText(2, y * cell_size + 17, lbl)
+
+        hm.paintEvent = paint_hm
+        cl.addWidget(hm, 0, Qt.AlignLeft)
+        layout.addWidget(card)
 
         # 总计
         total_study = sum(d['study'] for d in data)
@@ -1990,7 +2119,7 @@ class RestReminderWidget(QWidget):
         sb_layout.addStretch()
 
         # 底部版本标签
-        ver_lbl = QLabel('v4.3')
+        ver_lbl = QLabel('v4.4')
         ver_lbl.setAlignment(Qt.AlignCenter)
         ver_lbl.setStyleSheet('color: #444; font-size: 10px; font-family: Consolas; background: transparent;')
         sb_layout.addWidget(ver_lbl)
