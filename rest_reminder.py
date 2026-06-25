@@ -1794,8 +1794,13 @@ def _md_to_html(text):
         elif line.strip() == '---':
             out.append('<hr style="border:none;border-top:1px solid #252530;margin:12px 0;">')
         elif line.strip():
-            # **粗体**
+            # **粗体** → <strong>
             line = re.sub(r'\*\*(.+?)\*\*', r'<strong style="color:#e8e6e1;">\1</strong>', line)
+            # *斜体* → <em>
+            line = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'<em style="color:#c4b8a0;">\1</em>', line)
+            # * bullet → • bullet（AI 常用 * 当列表标记）
+            if re.match(r'^\*\s', line):
+                line = '•' + line[1:]
             out.append(f'<p style="color:#b8b4ac;line-height:1.7;margin:4px 0;">{line}</p>')
     if in_code:
         out.append('</pre>')
