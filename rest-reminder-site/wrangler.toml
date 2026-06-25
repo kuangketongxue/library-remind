@@ -1,0 +1,9 @@
+name = "crazy-rest-reminder"
+compatibility_date = "2025-01-01"
+
+[build]
+command = "npm run build"
+cwd = "."
+
+[build.environment]
+NODE_VERSION = "20"

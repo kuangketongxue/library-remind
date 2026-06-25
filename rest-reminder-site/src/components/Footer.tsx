@@ -32,7 +32,7 @@ export default function Footer() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-10">
             <div className="col-span-2 md:col-span-1">
               <div className="flex items-center gap-2.5 mb-4">
-                <div className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center text-[var(--bg)] text-sm font-bold font-display">R</div>
+                <img src="/rest-reminder-logo.png" alt="Rest Reminder" className="w-8 h-8 rounded-md" />
                 <span className="font-semibold text-base font-display">Rest Reminder</span>
               </div>
               <p className="text-sm text-[var(--fg-dim)] leading-relaxed mb-4">
@@ -48,6 +48,7 @@ export default function Footer() {
               <h4>资源</h4>
               <a href="#changelog">更新日志</a>
               <a href="#faq">常见问题</a>
+              <a href="#sponsor">赞助商</a>
             </div>
             <div className="footer-col">
               <h4>社区</h4>

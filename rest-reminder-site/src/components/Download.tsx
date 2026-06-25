@@ -6,7 +6,7 @@ const steps = [
   {
     num: "1",
     title: "下载安装",
-    desc: "下载 RestReminder.exe，双击运行",
+    desc: "从 GitHub Releases 下载 RestReminder.exe，46MB 秒装",
     img: "/screenshot-menu.png",
   },
   {
@@ -77,8 +77,9 @@ export default function Download() {
           >
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
               <a
-                href="/RestReminder.exe"
-                download
+                href="https://github.com/kuangketongxue/library-remind/releases/latest"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 bg-white text-[#b5651d] font-semibold px-8 py-3.5 rounded-full text-base hover:bg-[var(--fg)] hover:shadow-lg transition-all"
               >
                 ↓ 立即下载

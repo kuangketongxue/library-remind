@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>休息提醒官网 — 5 种设计变体</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #08090a;
+    color: #e8e8e8;
+    line-height: 1.6;
+  }
+
+  .header {
+    padding: 40px;
+    text-align: center;
+    border-bottom: 1px solid #1a1a1f;
+    position: sticky;
+    top: 0;
+    background: rgba(8,9,10,0.9);
+    backdrop-filter: blur(12px);
+    z-index: 100;
+  }
+  .header h1 { font-size: 1.4em; font-weight: 800; }
+  .header h1 span { color: #f59e0b; }
+  .header p { color: #666; font-size: 0.82em; margin-top: 6px; }
+
+  .variants {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .variant-section {
+    border-bottom: 1px solid #1a1a1f;
+    padding: 30px 40px;
+  }
+  .variant-section:last-child { border-bottom: none; }
+  .variant-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .variant-num {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: #1a1a1f;
+    border: 1px solid #2a2a30;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.85em; color: #f59e0b;
+  }
+  .variant-title { font-weight: 700; font-size: 1em; }
+  .variant-desc { color: #666; font-size: 0.78em; }
+
+  /* ===== MOCKUP STYLES ===== */
+  .mockup {
+    background: #0c0d0f;
+    border: 1px solid #1a1a1f;
+    border-radius: 12px;
+    overflow: hidden;
+    font-size: 10px;
+    line-height: 1.4;
+  }
+
+  /* Mockup browser chrome */
+  .mockup-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: #111214;
+    border-bottom: 1px solid #1a1a1f;
+  }
+  .mockup-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+  .mockup-dot.r { background: #ef4444; }
+  .mockup-dot.y { background: #eab308; }
+  .mockup-dot.g { background: #22c55e; }
+  .mockup-url {
+    flex: 1;
+    margin-left: 8px;
+    padding: 4px 10px;
+    background: #0c0d0f;
+    border-radius: 4px;
+    font-size: 0.75em;
+    color: #555;
+    font-family: monospace;
+  }
+  .mockup-body { padding: 20px; }
+
+  /* ===== VARIANT A: Hero 大字 + 卡片功能 ===== */
+  .v-a .mockup-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0 20px;
+  }
+  .v-a .mockup-logo {
+    display: flex; align-items: center; gap: 8px;
+    font-weight: 800; font-size: 1.1em;
+  }
+  .v-a .mockup-logo-icon {
+    width: 24px; height: 24px;
+    background: #f59e0b;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    color: #000; font-weight: 900; font-size: 0.9em;
+  }
+  .v-a .mockup-nav-links {
+    display: flex; gap: 16px;
+    color: #666; font-size: 0.85em;
+  }
+  .v-a .mockup-nav-btn {
+    padding: 5px 14px;
+    background: #f59e0b;
+    color: #000;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 0.82em;
+  }
+  .v-a .mockup-hero {
+    text-align: center;
+    padding: 30px 0 24px;
+  }
+  .v-a .mockup-hero h1 {
+    font-size: 1.8em;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    margin-bottom: 10px;
+  }
+  .v-a .mockup-hero h1 span { color: #f59e0b; }
+  .v-a .mockup-hero p {
+    color: #666;
+    font-size: 0.9em;
+    max-width: 400px;
+    margin: 0 auto 20px;
+  }
+  .v-a .mockup-hero-btns {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
+  .v-a .mockup-btn-primary {
+    padding: 8px 20px;
+    background: #f59e0b;
+    color: #000;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.85em;
+  }
+  .v-a .mockup-btn-secondary {
+    padding: 8px 20px;
+    border: 1px solid #2a2a30;
+    color: #888;
+    border-radius: 8px;
+    font-size: 0.85em;
+  }
+  .v-a .mockup-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 24px;
+  }
+  .v-a .mockup-card {
+    background: #111214;
+    border: 1px solid #1a1a1f;
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .v-a .mockup-card-icon {
+    font-size: 1.3em;
+    margin-bottom: 8px;
+  }
+  .v-a .mockup-card-title {
+    font-weight: 700;
+    font-size: 0.9em;
+    margin-bottom: 4px;
+  }
+  .v-a .mockup-card-desc {
+    color: #555;
+    font-size: 0.75em;
+    line-height: 1.5;
+  }
+
+  /* ===== VARIANT B: 左文右图 Hero ===== */
+  .v-b .mockup-hero {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    padding: 20px 0;
+  }
+  .v-b .mockup-hero-text { flex: 1; }
+  .v-b .mockup-hero-text h1 {
+    font-size: 1.6em;
+    font-weight: 900;
+    margin-bottom: 10px;
+  }
+  .v-b .mockup-hero-text h1 span { color: #f59e0b; }
+  .v-b .mockup-hero-text p {
+    color: #666;
+    font-size: 0.85em;
+    margin-bottom: 16px;
+  }
+  .v-b .mockup-hero-visual {
+    flex: 1;
+    background: #111214;
+    border: 1px solid #1a1a1f;
+    border-radius: 12px;
+    height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .v-b .mockup-float-ball {
+    width: 48px; height: 48px;
+    background: #f59e0b;
+    border-radius: 50%;
+    position: relative;
+  }
+  .v-b .mockup-float-ball::after {
+    content: '';
+    position: absolute;
+    inset: -10px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(245,158,11,0.2), transparent 70%);
+  }
+  .v-b .mockup-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 24px;
+  }
+  .v-b .mockup-stat {
+    background: #111214;
+    border: 1px solid #1a1a1f;
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+  }
+  .v-b .mockup-stat-value {
+    font-size: 1.3em;
+    font-weight: 900;
+    color: #f59e0b;
+  }
+  .v-b .mockup-stat-label {
+    color: #555;
+    font-size: 0.7em;
+    margin-top: 4px;
+  }
+
+  /* ===== VARIANT C: 中心对称 ===== */
+  .v-c .mockup-hero {
+    text-align: center;
+    padding: 30px 0 20px;
+    position: relative;
+  }
+  .v-c .mockup-hero::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 50%;
+    transform: translateX(-50%);
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, rgba(245,158,11,0.06), transparent 70%);
+    border-radius: 50%;
+  }
+  .v-c .mockup-hero-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border: 1px solid #f59e0b33;
+    border-radius: 20px;
+    color: #f59e0b;
+    font-size: 0.75em;
+    margin-bottom: 12px;
+  }
+  .v-c .mockup-hero h1 {
+    font-size: 2em;
+    font-weight: 900;
+    position: relative;
+    margin-bottom: 8px;
+  }
+  .v-c .mockup-hero-line {
+    width: 30px;
+    height: 2px;
+    background: #f59e0b;
+    margin: 12px auto;
+  }
+  .v-c .mockup-hero p {
+    color: #666;
+    font-size: 0.88em;
+    max-width: 360px;
+    margin: 0 auto;
+  }
+  .v-c .mockup-features {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-top: 24px;
+  }
+  .v-c .mockup-feature {
+    background: #111214;
+    border: 1px solid #1a1a1f;
+    border-radius: 10px;
+    padding: 16px 10px;
+    text-align: center;
+  }
+  .v-c .mockup-feature-icon {
+    font-size: 1.4em;
+    margin-bottom: 8px;
+  }
+  .v-c .mockup-feature-name {
+    font-weight: 700;
+    font-size: 0.82em;
+  }
+
+  /* ===== VARIANT D: 左侧边栏导航 ===== */
+  .v-d .mockup-layout {
+    display: flex;
+    gap: 0;
+  }
+  .v-d .mockup-sidebar {
+    width: 50px;
+    background: #0a0a0c;
+    border-right: 1px solid #1a1a1f;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 0;
+    gap: 16px;
+  }
+  .v-d .mockup-sidebar-icon {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    background: #f59e0b;
+    display: flex; align-items: center; justify-content: center;
+    color: #000; font-weight: 900; font-size: 0.8em;
+  }
+  .v-d .mockup-sidebar-item {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #333;
+  }
+  .v-d .mockup-sidebar-item.active {
+    background: #f59e0b;
+  }
+  .v-d .mockup-content {
+    flex: 1;
+    padding: 16px 20px;
+  }
+  .v-d .mockup-content h1 {
+    font-size: 1.3em;
+    font-weight: 900;
+    margin-bottom: 8px;
+  }
+  .v-d .mockup-content h1 span { color: #f59e0b; }
+  .v-d .mockup-content p {
+    color: #666;
+    font-size: 0.82em;
+    margin-bottom: 14px;
+    max-width: 300px;
+  }
+  .v-d .mockup-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .v-d .mockup-timeline-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: #111214;
+    border-radius: 8px;
+    border-left: 2px solid #f59e0b;
+  }
+  .v-d .mockup-timeline-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #f59e0b;
+  }
+  .v-d .mockup-timeline-text {
+    height: 5px;
+    background: #1e1e24;
+    border-radius: 3px;
+    flex: 1;
+  }
+
+  /* ===== VARIANT E: 极简大字 + 滚动 ===== */
+  .v-e .mockup-hero {
+    padding: 40px 0 20px;
+    position: relative;
+  }
+  .v-e .mockup-hero h1 {
+    font-size: 2.4em;
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    margin-bottom: 16px;
+  }
+  .v-e .mockup-hero h1 .outline {
+    -webkit-text-stroke: 1px #f59e0b;
+    color: transparent;
+  }
+  .v-e .mockup-hero p {
+    color: #666;
+    font-size: 0.88em;
+    max-width: 340px;
+  }
+  .v-e .mockup-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 24px;
+  }
+  .v-e .mockup-step {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: #111214;
+    border: 1px solid #1a1a1f;
+    border-radius: 8px;
+  }
+  .v-e .mockup-step-num {
+    width: 24px; height: 24px;
+    border: 1px solid #f59e0b;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #f59e0b;
+    font-size: 0.75em;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .v-e .mockup-step-text {
+    height: 5px;
+    background: #1e1e24;
+    border-radius: 3px;
+    flex: 1;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .header { padding: 24px 20px; }
+    .variant-section { padding: 24px 16px; }
+    .mockup-body { padding: 14px; }
+    .v-a .mockup-cards { grid-template-columns: 1fr; }
+    .v-c .mockup-features { grid-template-columns: repeat(2, 1fr); }
+    .v-b .mockup-hero { flex-direction: column; }
+    .v-d .mockup-layout { flex-direction: column; }
+    .v-d .mockup-sidebar { width: 100%; flex-direction: row; justify-content: center; padding: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>休息提醒官网 — <span>5 种设计变体</span></h1>
+  <p>基于 CC Switch 暗色卡片风格 · 看中哪个标金色 → 告诉我 → 我落地</p>
+</div>
+
+<div class="variants">
+
+  <!-- ===== A: Hero 大字 + 卡片功能 ===== -->
+  <div class="variant-section v-a">
+    <div class="variant-label">
+      <div class="variant-num">A</div>
+      <div>
+        <div class="variant-title">Hero 大字 + 三栏卡片</div>
+        <div class="variant-desc">经典落地页结构：大标题 → 副标题 → CTA按钮 → 三栏功能卡片</div>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-bar">
+        <div class="mockup-dot r"></div><div class="mockup-dot y"></div><div class="mockup-dot g"></div>
+        <div class="mockup-url">crazy-rest-reminder.pages.dev</div>
+      </div>
+      <div class="mockup-body">
+        <div class="mockup-nav">
+          <div class="mockup-logo">
+            <div class="mockup-logo-icon">R</div>
+            Rest Reminder
+          </div>
+          <div class="mockup-nav-links">
+            <span>功能</span>
+            <span>下载</span>
+            <span>赞助</span>
+            <div class="mockup-nav-btn">免费下载</div>
+          </div>
+        </div>
+        <div class="mockup-hero">
+          <h1>保护眼睛，<span>从每次休息开始</span></h1>
+          <p>46MB 轻量桌面挂件，60 分钟自动循环提醒你休息，AI 学习分析，全部免费开源</p>
+          <div class="mockup-hero-btns">
+            <div class="mockup-btn-primary">免费下载 ↓</div>
+            <div class="mockup-btn-secondary">GitHub →</div>
+          </div>
+        </div>
+        <div class="mockup-cards">
+          <div class="mockup-card">
+            <div class="mockup-card-icon">⏱️</div>
+            <div class="mockup-card-title">智能计时</div>
+            <div class="mockup-card-desc">60 分钟学习 → 5 分钟休息，自动循环</div>
+          </div>
+          <div class="mockup-card">
+            <div class="mockup-card-icon">📊</div>
+            <div class="mockup-card-title">学习分析</div>
+            <div class="mockup-card-desc">AI 生成日报/周报/月报，了解你的节奏</div>
+          </div>
+          <div class="mockup-card">
+            <div class="mockup-card-icon">🎯</div>
+            <div class="mockup-card-title">目标追踪</div>
+            <div class="mockup-card-desc">连续打卡 + 轮次统计 + 趋势图表</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== B: 左文右图 ===== -->
+  <div class="variant-section v-b">
+    <div class="variant-label">
+      <div class="variant-num">B</div>
+      <div>
+        <div class="variant-title">左文右图 — 浮球可视化</div>
+        <div class="variant-desc">左侧文案 + 右侧产品浮球可视化，加上方数据条</div>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-bar">
+        <div class="mockup-dot r"></div><div class="mockup-dot y"></div><div class="mockup-dot g"></div>
+        <div class="mockup-url">crazy-rest-reminder.pages.dev</div>
+      </div>
+      <div class="mockup-body">
+        <div class="mockup-nav" style="padding-bottom:12px;">
+          <div class="mockup-logo">
+            <div class="mockup-logo-icon">R</div>
+            Rest Reminder
+          </div>
+          <div class="mockup-nav-links">
+            <span>功能</span><span>关于</span>
+            <div class="mockup-nav-btn">下载</div>
+          </div>
+        </div>
+        <div class="mockup-hero">
+          <div class="mockup-hero-text">
+            <h1>你的桌面<span>护眼助手</span></h1>
+            <p>右下角浮球实时提醒，不用打开软件就能看到剩余时间。到点自动弹窗，休息完自动继续。</p>
+            <div style="display:flex;gap:8px;">
+              <div class="mockup-btn-primary">免费下载</div>
+              <div class="mockup-btn-secondary">GitHub 开源</div>
+            </div>
+          </div>
+          <div class="mockup-hero-visual">
+            <div class="mockup-float-ball"></div>
+          </div>
+        </div>
+        <div class="mockup-stats">
+          <div class="mockup-stat">
+            <div class="mockup-stat-value">46MB</div>
+            <div class="mockup-stat-label">轻量安装</div>
+          </div>
+          <div class="mockup-stat">
+            <div class="mockup-stat-value">60min</div>
+            <div class="mockup-stat-label">自动循环</div>
+          </div>
+          <div class="mockup-stat">
+            <div class="mockup-stat-value">12h+</div>
+            <div class="mockup-stat-label">每日追踪</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== C: 中心对称 ===== -->
+  <div class="variant-section v-c">
+    <div class="variant-label">
+      <div class="variant-num">C</div>
+      <div>
+        <div class="variant-title">中心对称 + 4 功能块</div>
+        <div class="variant-desc">中心对齐，上方 badge → 大标题 → 分隔线 → 4 等分功能块</div>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-bar">
+        <div class="mockup-dot r"></div><div class="mockup-dot y"></div><div class="mockup-dot g"></div>
+        <div class="mockup-url">crazy-rest-reminder.pages.dev</div>
+      </div>
+      <div class="mockup-body">
+        <div class="mockup-hero">
+          <div class="mockup-hero-badge">⚡ 开源免费 · MIT 协议</div>
+          <h1>Rest Reminder</h1>
+          <div class="mockup-hero-line"></div>
+          <p>保护眼睛，从每次休息开始。46MB 轻量挂件，60 分钟自动循环，AI 学习分析，全部免费。</p>
+        </div>
+        <div class="mockup-features">
+          <div class="mockup-feature">
+            <div class="mockup-feature-icon">⏱️</div>
+            <div class="mockup-feature-name">智能计时</div>
+          </div>
+          <div class="mockup-feature">
+            <div class="mockup-feature-icon">📊</div>
+            <div class="mockup-feature-name">学习分析</div>
+          </div>
+          <div class="mockup-feature">
+            <div class="mockup-feature-icon">🎯</div>
+            <div class="mockup-feature-name">目标追踪</div>
+          </div>
+          <div class="mockup-feature">
+            <div class="mockup-feature-icon">💡</div>
+            <div class="mockup-feature-name">金句复盘</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== D: 左侧边栏 ===== -->
+  <div class="variant-section v-d">
+    <div class="variant-label">
+      <div class="variant-num">D</div>
+      <div>
+        <div class="variant-title">侧边栏导航 + 时间线</div>
+        <div class="variant-desc">类似 CC Switch 的左侧图标导航 + 右侧时间线式内容展示</div>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-bar">
+        <div class="mockup-dot r"></div><div class="mockup-dot y"></div><div class="mockup-dot g"></div>
+        <div class="mockup-url">crazy-rest-reminder.pages.dev</div>
+      </div>
+      <div class="mockup-body" style="padding:0;">
+        <div class="mockup-layout">
+          <div class="mockup-sidebar">
+            <div class="mockup-sidebar-icon">R</div>
+            <div class="mockup-sidebar-item active"></div>
+            <div class="mockup-sidebar-item"></div>
+            <div class="mockup-sidebar-item"></div>
+            <div class="mockup-sidebar-item"></div>
+          </div>
+          <div class="mockup-content">
+            <h1>每日<span>学习报告</span></h1>
+            <p>今天已专注 4 小时 32 分钟，完成 4 个轮次，连续打卡 7 天。</p>
+            <div class="mockup-timeline">
+              <div class="mockup-timeline-item">
+                <div class="mockup-timeline-dot"></div>
+                <div class="mockup-timeline-text" style="width:70%"></div>
+              </div>
+              <div class="mockup-timeline-item">
+                <div class="mockup-timeline-dot"></div>
+                <div class="mockup-timeline-text" style="width:85%"></div>
+              </div>
+              <div class="mockup-timeline-item">
+                <div class="mockup-timeline-dot"></div>
+                <div class="mockup-timeline-text" style="width:55%"></div>
+              </div>
+              <div class="mockup-timeline-item">
+                <div class="mockup-timeline-dot"></div>
+                <div class="mockup-timeline-text" style="width:40%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== E: 极简大字 + 步骤 ===== -->
+  <div class="variant-section v-e">
+    <div class="variant-label">
+      <div class="variant-num">E</div>
+      <div>
+        <div class="variant-title">极简大字 + 描边标题 + 步骤</div>
+        <div class="variant-desc">超大字号 + outline 文字效果 + 左侧步骤列表，冲击力最强</div>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-bar">
+        <div class="mockup-dot r"></div><div class="mockup-dot y"></div><div class="mockup-dot g"></div>
+        <div class="mockup-url">crazy-rest-reminder.pages.dev</div>
+      </div>
+      <div class="mockup-body">
+        <div class="mockup-hero">
+          <h1>休息提醒<span class="outline">v4.4</span></h1>
+          <p>开源免费的学习护眼工具，60 分钟自动提醒你起来活动。</p>
+        </div>
+        <div class="mockup-steps">
+          <div class="mockup-step">
+            <div class="mockup-step-num">1</div>
+            <div class="mockup-step-text"></div>
+          </div>
+          <div class="mockup-step">
+            <div class="mockup-step-num">2</div>
+            <div class="mockup-step-text" style="width:80%"></div>
+          </div>
+          <div class="mockup-step">
+            <div class="mockup-step-num">3</div>
+            <div class="mockup-step-text" style="width:65%"></div>
+          </div>
+          <div class="mockup-step">
+            <div class="mockup-step-num">4</div>
+            <div class="mockup-step-text" style="width:50%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Click to select — highlight selected variant
+  document.querySelectorAll('.variant-section').forEach(section => {
+    section.addEventListener('click', () => {
+      // Remove all selected
+      document.querySelectorAll('.variant-section').forEach(s => {
+        s.style.background = '';
+        s.style.outline = '';
+        s.style.outlineOffset = '';
+      });
+      // Select this one
+      section.style.background = '#12100a';
+      section.style.outline = '2px solid #f59e0b';
+      section.style.outlineOffset = '-2px';
+    });
+  });
+</script>
+
+</body>
+</html>
