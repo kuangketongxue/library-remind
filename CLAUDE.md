@@ -24,7 +24,7 @@ RestReminder.spec             — PyInstaller 配置（含 hiddenimports=['stora
 - **数据源**：`.stats_history.json` + `.review_log.json`
 
 ## 持久化文件
-`.daily_log.json` · `.app_state.json` · `.computer_usage.json` · `.goal.json` · `.streak.json` · `.settings.json` · `.stats_history.json` · `.review_log.json`
+`.daily_log.json` · `.app_state.json` · `.goal.json` · `.streak.json` · `.settings.json` · `.stats_history.json` · `.review_log.json`
 
 ## 构建 & 部署
 ```bash

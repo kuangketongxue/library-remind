@@ -22,7 +22,7 @@
 | **5标签页主界面** | 今日概览/AI报告/趋势分析/设置/关于，所有内容直接展示 |
 | **复盘记录** | 每小时学科+标签+评分1-100，数据落盘 |
 | B站收藏夹视频 | 固定收藏夹（每3轮护眼视频） |
-| 学习时长追踪 + 复盘记录 | 本地持久化 |
+| 学习时长追踪 | 本地持久化（每次倒计时完成=1小时） |
 | 🤖 **AI 学习分析** | 日报/周报/月报/季报/年报 |
 | 开机自启 + 托盘 + 浮球 | 后台常驻 |
 
@@ -45,7 +45,7 @@ python rest_reminder.py
 ├── 一键安装.bat             # 安装+依赖+自启动
 ├── RestReminder.spec       # PyInstaller 配置
 ├── requirements.txt        # 依赖声明
-├── .env                    # API 配置（本地，不提交）
+├── .settings.json          # 用户设置（API key 等，本地，不提交）
 ├── docs/ARCHITECTURE.md    # 架构文档
 ├── rest-reminder-site/     # 网站源码（Next.js）
 └── 数据文件（.daily_log.json 等）  # 本地持久化

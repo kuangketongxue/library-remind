@@ -13,7 +13,7 @@
 
 ### 🗑️ 移除
 - **Pro 订阅系统**：完全移除，所有功能免费可用
-- `rest-reminder-pro/` 不再需要，AI 报告通过 `pro_features` 直接调用
+- `rest-reminder-pro/` 不再需要，AI 报告内联到主程序
 - `tray_card.py`：旧版托盘卡片（已弃用）
 
 ### 🐛 Bug 修复

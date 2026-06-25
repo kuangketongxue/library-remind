@@ -8,7 +8,7 @@ Python 3.7+ / PyQt5 / requests / psutil / Win32 API (ctypes)
 
 ## 关键文件
 ```
-rest_reminder.py        — 主程序（~3900行，含所有 UI + 逻辑）
+rest_reminder.py        — 主程序（~4360行，含所有 UI + 逻辑）
 storage.py              — 统一 JSON 存储层（JSONStore 类）
 RestReminder.spec       — PyInstaller 配置（含 hiddenimports=['storage']）
 产品规格-v4.3.md        — v4.3 完整产品规格（计时规则/URL/功能清单）

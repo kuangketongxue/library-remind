@@ -46,7 +46,6 @@ rest_reminder.log
 # 本地数据文件
 daily_records.json
 daily_tracker_state.json
-.computer_usage.json
 .overlay_pos.json
 .stats_history.json
 .settings.json
@@ -81,17 +80,12 @@ lark-cli.bat
 LARK_CLI使用说明.md
 .feishu_tmp.json
 .feishu_cache.json
-.daily_log.json
-.app_state.json
 
 # 完全独立启动文件
 完全独立启动.vbs
 
 # 本地用户数据
 .review_log.json
-.daily_log.json
-.app_state.json
-.computer_usage.json
 
 # AI 模块（含 API key，不进入开源）
 rest-reminder-pro/
@@ -116,6 +110,4 @@ rest-reminder-site/.firecrawl/
 rest-reminder-site/out/
 
 # 本地临时文件
-*.png
-TODO-*.md
 cleanup.bat
