@@ -5,7 +5,7 @@
 **智能桌面久坐提醒 · 学习工作两不误**
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.7+-yellow.svg)](https://python.org)
+[![Python](https://img.shields.io/badge/python-3.14+-yellow.svg)](https://python.org)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010/11-lightgrey.svg)]()
 
 [📥 免费下载](https://github.com/kuangketongxue/library-remind/releases/latest) · [🌐 官网](https://crazy-rest-reminder.pages.dev/) · [💬 反馈](https://github.com/kuangketongxue/library-remind/issues)

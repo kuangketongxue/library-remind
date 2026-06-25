@@ -82,6 +82,23 @@ idle ──[开始]──> running ──[60min结束]──> resting ──[5mi
 |------|------|
 | PyQt5 | GUI 框架 |
 | psutil | 电池检测 |
-| requests | B站 API / Supabase |
+| requests | B站 API / Supabase / AI API |
 | ctypes | Win32 API（空闲检测、DPI、图标） |
 | winreg | 开机自启 |
+
+## AI 报告渲染
+
+`_md_to_html(text)` — 模块级函数，轻量 markdown → HTML：
+- `**粗体**` → `<strong style="color:#e8e6e1">`（金色高亮）
+- `*斜体*` → `<em style="color:#c4b8a0">`
+- `* bullet` → `• bullet`（AI 常用星号当列表标记）
+- 代码块 ` ``` ` → `<pre>` 带语法样式
+- 标题 `#` / `##` / `###` → 对应 h1/h2/h3
+- 列表 `- ` → `<li>`
+
+## 趋势图表
+
+`_draw_single_bar()` — 纯学习时长单柱图（v5.0 重构）：
+- 移除电脑使用时长、双柱图、饼图
+- 鼠标悬浮显示具体数值（`QToolTip` + `_bar_rects` 坐标跟踪）
+- `max_val` 统一为 `max(max(vals, default=0), 1)`

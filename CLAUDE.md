@@ -8,7 +8,7 @@ Python 3.14+ / PyQt5 / requests / psutil / Win32 API (ctypes)
 
 ## 关键文件
 ```
-rest_reminder.py              — 主程序（4326行，含所有 UI + 逻辑）
+rest_reminder.py              — 主程序（~4360行，含所有 UI + 逻辑）
 storage.py                    — 统一 JSON 存储层（JSONStore 类）
 RestReminder.spec             — PyInstaller 配置（含 hiddenimports=['storage']）
 产品规格-v4.3.md              — v4.3 完整产品规格
@@ -42,6 +42,7 @@ pyinstaller RestReminder.spec
 - **Next.js 16 + 中文路径**：Turbopack panic → 必须纯英文路径（2026-06-19）
 - **CF Pages 25MB 限制**：部署前删 out/ 中 RestReminder.exe（2026-06-19）
 - **except Exception: pass 是反模式**：必须至少加 log，唯一允许 pass 的是 WA_DeleteOnClose 后的 RuntimeError（2026-06-20）
+- **Python 3.14 兼容**：`from PyQt5 import sip`（`import sip` 在 3.14 失败），`QToolTip` 从 QtWidgets 导入，`QRect` 从 QtCore 导入
 - **状态机新状态三连更新**：新增状态时同步改 `_BTN_CONFIG` + `_handle_*` 方法 + 主循环路由分支（2026-06-21）
 - **PyQt 数值 API 类型安全**：`setValue()`/`setMaximum()` 只接受 int，float `//` 地板除返回 float，必须显式 `int()`（2026-06-21）
 - **log 中不要用 [LINE NNN] 标记**：代码移动后行号立刻过时，用描述性消息替代（如 `"[单实例] 解锁失败: {e}"`）（2026-06-21）
