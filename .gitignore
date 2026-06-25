@@ -90,6 +90,8 @@ LARK_CLI使用说明.md
 完全独立启动.vbs
 
 # 本地用户数据
+.computer_usage.json
+.report_cache/
 
 # AI 模块（含 API key，不进入开源）
 rest-reminder-pro/
