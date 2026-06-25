@@ -54,7 +54,7 @@ function HowItWorks() {
                 {s.img === "download" && (
                   <div className="p-4">
                     <div className="flex items-center gap-2 mb-3 pb-3 border-b border-[var(--border)]">
-                      <div className="w-5 h-5 rounded-full bg-[var(--accent)] flex items-center justify-center text-[8px] text-[var(--bg)] font-bold">R</div>
+                      <img src="/rest-reminder-logo.png" alt="Rest Reminder" className="w-5 h-5 rounded-sm" />
                       <div className="text-xs text-[var(--fg)]">Rest Reminder</div>
                     </div>
                     <div className="space-y-1.5">

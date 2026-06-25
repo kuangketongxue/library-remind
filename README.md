@@ -29,7 +29,7 @@
 ## 🚀 快速开始
 
 ```
-双击 dist/RestReminder.exe
+双击 _launch.vbs
 # 或
 python rest_reminder.py
 ```
@@ -37,13 +37,18 @@ python rest_reminder.py
 ## 📁 项目结构
 
 ```
-├── rest_reminder.py        # 主程序
+├── rest_reminder.py        # 主程序（4326行）
 ├── storage.py              # 统一 JSON 存储层
-├── cute_icon.png/ico       # 图标
-├── requirements.txt        # 依赖
+├── vendor/                 # 本地依赖包（PyQt5/psutil/requests）
+├── _launch.vbs             # 静默启动（后台无窗口）
+├── run.bat                 # 启动脚本
+├── 一键安装.bat             # 安装+依赖+自启动
 ├── RestReminder.spec       # PyInstaller 配置
-├── 一键安装.bat             # 安装+自启动
-└── dist/RestReminder.exe   # 打包好的 exe
+├── requirements.txt        # 依赖声明
+├── .env                    # API 配置（本地，不提交）
+├── docs/ARCHITECTURE.md    # 架构文档
+├── rest-reminder-site/     # 网站源码（Next.js）
+└── 数据文件（.daily_log.json 等）  # 本地持久化
 ```
 
 ## 🎨 设计

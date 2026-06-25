@@ -3,20 +3,20 @@
 - 每小时提醒休息，并随机打开 B 站收藏夹中的视频
 - 20-20-20 护眼提醒：每 20 分钟浮窗提示看远处 20 秒
 - 监控电池充电状态
-- 监控电脑使用时长（每 3 小时提醒）
 - 学习时长本地计数（每次倒计时完成算 1 小时）
 - 数据本地持久化（.daily_log.json）
 """
 import sys
 import time
 import random
-import hashlib
-import uuid
+import os
+import json
 import platform
 import requests
 import ctypes
-import os
+import msvcrt
 import tempfile
+import sip
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel,
                              QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox, QShortcut, QFrame, QTabWidget, QStackedWidget, QComboBox, QLineEdit, QScrollArea, QDialog, QSlider, QSpinBox, QGroupBox, QTextBrowser)
@@ -40,6 +40,7 @@ if _PRO_DIR not in sys.path:
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
 VERSION = 'v4.4'
+AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=1_000_000, backupCount=3, encoding='utf-8')
 _handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', '%Y-%m-%d %H:%M:%S'))
@@ -56,7 +57,6 @@ streak_store    = JSONStore('.streak.json',         default={'current_streak': 0
 history_store   = JSONStore('.stats_history.json',  default={})
 app_state_store = JSONStore('.app_state.json')
 review_store    = JSONStore('.review_log.json',     default={},          ensure_ascii=False, indent=2)
-computer_store  = JSONStore('.computer_usage.json', default={}, ensure_ascii=False)
 
 
 def open_url(url):
@@ -260,6 +260,7 @@ class FloatingBall(QWidget):
             popup = QWidget(None)
             popup.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint)
             popup.setAttribute(Qt.WA_TranslucentBackground)
+            popup.setAttribute(Qt.WA_DeleteOnClose)
             popup.setFixedSize(200, 130)
 
             root = QFrame(popup)
@@ -318,10 +319,6 @@ class FloatingBall(QWidget):
             popup._study_lbl.setStyleSheet('color: #78B450;')
             row.addWidget(popup._study_lbl)
             row.addStretch()
-            popup._comp_lbl = QLabel('')
-            popup._comp_lbl.setFont(QFont('Microsoft YaHei', 8))
-            popup._comp_lbl.setStyleSheet('color: #d97757;')
-            row.addWidget(popup._comp_lbl)
             layout.addLayout(row)
 
             # 目标 + 轮次
@@ -434,13 +431,10 @@ class FloatingBall(QWidget):
                 timer_text = f'续航 {mw._activity_interval:02d}:00'
 
             study = f'📚 {mw.study_hours_today:.1f}h'
-            total_h = mw.computer_usage_ticks // 3600
-            total_m = (mw.computer_usage_ticks % 3600) // 60
-            computer = f'💻 {total_h}h{total_m}m'
-        except Exception:
+        except Exception as e:
             timer_text = '续航 60:00'
             study = '📚 0h'
-            computer = '💻 0h0m'
+            log.debug(f'[_update_popup_text] 计算异常: {e}')
 
         # 文本缓存：跳过无变化的 setText 避免 repaint storm
         prev = getattr(popup, '_prev_texts', {})
@@ -450,9 +444,6 @@ class FloatingBall(QWidget):
         if prev.get('study') != study:
             popup._study_lbl.setText(study)
             prev['study'] = study
-        if prev.get('computer') != computer:
-            popup._comp_lbl.setText(computer)
-            prev['computer'] = computer
         if hasattr(popup, '_goal_lbl'):
             goal = mw.goal_text or '🎯 未设目标'
             if prev.get('goal') != goal:
@@ -577,7 +568,7 @@ class LocalSync:
             cls._data = data
             cls._current_date = today
             return cls._data
-        cls._data = {'date': today, 'study_hours': 0, 'computer_hours': 0, 'break_minutes_today': 0}
+        cls._data = {'date': today, 'study_hours': 0, 'break_minutes_today': 0}
         cls._current_date = today
         return cls._data
 
@@ -591,14 +582,6 @@ class LocalSync:
         data['study_hours'] = round(total_hours, 1)
         cls._save()
         log.info(f'[LocalSync] 学习时长: {total_hours}h')
-        return True
-
-    @classmethod
-    def increment_computer_hour(cls, total_hours):
-        data = cls._load()
-        data['computer_hours'] = round(total_hours, 1)
-        cls._save()
-        log.info(f'[LocalSync] 电脑使用时长: {total_hours}h')
         return True
 
     @classmethod
@@ -662,7 +645,6 @@ class LocalSync:
         history = history_store.load()
         history[today] = {
             'study': round(data.get('study_hours', 0), 1),
-            'computer': round(data.get('computer_hours', 0), 1),
             'break_minutes': round(data.get('break_minutes_today', 0), 1)
         }
         # 只保留365天（支持年趋势）
@@ -711,7 +693,6 @@ class SingleInstanceChecker:
 
     def is_already_running(self):
         try:
-            import msvcrt
             try:
                 self.lock_handle = open(self.lock_path, 'w')
                 msvcrt.locking(self.lock_handle.fileno(), msvcrt.LK_NBLCK, 1)
@@ -730,39 +711,38 @@ class SingleInstanceChecker:
             return self._fallback_check()
 
     def _fallback_check(self):
-        try:
-            if os.path.exists(self.lock_path):
-                try:
-                    with open(self.lock_path, 'r') as f:
-                        old_pid = int(f.read().strip())
-                    if psutil.pid_exists(old_pid):
-                        try:
-                            proc = psutil.Process(old_pid)
-                            cmdline = ' '.join(proc.cmdline())
-                            if 'rest_reminder' in cmdline:
-                                return True
-                        except Exception:
-                            pass
-                    os.remove(self.lock_path)
-                except (ValueError, IOError):
+        """文件锁降级方案：检查旧锁 → 清理 → 获取新锁"""
+        if os.path.exists(self.lock_path):
+            try:
+                with open(self.lock_path, "r") as f:
+                    old_pid = int(f.read().strip())
+                if psutil.pid_exists(old_pid):
                     try:
-                        os.remove(self.lock_path)
-                    except Exception as e:
-                        log.warning(f'[单实例] 删除旧锁文件失败: {e}')
-            with open(self.lock_path, 'w') as f:
-                f.write(str(os.getpid()))
-            self.lock_file = self.lock_path
-            atexit.register(self.cleanup)
-            return False
-        except Exception as e:
-            log.error(f'备用单实例检查失败：{e}')
-            return False
-
+                        proc = psutil.Process(old_pid)
+                        if "rest_reminder" in " ".join(proc.cmdline()):
+                            return True
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        pass  # 进程已退出或不可访问，视为旧锁失效
+            except (ValueError, IOError):
+                pass
+            # 旧锁已失效，直接删除
+            try:
+                os.remove(self.lock_path)
+            except Exception as e:
+                log.warning(f"[单实例] 删除旧锁文件失败: {e}")
+        # 获取新锁（原子操作）
+        lh = open(self.lock_path, "w")
+        msvcrt.locking(lh.fileno(), msvcrt.LK_NBLCK, 1)
+        lh.write(str(os.getpid()))
+        lh.flush()
+        self.lock_handle = lh
+        self.lock_file = self.lock_path
+        atexit.register(self.cleanup)
+        return False
     def cleanup(self):
         try:
             if self.lock_handle:
                 try:
-                    import msvcrt
                     msvcrt.locking(self.lock_handle.fileno(), msvcrt.LK_UNLCK, 1)
                 except Exception as e:
                     log.warning(f'[单实例] 解锁失败: {e}')
@@ -1089,6 +1069,7 @@ class StatsWindow(QWidget):
     """学习统计窗口 - 显示最近7天的学习/电脑使用柱状图"""
     def __init__(self):
         super().__init__()
+        self.setAttribute(Qt.WA_DeleteOnClose)
         self.setWindowTitle('📊 学习统计')
         self.setFixedSize(420, 320)
         self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.Tool)
@@ -1301,7 +1282,6 @@ class TrendWindow(QWidget):
         self._refreshing = True
         try:
             try:
-                import sip
                 if sip.isdeleted(self):
                     return
             except (ImportError, RuntimeError):
@@ -1512,15 +1492,11 @@ class TrendWindow(QWidget):
 
         # 总览统计
         total_study = sum(d['study'] for d in month_data)
-        total_computer = sum(d['computer'] for d in month_data)
         total_days = sum(d['count'] for d in months.values())
         avg_study = round(total_study / total_days, 1) if total_days else 0
-        summary = QLabel(f'📊 统计周期内共 {total_days} 天 · 日均学习 {avg_study}h · 总学习 {total_study:.0f}h · 总电脑 {total_computer:.0f}h')
+        summary = QLabel(f'📊 统计周期内共 {total_days} 天 · 日均学习 {avg_study}h · 总学习 {total_study:.0f}h')
         summary.setStyleSheet('color: #6a8cbb; font-size: 11px; background: transparent; padding: 6px 0;')
         layout.addWidget(summary)
-
-        # 饼图（学习 vs 电脑占比）
-        self._draw_pie_chart(layout, total_study, total_computer)
 
     # ── Tab 5: 时段分析 ──
     def _draw_time_analysis(self):
@@ -1873,23 +1849,238 @@ class TrendWindow(QWidget):
             self.close()
 
 
+def _build_report_data(report_type):
+    """根据报告类型从数据源提取摘要"""
+    today = datetime.now().date()
+    history = history_store.load() or {}
+    reviews = review_store.load() or {}
+    daily = daily_store.load() or {}
+
+    # 筛选日期范围
+    ranges = {
+        'daily': 1, 'weekly': 7, 'monthly': 30,
+        'quarterly': 90, 'yearly': 365
+    }
+    days = ranges.get(report_type, 7)
+    start = today - timedelta(days=days)
+    records = []
+    for d, v in sorted(history.items()):
+        try:
+            if datetime.fromisoformat(d).date() >= start:
+                records.append({'date': d, **v})
+        except (ValueError, TypeError):
+            pass
+
+    # 汇总（history 存的是 study(小时)，需转分钟）
+    total_study = sum(r.get('study', 0) for r in records) * 60  # hours → minutes
+    # sessions: 日期范围内的复盘条目数（每条复盘 = 1 轮）
+    sessions = 0
+    # avg_quality: 日期范围内复盘条目的 score 平均值
+    review_scores = []
+    for d, items in sorted(reviews.items()):
+        try:
+            if datetime.fromisoformat(d).date() < start:
+                continue
+            entries = items if isinstance(items, list) else [items]
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                sessions += 1
+                s = entry.get('score')
+                if s:
+                    review_scores.append(s)
+        except (ValueError, TypeError):
+            pass
+    avg_quality = int(sum(review_scores) / len(review_scores)) if review_scores else 0
+
+    review_records = []
+    for d, items in sorted(reviews.items()):
+        try:
+            if datetime.fromisoformat(d).date() >= start:
+                if isinstance(items, list):
+                    review_records.extend(items)
+                elif isinstance(items, dict):
+                    review_records.append(items)
+        except (ValueError, TypeError):
+            pass
+
+    tags = {}
+    for r in review_records:
+        for t in r.get('tags', []) if isinstance(r, dict) else []:
+            tags[t] = tags.get(t, 0) + 1
+    top_tags = sorted(tags.items(), key=lambda x: -x[1])[:5]
+
+    return {
+        'report_type': report_type,
+        'date_range': f'{start} ~ {today}',
+        'days': days,
+        'total_study_hours': round(total_study / 60, 1),
+        'sessions': sessions,
+        'avg_quality': avg_quality,
+        'top_tags': top_tags,
+        'records': records[-10:],  # 最近10条
+    }
+
+
+def _call_ai(prompt, model='sensenova-6.7-flash-lite'):
+    """调用 AI API（SenseNova 主 → Agnes 备），返回生成文本"""
+
+    # 候选端点（按优先级）
+    endpoints = [
+        {'url': 'https://token.sensenova.cn/v1/chat/completions', 'key': None},
+        {'url': 'https://apihub.agnes-ai.com/v1/chat/completions', 'key': None},
+    ]
+
+    headers_base = {'Content-Type': 'application/json'}
+    body = {
+        'model': model,
+        'messages': [
+            {'role': 'system', 'content': '你是学习分析助手，根据用户的学习数据给出简洁有用的分析报告。用中文回答。'},
+            {'role': 'user', 'content': prompt},
+        ],
+        'max_tokens': 800,
+        'temperature': 0.7,
+    }
+
+    last_err = None
+    for ep in endpoints:
+        try:
+            url = ep['url']
+            # 尝试从 settings 读取对应 API key
+            api_key = None
+            if 'sensenova' in url:
+                api_key = settings_store.get('sensenova_api_key') or os.environ.get('SENSENOVA_API_KEY')
+            elif 'agnes' in url:
+                api_key = settings_store.get('agnes_api_key') or os.environ.get('AGNES_API_KEY')
+
+            if not api_key:
+                last_err = f'未配置 API key（{url}）'
+                continue
+
+            headers = {**headers_base, 'Authorization': f'Bearer {api_key}'}
+            resp = requests.post(url, json=body, headers=headers, timeout=30)
+
+            if resp.status_code == 200:
+                data = resp.json()
+                content = data.get('choices', [{}])[0].get('message', {}).get('content', '')
+                if content:
+                    return {'ok': True, 'content': content, 'provider': url}
+            else:
+                last_err = f'HTTP {resp.status_code}: {resp.text[:200]}'
+        except Exception as e:
+            last_err = str(e)
+
+    return {'ok': False, 'error': f'所有 AI 服务不可用。最后错误：{last_err}'}
+
+
+def generate_report(report_type, force_refresh=False):
+    """生成 AI 学习分析报告（内联，不再依赖 pro_features）"""
+    try:
+        cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.report_cache')
+        os.makedirs(cache_dir, exist_ok=True)
+
+        cache_file = os.path.join(cache_dir, f'{report_type}.json')
+        cache = {}
+        if not force_refresh and os.path.exists(cache_file):
+            try:
+                with open(cache_file, 'r', encoding='utf-8') as jf:
+                    cache = json.load(jf)
+                cached_time = cache.get('generated_at', '')
+                # 缓存有效期：日报 4h / 周报 12h / 月报 24h / 季报 48h / 年报 72h
+                ttl = {'daily': 4, 'weekly': 12, 'monthly': 24, 'quarterly': 48, 'yearly': 72}
+                max_hours = ttl.get(report_type, 12)
+                if cached_time:
+                    gen = datetime.fromisoformat(cached_time)
+                    if (datetime.now() - gen).total_seconds() < max_hours * 3600:
+                        return {'ok': True, 'content': cache.get('report', ''), 'from_cache': True}
+            except Exception:
+                cache = {}
+
+        # 生成数据
+        data = _build_report_data(report_type)
+
+        type_names = {'daily': '日报', 'weekly': '周报', 'monthly': '月报', 'quarterly': '季报', 'yearly': '年报'}
+        name = type_names.get(report_type, report_type)
+
+        prompt = (
+            f"请根据以下学习数据生成一份{name}（时间范围：{data['date_range']}）：\n"
+            f"- 学习时长：{data['total_study_hours']} 小时\n"
+            f"- 完成轮次：{data['sessions']} 轮\n"
+            f"- 平均复盘质量：{data['avg_quality']}/100\n"
+            f"- 高频标签：{', '.join(f'{t}({c})' for t, c in data['top_tags']) or '无'}\n"
+            f"- 最近记录：{data['records'][:5]}\n\n"
+            f"请输出结构化的 Markdown 格式报告，包含：\n"
+            f"1. 概览（时长/轮次/质量）\n"
+            f"2. 趋势分析\n"
+            f"3. 改进建议（3-5条）\n"
+            f"4. 亮点总结"
+        )
+
+        result = _call_ai(prompt)
+
+        if result.get('ok'):
+            report_text = result['content']
+            # 持久化缓存
+            try:
+                cache = {'data': data, 'report': report_text, 'generated_at': datetime.now().isoformat(), 'provider': result.get('provider', '')}
+                with open(cache_file, 'w', encoding='utf-8') as f:
+                    json.dump(cache, f, ensure_ascii=False, indent=2)
+            except Exception:
+                pass
+            return {'ok': True, 'content': report_text}
+
+        return result
+
+    except Exception as e:
+        log.error(f'[generate_report] 报告生成失败: {e}')
+        return {'ok': False, 'error': f'报告生成失败：{e}'}
+
+
 class _ReportWorker(QThread):
     """后台线程：生成 AI 报告，不阻塞 UI"""
     finished = pyqtSignal(dict)
 
-    def __init__(self, report_type, force_refresh=False):
-        super().__init__()
+    def __init__(self, parent=None, report_type=None, force_refresh=False):
+        super().__init__(parent)
         self.report_type = report_type
         self.force_refresh = force_refresh
 
     def run(self):
         try:
-            from pro_features import generate_report
-        except ImportError:
-            self.finished.emit({"ok": False, "error": "AI 模块加载失败"})
-            return
-        result = generate_report(self.report_type, force_refresh=self.force_refresh)
-        self.finished.emit(result)
+            result = generate_report(self.report_type, force_refresh=self.force_refresh)
+            self.finished.emit(result)
+        except Exception as e:
+            log.error(f'[ReportWorker] 报告生成异常: {e}')
+            self.finished.emit({"ok": False, "error": f"报告生成异常：{e}"})
+
+
+def _create_app_icon():
+    """从 cute_icon.png 加载应用图标（PNG 在任务栏渲染更好）"""
+    from PyQt5.QtGui import QPixmap
+    icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cute_icon.png')
+    if os.path.exists(icon_path):
+        icon = QIcon(icon_path)
+        if not icon.isNull():
+            return icon
+    # fallback：动态生成 ⚡ 图标
+    pm = QPixmap(64, 64)
+    pm.fill(Qt.transparent)
+    painter = QPainter(pm)
+    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setBrush(QBrush(QColor(212, 175, 55, 30)))
+    painter.setPen(Qt.NoPen)
+    painter.drawEllipse(2, 2, 60, 60)
+    painter.setBrush(QBrush(QColor(20, 20, 24)))
+    painter.setPen(QPen(QColor(212, 175, 55, 120), 2))
+    painter.drawEllipse(6, 6, 52, 52)
+    painter.setPen(QColor(212, 175, 55))
+    painter.setFont(QFont('Segoe UI Emoji', 22, QFont.Bold))
+    painter.drawText(pm.rect(), Qt.AlignCenter, '⚡')
+    painter.end()
+    icon = QIcon(pm)
+    icon.addPixmap(pm.scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation), QIcon.Normal, QIcon.Off)
+    icon.addPixmap(pm.scaled(16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation), QIcon.Normal, QIcon.On)
+    return icon
 
 
 class RestReminderWidget(QWidget):
@@ -1934,10 +2125,9 @@ class RestReminderWidget(QWidget):
 
         # 提醒方式设置
         self.app_settings = LocalSync.load_settings()
-
-        # 电脑使用时长（简单累计）
-        self.computer_usage_ticks = 0  # 每秒+1，/3600=hours
-        self._computer_save_tick = 0
+        sn_key = self.app_settings.get('sensenova_api_key', '')
+        ag_key = self.app_settings.get('agnes_api_key', '')
+        log.info(f'[AI] sensenova_key={bool(sn_key)} agnes_key={bool(ag_key)}')
 
         # 5分钟倒计时浮层状态
         self._study_countdown_active = False
@@ -1981,8 +2171,8 @@ class RestReminderWidget(QWidget):
 
         # 启动时先定位到屏幕右侧，主窗口默认隐藏（只显示小浮球）
         self.position_to_right()
-        # self.hide()  # 临时注释：调试黑屏问题
-        self.show()
+        if not self.app_settings.get('silent_start', False):
+            self.show()
         # 恢复上次运行状态（跨重启续接）
         self._restore_active_state()
         # 启动时提示设目标
@@ -1996,8 +2186,7 @@ class RestReminderWidget(QWidget):
 
         self.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.WindowMinimizeButtonHint)
 
-        ico_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cute_icon.ico')
-        self.app_icon = QIcon(ico_path)
+        self.app_icon = _create_app_icon()
         self.setWindowIcon(self.app_icon)
         self.setObjectName('mainWindow')
 
@@ -2372,6 +2561,37 @@ class RestReminderWidget(QWidget):
         layout.addWidget(status_card)
         layout.addSpacing(8)
 
+        # ── 距离22:00倒计时 ──
+        countdown_card = QFrame()
+        countdown_card.setObjectName('statCard')
+        cc = QVBoxLayout(countdown_card)
+        cc.setContentsMargins(16, 14, 16, 14)
+        cc.setSpacing(6)
+        cd_title = QLabel('⏳ 距离22:00')
+        cd_title.setStyleSheet('color: #e8e6e1; font-size: 13px; font-weight: bold;')
+        cc.addWidget(cd_title)
+        cd_bar = QProgressBar()
+        cd_bar.setObjectName('countdownBar')
+        cd_bar.setMaximum(100)
+        cd_bar.setValue(0)
+        cd_bar.setTextVisible(True)
+        cd_bar.setFormat('%p%')
+        cd_bar.setFixedHeight(16)
+        cd_bar.setStyleSheet("""
+            QProgressBar { background: rgba(255,255,255,0.06); border: none; border-radius: 4px; }
+            QProgressBar::chunk { background: qlineargradient(x1:0,x2:1,stop:0 #FF9800,stop:1 #FF5252); border-radius: 4px; }
+        """)
+        cc.addWidget(cd_bar)
+        cd_time = QLabel('')
+        cd_time.setStyleSheet('color: #888; font-size: 11px;')
+        cc.addWidget(cd_time)
+        self._cd_bar = cd_bar
+        self._cd_time = cd_time
+        self._update_countdown_display()
+        log.info('[CountdownCard] 距离22:00卡片已构建')
+        layout.addWidget(countdown_card)
+        layout.addSpacing(8)
+
         # ── 复盘摘要 ──
         reviews_data = review_store.load()
         today_reviews = reviews_data.get(datetime.now().date().isoformat(), [])
@@ -2409,137 +2629,24 @@ class RestReminderWidget(QWidget):
             return '今天的学习已经结束，好好休息'
         state_names = {'idle': '准备好开始学习了吗？', 'running': '保持专注，你正在进步', 'resting': '放松一下，马上回来', 'paused': '已暂停，随时可以继续'}
         return state_names.get(self.timer_state, '精力管理，从今天开始')
-
-        autostart_checked = self.is_autostart_enabled()
-        silent_checked = self.app_settings.get('silent_start', False)
-        close_tray_checked = self.app_settings.get('close_to_tray', True)
-        study_checked = self.app_settings.get('study_tracking', True)
-        review_checked = self.app_settings.get('review_reminder', True)
-        sound_checked = self.app_settings.get('sound_enabled', True)
-
-        autostart_row = self._make_setting_row(
-            '⚡', '开机自启',
-            '随系统启动自动运行精力管理',
-            autostart_checked,
-            lambda v: self.set_autostart(v == 1)
-        )
-        layout.addWidget(autostart_row)
-
-        silent_row = self._make_setting_row(
-            '👻', '静默启动',
-            '程序启动时不显示主窗口，仅在系统托盘运行',
-            silent_checked,
-            self._toggle_silent_start
-        )
-        layout.addWidget(silent_row)
-
-        close_tray_row = self._make_setting_row(
-            '📦', '关闭时最小化到托盘',
-            '点击关闭按钮时隐藏到系统托盘，不退出程序',
-            close_tray_checked,
-            self._toggle_close_to_tray
-        )
-        layout.addWidget(close_tray_row)
-
-        # ═══ 计时设置 ═══
-        layout.addSpacing(8)
-        layout.addLayout(self._make_section_header('⏱️', '计时设置'))
-
-        study_row = self._make_setting_row(
-            '📚', '学习时长统计',
-            '每次倒计时完成自动记录 1 小时学习时长',
-            study_checked,
-            self._toggle_study_tracking
-        )
-        layout.addWidget(study_row)
-
-        review_row = self._make_setting_row(
-            '⭐', '复盘提醒',
-            '每小时休息前弹出复盘评分（1-100分）',
-            review_checked,
-            self._toggle_review_reminder
-        )
-        layout.addWidget(review_row)
-
-        sound_row = self._make_setting_row(
-            '🔔', '声音提醒',
-            '倒计时结束时播放提示音',
-            sound_checked,
-            self._toggle_sound
-        )
-        layout.addWidget(sound_row)
-
-        # ═══ 快捷操作 ═══
-        layout.addSpacing(8)
-        layout.addLayout(self._make_section_header('⚡', '快捷操作'))
-
-        # 收藏夹按钮
-        fav_btn = QPushButton('📂 打开 B站收藏夹')
-        fav_btn.setFixedHeight(38)
-        fav_btn.setCursor(Qt.PointingHandCursor)
-        fav_btn.clicked.connect(self._open_fav_folder)
-        layout.addWidget(fav_btn)
-
-        # 重置按钮
-        reset_btn = QPushButton('🔄 重置今日数据')
-        reset_btn.setFixedHeight(38)
-        reset_btn.setCursor(Qt.PointingHandCursor)
-        reset_btn.setStyleSheet('QPushButton { color: #d95757; border-color: rgba(217,87,87,0.20); } QPushButton:hover { background: rgba(217,87,87,0.12); }')
-        reset_btn.clicked.connect(self._reset_today)
-        layout.addWidget(reset_btn)
-
-        layout.addStretch()
-
-        scroll.setWidget(container)
-        self._tab_content.addWidget(scroll)
-
-    def _open_fav_folder(self):
-        """打开 B站收藏夹"""
-        open_url('https://space.bilibili.com/529362421/favlist?fid=3648313921&ftype=create&spm_id_from=333.788.0.0')
-
-    def _reset_today(self):
-        """重置今日数据"""
-        reply = QMessageBox.question(self, '确认重置',
-            '确定要清除今日所有学习数据吗？此操作不可撤销。',
-            QMessageBox.Yes | QMessageBox.No)
-        if reply != QMessageBox.Yes:
-            return
-        today = datetime.now().date().isoformat()
-        daily_data = daily_store.load()
-        if today in daily_data:
-            del daily_data[today]
-            daily_store.save(daily_data)
-        self.study_hours_today = 0
-        self.break_minutes_today = 0
-        self._round_count = 0
-        self._pending_review = False
-        self._daily_report_shown_today = False
-        self.update_study_display()
-        log.info('[重置] 今日数据已清除')
-
     def _toggle_silent_start(self, checked):
-        self._silent_start = checked == 1
-        self.app_settings['silent_start'] = self._silent_start
+        self.app_settings['silent_start'] = checked == 1
         LocalSync.save_settings(self.app_settings)
 
     def _toggle_close_to_tray(self, checked):
-        self._close_to_tray = checked == 1
-        self.app_settings['close_to_tray'] = self._close_to_tray
+        self.app_settings['close_to_tray'] = checked == 1
         LocalSync.save_settings(self.app_settings)
 
     def _toggle_study_tracking(self, checked):
-        self._study_tracking = checked == 1
-        self.app_settings['study_tracking'] = self._study_tracking
+        self.app_settings['study_tracking'] = checked == 1
         LocalSync.save_settings(self.app_settings)
 
     def _toggle_review_reminder(self, checked):
-        self._review_reminder = checked == 1
-        self.app_settings['review_reminder'] = self._review_reminder
+        self.app_settings['review_reminder'] = checked == 1
         LocalSync.save_settings(self.app_settings)
 
     def _toggle_sound(self, checked):
-        self._sound_enabled = checked == 1
-        self.app_settings['sound_enabled'] = self._sound_enabled
+        self.app_settings['sound_enabled'] = checked == 1
         LocalSync.save_settings(self.app_settings)
 
     def _build_ai_tab(self):
@@ -2615,7 +2722,7 @@ class RestReminderWidget(QWidget):
         for b in self._report_buttons.values():
             b.setEnabled(False)
 
-        worker = _ReportWorker(report_type, force_refresh)
+        worker = _ReportWorker(self, report_type, force_refresh)
         def _on_done(result):
             for b in self._report_buttons.values():
                 b.setEnabled(True)
@@ -2828,7 +2935,7 @@ class RestReminderWidget(QWidget):
         name_lbl.setStyleSheet('color: #e8e6e1;')
         top_row.addWidget(name_lbl)
         # 版本 badge
-        ver_badge = QLabel('v4.3')
+        ver_badge = QLabel('v4.4')
         ver_badge.setStyleSheet('background: rgba(255,255,255,0.08); color: #888; border-radius: 6px; padding: 3px 10px; font-size: 11px; font-family: Consolas;')
         top_row.addWidget(ver_badge)
         top_row.addStretch()
@@ -2942,7 +3049,7 @@ class RestReminderWidget(QWidget):
         browser = QTextBrowser()
         browser.setPlainText('''v4.3 (2026-06-21)
 ━━━━━━━━━━━━━━━━
-• 重新设计主界面：5 tab 结构（今日 / AI 报告 / 趋势 / 使用统计 / 关于）
+• 重新设计主界面：5 tab 结构（今日 / AI 报告 / 趋势 / 设置 / 关于）
 • 浮球独立：60×60 ⏰ 图标 + 点击弹出 info 浮层
 • 修复趋势 tab 快速点击数据丢失问题
 • 删除空壳 tab（路由/认证/高级）
@@ -3041,6 +3148,7 @@ v4.1 (2026-06-17)
                 except (RuntimeError, Exception):
                     pass  # C++ 对象已销毁，重建
             self._trend_window = TrendWindow()
+            self._trend_window.destroyed.connect(lambda: setattr(self, '_trend_window', None))
             self._trend_window.show()
             log.info('[show_stats] TrendWindow 已创建并显示')
         except Exception as e:
@@ -3073,8 +3181,12 @@ v4.1 (2026-06-17)
         self.move(x, y)
 
     def _get_autostart_cmd(self):
-        # 直接启动主程序，不经过看门狗
+        # PyInstaller 打包：_MEI 临时目录不可持久化，需回退到源目录
         script = os.path.abspath(__file__)
+        if getattr(sys, 'frozen', False):
+            # 打包模式下用 _launch.vbs（固定路径），不走 __file__
+            script_dir = os.path.dirname(os.path.abspath(sys.executable))
+            script = os.path.join(script_dir, 'rest_reminder.py')
         pythonw = os.path.join(os.path.dirname(sys.executable), 'pythonw.exe')
         if not os.path.exists(pythonw):
             pythonw = sys.executable
@@ -3438,11 +3550,35 @@ v4.1 (2026-06-17)
                 msg += '📝 今天还没有复盘记录\n'
             msg += '\n记得记录到飞书～'
             self.tray_icon.showMessage('📋 每日记录提醒', msg, QSystemTrayIcon.Information, 8000)
-            comp_h = self.computer_usage_ticks // 3600
-            comp_m = (self.computer_usage_ticks % 3600) // 60
-            log.info(f'[DailyReport] 22:00 提醒: 学习{study}h, 电脑{comp_h:.1f}h')
+            log.info(f'[DailyReport] 22:00 提醒: 学习{study}h')
             # 检查连续打卡
             self._check_streak()
+
+    def _update_countdown_display(self):
+        """更新今日tab中距离22:00的倒计时进度条（4:30=0%, 22:00=100%）"""
+        bar = getattr(self, '_cd_bar', None)
+        lbl = getattr(self, '_cd_time', None)
+        if bar is None or lbl is None or sip.isdeleted(bar) or sip.isdeleted(lbl):
+            return
+        now = datetime.now()
+        midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        span_start = int(4.5 * 3600)  # 4:30 = 16200秒
+        total_span = int(22 * 3600 - 4.5 * 3600)  # 63000秒
+        if now.hour >= 22:
+            bar.setValue(100)
+            lbl.setText('今天的学习已结束')
+        else:
+            seconds_since_midnight = (now - midnight).total_seconds()
+            if seconds_since_midnight < span_start:
+                bar.setValue(0)
+                lbl.setText(f'剩余 {22 - now.hour - 1}小时{60 - now.minute}分钟')
+            else:
+                progress = int(((seconds_since_midnight - span_start) / total_span) * 100)
+                bar.setValue(min(progress, 100))
+                remaining = 22 * 3600 - seconds_since_midnight
+                h = int(remaining // 3600)
+                m = int((remaining % 3600) // 60)
+                lbl.setText(f'剩余 {h}小时{m}分钟')
 
     def _load_yesterday_review_avg(self, reviews_data=None):
         """加载昨日平均评分"""
@@ -3466,7 +3602,6 @@ v4.1 (2026-06-17)
                 # 重置数据
                 self.played_today = set()
                 self.study_hours_today = 0
-                self.computer_usage_ticks = 0
                 self._round_count = 0
                 self._activity_interval = 60
                 self.break_start = None
@@ -3477,7 +3612,6 @@ v4.1 (2026-06-17)
                 LocalSync.reset()
                 self.break_minutes_today = 0
                 LocalSync.save_break_minutes(0)
-                self._save_computer_usage()
                 self.update_study_display()
                 log.info(f'新的一天，数据已重置: {self.current_date}')
 
@@ -3494,6 +3628,7 @@ v4.1 (2026-06-17)
 
             # --- 22:00 倒计时（统一更新，避免重复请求） ---
             self._update_countdown(now)
+            self._update_countdown_display()
 
             # --- 每 15 秒电池检测 ---
             self._battery_tick += 1
@@ -3513,11 +3648,7 @@ v4.1 (2026-06-17)
                 self._state_save_tick = 0
                 self._save_active_state()
 
-            # --- 电脑使用时长简单累计 ---
-            self.update_computer_usage(now)
-
-            # --- 同步浮球数据 ---
-            self.floating_ball._update_popup_text()
+            # --- 同步浮球数据（_sync_buttons 已在各状态 handler 中调用） ---
 
         except Exception as e:
             log.error(f'[update_display 异常] {type(e).__name__}: {e}')
@@ -3525,15 +3656,11 @@ v4.1 (2026-06-17)
 
     def update_study_display(self):
         """更新通用 tab 中的数据标签"""
-        total_h = self.computer_usage_ticks // 3600
-        total_m = (self.computer_usage_ticks % 3600) // 60
         if hasattr(self, 'study_info_label'):
             self.study_info_label.setText(f'{self.study_hours_today:.1f}h')
-        if hasattr(self, 'computer_info_label'):
-            self.computer_info_label.setText(f'{total_h}h {total_m}m')
 
     def _build_review_dialog(self, title, label):
-        """构建复盘评分对话框：学科6选1 + 标签5选1 + 评分滑块1-100，15秒自动提交，金色选中态"""
+        """构建复盘评分对话框：学科6选1 + 标签5选1 + 评分滑块1-100，1分钟自动提交，金色选中态"""
         parent = self.window() or self
         dialog = QDialog(parent)
         dialog.setWindowTitle(title)
@@ -3632,7 +3759,7 @@ v4.1 (2026-06-17)
         info_bar.setStyleSheet('background: #16161c; border-radius: 6px;')
         info_layout = QHBoxLayout(info_bar)
         info_layout.setContentsMargins(10, 6, 10, 6)
-        info_lbl = QLabel('⏳ 15秒后自动提交')
+        info_lbl = QLabel(f'⏳ {AUTO_SUBMIT_SECONDS}秒后自动提交')
         info_lbl.setStyleSheet('color: #666; font-size: 11px; background: transparent;')
         info_layout.addWidget(info_lbl)
         layout.addWidget(info_bar)
@@ -3642,8 +3769,8 @@ v4.1 (2026-06-17)
         submit_btn.clicked.connect(dialog.accept)
         layout.addWidget(submit_btn)
 
-        # 15秒倒计时自动提交
-        remaining = [15]
+        # 倒计时自动提交
+        remaining = [AUTO_SUBMIT_SECONDS]
         def _countdown():
             remaining[0] -= 1
             if remaining[0] > 0:
@@ -3660,12 +3787,12 @@ v4.1 (2026-06-17)
         return dialog
 
     def _prompt_review(self):
-        """快速复盘弹窗：学科+标签+评分1-100（阻塞，30秒自动提交）"""
+        """快速复盘弹窗：学科+标签+评分1-100（阻塞，60秒自动提交）"""
         try:
             if not self._pending_review:
                 return
             dialog = self._build_review_dialog('📝 快速复盘', '这小时学了什么？')
-            QTimer.singleShot(30000, dialog.accept)
+            QTimer.singleShot(AUTO_SUBMIT_SECONDS * 1000, dialog.accept)
             if dialog.exec_():
                 subject = dialog._subject_val[0]
                 label = dialog._label_val[0]
@@ -3685,7 +3812,7 @@ v4.1 (2026-06-17)
     def _catchup_review(self):
         """补录复盘：托盘菜单入口"""
         dialog = self._build_review_dialog('📝 补录复盘', '刚才（漏掉的）那小时学得怎么样？')
-        QTimer.singleShot(30000, dialog.accept)
+        QTimer.singleShot(AUTO_SUBMIT_SECONDS * 1000, dialog.accept)
         if dialog.exec_():
             subject = dialog._subject_val[0]
             label = dialog._label_val[0]
@@ -3772,7 +3899,7 @@ v4.1 (2026-06-17)
             log.error(f'[目标] 对话框异常: {e}')
 
     def _prompt_round_goal(self):
-        """休息结束后弹出本轮目标：学科6选1 + 目标文本 + 15秒倒计时自动提交，金色选中态"""
+        """休息结束后弹出本轮目标：学科6选1 + 目标文本 + 1分钟倒计时自动提交，金色选中态"""
         try:
             saved = [False]
             dialog = QDialog(self)
@@ -3828,7 +3955,7 @@ v4.1 (2026-06-17)
             info_bar.setStyleSheet('background: #16161c; border-radius: 6px;')
             info_layout = QHBoxLayout(info_bar)
             info_layout.setContentsMargins(10, 6, 10, 6)
-            info_lbl = QLabel('⏳ 15秒后自动提交')
+            info_lbl = QLabel(f'⏳ {AUTO_SUBMIT_SECONDS}秒后自动提交')
             info_lbl.setStyleSheet('color: #666; font-size: 11px; background: transparent;')
             info_layout.addWidget(info_lbl)
             layout.addWidget(info_bar)
@@ -3853,8 +3980,8 @@ v4.1 (2026-06-17)
 
             dialog.accepted.connect(_do_save)
 
-            # 15秒倒计时自动提交
-            remaining = [15]
+            # 倒计时自动提交
+            remaining = [AUTO_SUBMIT_SECONDS]
             def _countdown():
                 remaining[0] -= 1
                 if remaining[0] > 0:
@@ -3896,136 +4023,8 @@ v4.1 (2026-06-17)
         # 同步托盘卡片 UI
         self._update_tray_card()
 
-    def _show_settings_dialog(self):
-        """设置对话框：提醒方式 + B站收藏夹 + 测试连接"""
-        from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QLabel, QComboBox,
-                                     QLineEdit, QPushButton, QHBoxLayout, QMessageBox)
-        dialog = QDialog(self)
-        dialog.setWindowTitle('⚙️ 设置')
-        dialog.setFixedSize(360, 400)
-        dialog.setStyleSheet("""
-            QDialog { background-color: #141413; color: #faf9f5; border-radius: 12px; }
-            QLabel { color: #e8e6e1; font-size: 12px; }
-            QComboBox { background: #1e1d1b; color: #e8e6e1; border: 1px solid #333; border-radius: 6px; padding: 6px; font-size: 12px; }
-            QLineEdit { background: #1e1d1b; color: #e8e6e1; border: 1px solid #333; border-radius: 6px; padding: 6px; font-size: 12px; }
-            QPushButton { background: rgba(212,175,55,0.12); color: #d4af37; border: 1px solid rgba(212,175,55,0.2); border-radius: 100px; padding: 8px; font-size: 11px; }
-            QPushButton:hover { background: rgba(212,175,55,0.2); }
-            QPushButton#testBtn { background: rgba(120,180,80,0.12); color: #78B450; border: 1px solid rgba(120,180,80,0.2); }
-            QPushButton#testBtn:hover { background: rgba(120,180,80,0.2); }
-        """)
-        layout = QVBoxLayout(dialog)
-        layout.setContentsMargins(20, 16, 20, 16)
-        layout.setSpacing(8)
-
-        layout.addWidget(QLabel('📢 提醒方式'))
-        mode_combo = QComboBox()
-        mode_combo.addItems(['打开B站', '💡 请辨金句', '只弹通知', '无操作'])
-        mode_map = {'打开B站': 'video', '💡 请辨金句': 'quote', '只弹通知': 'notify', '无操作': 'none'}
-        current_mode = self.app_settings.get('reminder_mode', 'video')
-        for i, (k, v) in enumerate(mode_map.items()):
-            if v == current_mode:
-                mode_combo.setCurrentIndex(i)
-                break
-        layout.addWidget(mode_combo)
-
-        layout.addWidget(QLabel('🎬 B站收藏夹 ID'))
-        fid_input = QLineEdit()
-        fid_input.setText(self.app_settings.get('bilibili_fid', '3648313921'))
-        fid_input.setPlaceholderText('收藏夹 media_id')
-        layout.addWidget(fid_input)
-
-        layout.addWidget(QLabel('👤 B站用户 ID'))
-        mid_input = QLineEdit()
-        mid_input.setText(self.app_settings.get('bilibili_mid', '529362421'))
-        mid_input.setPlaceholderText('用户 mid')
-        layout.addWidget(mid_input)
-
-        test_btn = QPushButton('🔍 测试收藏夹连接')
-        test_btn.setObjectName('testBtn')
-        layout.addWidget(test_btn)
-        test_result = QLabel('')
-        test_result.setStyleSheet('font-size: 11px; background: transparent;')
-        layout.addWidget(test_result)
-
-        def _set_result(text, color):
-            test_result.setText(text)
-            test_result.setStyleSheet(f'color: {color}; font-size: 11px; background: transparent;')
-            test_btn.setText('🔍 测试收藏夹连接')
-            test_btn.setEnabled(True)
-
-        def test_bilibili():
-            fid = fid_input.text().strip()
-            if not fid:
-                _set_result('⚠️ 请先填写收藏夹 ID', '#ff8844')
-                return
-            test_btn.setEnabled(False)
-            test_btn.setText('测试中...')
-            QApplication.processEvents()
-            import threading
-            def _do_test():
-                try:
-                    import requests
-                    url = f'https://api.bilibili.com/x/v3/fav/folder/info?media_id={fid}'
-                    h = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://www.bilibili.com'}
-                    try:
-                        r = requests.get(url, headers=h, timeout=5)
-                        data = r.json()
-                        code = data.get('code', -1)
-                    except requests.Timeout:
-                        QTimer.singleShot(0, lambda: _set_result('⚠️ 网络超时', '#ff8844'))
-                        return
-                    except requests.ConnectionError:
-                        QTimer.singleShot(0, lambda: _set_result('⚠️ 无法连接B站API', '#ff8844'))
-                        return
-                    if code == 0:
-                        d = data.get('data', {})
-                        QTimer.singleShot(0, lambda: _set_result(f'✅ 收藏夹「{d.get("title","?")}」· {d.get("media_count",0)} 个视频', '#78B450'))
-                    elif code == -400:
-                        QTimer.singleShot(0, lambda: _set_result('❌ 收藏夹不存在', '#ff4444'))
-                    else:
-                        QTimer.singleShot(0, lambda: _set_result(f'⚠️ API 错误 ({code})', '#ff8844'))
-                except Exception as e:
-                    QTimer.singleShot(0, lambda: _set_result(f'❌ 错误: {str(e)[:30]}', '#ff4444'))
-            threading.Thread(target=_do_test, daemon=True).start()
-
-        test_btn.clicked.connect(test_bilibili)
-        layout.addSpacing(6)
-
-        btn_row = QHBoxLayout()
-        save_btn = QPushButton('保存')
-        close_btn = QPushButton('关闭')
-        btn_row.addWidget(save_btn)
-        btn_row.addWidget(close_btn)
-        layout.addLayout(btn_row)
-
-        def save_settings():
-            self.app_settings['reminder_mode'] = mode_map.get(mode_combo.currentText(), 'video')
-            self.app_settings['bilibili_fid'] = fid_input.text().strip()
-            self.app_settings['bilibili_mid'] = mid_input.text().strip()
-            LocalSync.save_settings(self.app_settings)
-            mode_names = {'video': '打开B站', 'quote': '💡 请辨金句', 'notify': '只弹通知', 'none': '无操作'}
-            self.tray_icon.showMessage('设置', '设置已保存', QSystemTrayIcon.Information, 1500)
-            log.info(f'[设置] 提醒方式切换为: {self.app_settings["reminder_mode"]}')
-            dialog.close()
-
-        save_btn.clicked.connect(save_settings)
-        close_btn.clicked.connect(dialog.close)
-        dialog.exec_()
-
-        new_state = not self.is_autostart_enabled()
-        if self.set_autostart(new_state):
-            tip = '已开启' if new_state else '已关闭'
-            self.autostart_btn.setText('✅ 自启' if new_state else '🔄 自启')
-            self.tray_icon.showMessage('休息提醒', f'开机自启动{tip}', QSystemTrayIcon.Information, 2000)
-
     def _show_ai_report(self):
         """显示 AI 学习分析报告"""
-        try:
-            from pro_features import generate_report
-        except ImportError:
-            QMessageBox.information(self, '🤖 AI 报告',
-                'AI 模块加载失败，请检查 rest-reminder-pro/ 目录是否存在。')
-            return
 
         # 选择报告类型
         from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout,
@@ -4137,6 +4136,15 @@ v4.1 (2026-06-17)
             except Exception as e:
                 log.warning(f'[恢复] break_start 解析失败: {e}')
 
+        # 恢复休息结束时间（仅限今天）
+        if self._rest_end_time is None and state.get('rest_end_time'):
+            try:
+                ret = datetime.fromisoformat(state['rest_end_time'])
+                if ret.date() == datetime.now().date():
+                    self._rest_end_time = ret
+            except Exception as e:
+                log.warning(f'[恢复] rest_end_time 解析失败: {e}')
+
         self.played_today = set(state.get('played_today', []))
         self._round_count = state.get('round_count', 0)
         self.update_study_display()
@@ -4153,6 +4161,7 @@ v4.1 (2026-06-17)
             'timer_state': self.timer_state,
             'remaining': round(remaining),
             'break_start': self.break_start.isoformat() if self.break_start else None,
+            'rest_end_time': self._rest_end_time.isoformat() if self._rest_end_time else None,
             'break_minutes': self.break_minutes_today,
             'played_today': list(self.played_today),
             'activity_interval': self._activity_interval,
@@ -4206,60 +4215,25 @@ v4.1 (2026-06-17)
         """导出最近7天数据到剪贴板"""
         history = LocalSync.load_weekly_stats()
         today = datetime.now().date()
-        lines = ['日期        | 学习(h) | 电脑(h) | 休息(min)']
-        lines.append('-' * 42)
+        lines = ['日期        | 学习(h) | 休息(min)']
+        lines.append('-' * 34)
         total_study = 0
-        total_computer = 0
         total_break = 0
         for i in range(6, -1, -1):
             d = (today - timedelta(days=i)).isoformat()
             label = (today - timedelta(days=i)).strftime('%m/%d (%a)')
-            data = history.get(d, {'study': 0, 'computer': 0, 'break_minutes': 0})
+            data = history.get(d, {'study': 0, 'break_minutes': 0})
             study = data.get('study', 0)
-            computer = data.get('computer', 0)
             brk = data.get('break_minutes', 0)
             total_study += study
-            total_computer += computer
             total_break += brk
-            lines.append(f'{label}  |  {study:>5.1f}  |  {computer:>5.1f}  |  {brk:>6.1f}')
-        lines.append('-' * 42)
-        lines.append(f'合计        |  {total_study:>5.1f}  |  {total_computer:>5.1f}  |  {total_break:>6.1f}')
+            lines.append(f'{label}  |  {study:>5.1f}  |  {brk:>6.1f}')
+        lines.append('-' * 34)
+        lines.append(f'合计        |  {total_study:>5.1f}  |  {total_break:>6.1f}')
         text = '\n'.join(lines)
         QApplication.clipboard().setText(text)
         self.tray_icon.showMessage('📋 已复制到剪贴板', f'最近7天数据已导出\n\n{text}', QSystemTrayIcon.Information, 5000)
         log.info(f'[导出] 本周数据已复制到剪贴板')
-
-    def _load_computer_usage(self):
-        """从本地文件恢复今天的电脑使用计数（跨重启持久化）"""
-        try:
-            data = computer_store.load()
-            if not data:
-                return
-            if data.get('date') == self.current_date.isoformat():
-                self.computer_usage_ticks = int(data.get('ticks', 0))
-                log.info(f'[ComputerUsage] 恢复今日计数: {self.computer_usage_ticks / 3600:.2f}h')
-        except Exception as e:
-            log.error(f'[ComputerUsage] 加载缓存失败: {e}')
-
-    def _save_computer_usage(self):
-        """保存当前电脑使用计数到本地文件"""
-        try:
-            computer_store.save({
-                'date': self.current_date.isoformat(),
-                'ticks': self.computer_usage_ticks
-            })
-        except Exception as e:
-            log.error(f'[ComputerUsage] 保存缓存失败: {e}')
-
-    def update_computer_usage(self, now):
-        """更新电脑使用时长（简单累计）"""
-        self.computer_usage_ticks += 1
-        # 每2分钟保存一次
-        self._computer_save_tick += 1
-        if self._computer_save_tick >= 120:
-            self._computer_save_tick = 0
-            self._save_computer_usage()
-
 
     def update_battery_status(self):
         try:
@@ -4343,16 +4317,22 @@ v4.1 (2026-06-17)
         try:
             event.ignore()
             self._save_active_state()
-            self.hide()  # 直接隐藏，不移到边缘
+            if self.app_settings.get('close_to_tray', True):
+                self.hide()
+            else:
+                self.quit_app()
         except Exception as e:
             log.error(f'[closeEvent 异常] {type(e).__name__}: {e}')
 
     def quit_app(self):
         try:
             self._save_active_state()
-            self._save_computer_usage()
-            self.timer.stop()
             self.tray_icon.hide()
+            if hasattr(self, 'floating_ball'):
+                self.floating_ball.hide()
+            if hasattr(self, 'countdown_overlay'):
+                self.countdown_overlay.hide_overlay()
+            self.timer.stop()
             QApplication.quit()
         except Exception as e:
             log.error(f'[quit_app 异常] {type(e).__name__}: {e}')
@@ -4365,7 +4345,7 @@ def main():
     if _single_instance.is_already_running():
         log.warning('休息提醒程序已经在运行中！')
         if '--silent' not in sys.argv:
-            a = QApplication(sys.argv)
+            a = QApplication([])
             QMessageBox.warning(None, '已在运行', '程序已在运行中！\n请检查系统托盘图标。')
         sys.exit(0)
 
@@ -4382,9 +4362,8 @@ def main():
         ctypes.windll.user32.SetProcessDPIAware()
     except Exception:
         log.error("[DPIAware] 设置失败")
-        pass
 
-    app = QApplication(sys.argv)
+    app = QApplication([])
     app.setQuitOnLastWindowClosed(False)
 
     silent = '--silent' in sys.argv
@@ -4393,20 +4372,6 @@ def main():
         widget.hide()
     else:
         widget.show()
-
-    try:
-        ico_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cute_icon.ico')
-        hicon = ctypes.windll.user32.LoadImageW(0, ico_path, 1, 0, 0, 0x00000010)
-        if hicon:
-            hwnd = int(widget.winId())
-            WM_SETICON = 0x0080
-            ICON_SMALL = 0
-            ICON_BIG = 1
-            hicon_ptr = ctypes.c_void_p(hicon)
-            ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, hicon_ptr)
-            ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, hicon_ptr)
-    except Exception as e:
-        log.error(f'WM_SETICON error: {e}')
 
     sys.exit(app.exec_())
 

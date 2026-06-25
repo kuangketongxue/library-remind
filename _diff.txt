@@ -1,0 +1,1306 @@
+warning: in the working copy of 'rest-reminder-site/src/app/layout.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'rest-reminder-site/src/app/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'rest-reminder-site/src/components/Changelog.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'rest-reminder-site/src/components/Download.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'rest-reminder-site/src/components/Features.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'rest-reminder-site/src/components/Footer.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'rest-reminder-site/src/components/Hero.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'rest-reminder-site/src/components/Navbar.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'run.bat', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '一键安装.bat', LF will be replaced by CRLF the next time Git touches it
+diff --git a/CLAUDE.md b/CLAUDE.md
+index e9fff39..555b8d8 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -4,11 +4,11 @@
+ PyQt5 桌面挂件，品牌名「⚡ 精力管理」。开源 MIT，AI 学习分析。
+ 
+ ## 技术栈
+-Python 3.7+ / PyQt5 / requests / psutil / Win32 API (ctypes)
++Python 3.14+ / PyQt5 / requests / psutil / Win32 API (ctypes)
+ 
+ ## 关键文件
+ ```
+-rest_reminder.py              — 主程序（~3900行，含所有 UI + 逻辑）
++rest_reminder.py              — 主程序（4326行，含所有 UI + 逻辑）
+ storage.py                    — 统一 JSON 存储层（JSONStore 类）
+ RestReminder.spec             — PyInstaller 配置（含 hiddenimports=['storage']）
+ 产品规格-v4.3.md              — v4.3 完整产品规格
+@@ -35,7 +35,7 @@ pyinstaller RestReminder.spec
+ 见全局 `~/.claude/CLAUDE.md`（firecrawl×3 + tavily×2 + zhihu + global + opencli 并行）。
+ 
+ ## 踩坑记录（必读）
+-- **子目录模块需显式加入 sys.path**：`rest-reminder-pro/` 等子目录不会被 Python 自动发现，启动时 `sys.path.insert(0, subdir)`（2026-06-20）
++- **子目录模块需显式加入 sys.path**：嵌套子目录（如 `rest-reminder-site/`）不会被 Python 自动发现，启动时 `sys.path.insert(0, subdir)`（2026-06-20）
+ - **setWindowFlags 必须在 setGeometry 之前**：`FramelessWindowHint` 重建窗口导致几何尺寸丢失，窗口变 48x48（2026-06-20）
+ - **WA_DeleteOnClose 后操作 C++ 对象**：关闭后 C++ 对象销毁，_clear_tab 用 `sip.isdeleted()` 检查，_refresh_active_tab 加 `AttributeError` catch（2026-06-20）
+ - **读数据时不要写文件**：UI 展示方法不应触发 save_daily_stats() 写入（2026-06-20）
+@@ -51,6 +51,5 @@ pyinstaller RestReminder.spec
+ ## 禁止事项
+ - 不创建庆祝/确认类临时文件
+ - 不写重复修复报告
+-- 不向 GitHub 推送 rest-reminder-pro/（含 Agnes AI key）
+-- 不把 Pro 收费逻辑写在代码里，收费功能以后单独加（2026-06-20）
++- 不把收费逻辑写在代码里（v4.4 全免费）
+ - 活动密度感知已删除，不在任何文档/代码中引用（2026-06-23）
+diff --git a/README.md b/README.md
+index 70988b1..e6c6c43 100644
+--- a/README.md
++++ b/README.md
+@@ -29,7 +29,7 @@
+ ## 🚀 快速开始
+ 
+ ```
+-双击 dist/RestReminder.exe
++双击 _launch.vbs
+ # 或
+ python rest_reminder.py
+ ```
+@@ -37,13 +37,18 @@ python rest_reminder.py
+ ## 📁 项目结构
+ 
+ ```
+-├── rest_reminder.py        # 主程序
++├── rest_reminder.py        # 主程序（4326行）
+ ├── storage.py              # 统一 JSON 存储层
+-├── cute_icon.png/ico       # 图标
+-├── requirements.txt        # 依赖
++├── vendor/                 # 本地依赖包（PyQt5/psutil/requests）
++├── _launch.vbs             # 静默启动（后台无窗口）
++├── run.bat                 # 启动脚本
++├── 一键安装.bat             # 安装+依赖+自启动
+ ├── RestReminder.spec       # PyInstaller 配置
+-├── 一键安装.bat             # 安装+自启动
+-└── dist/RestReminder.exe   # 打包好的 exe
++├── requirements.txt        # 依赖声明
++├── .env                    # API 配置（本地，不提交）
++├── docs/ARCHITECTURE.md    # 架构文档
++├── rest-reminder-site/     # 网站源码（Next.js）
++└── 数据文件（.daily_log.json 等）  # 本地持久化
+ ```
+ 
+ ## 🎨 设计
+diff --git a/RestReminder.spec b/RestReminder.spec
+index c724729..f176a61 100644
+--- a/RestReminder.spec
++++ b/RestReminder.spec
+@@ -6,7 +6,7 @@ a = Analysis(
+     pathex=[],
+     binaries=[],
+     datas=[('cute_icon.ico', '.'), ('cute_icon.png', '.')],
+-    hiddenimports=['storage'],
++    hiddenimports=['storage', 'PyQt5.QtWidgets'],
+     hookspath=[],
+     hooksconfig={},
+     runtime_hooks=[],
+diff --git a/cute_icon.png b/cute_icon.png
+deleted file mode 100644
+index 467b0fb..0000000
+Binary files a/cute_icon.png and /dev/null differ
+diff --git a/rest-reminder-site/src/app/layout.tsx b/rest-reminder-site/src/app/layout.tsx
+index 0024ca1..3b067ce 100644
+--- a/rest-reminder-site/src/app/layout.tsx
++++ b/rest-reminder-site/src/app/layout.tsx
+@@ -6,6 +6,7 @@ export const metadata: Metadata = {
+   title: "Rest Reminder — 免费开源 Windows久坐提醒软件 | 护眼番茄钟 | B站视频休息提醒",
+   description: "免费开源的Windows桌面久坐提醒工具。每小时自动弹出休息提醒+B站护眼视频，学习/工作时长追踪，连续打卡，暗黑主题。MIT协议，46MB轻量安装。",
+   keywords: ["久坐提醒", "番茄钟", "护眼提醒", "Windows桌面工具", "开源免费", "学习计时", "工作休息提醒", "B站护眼视频", "桌面挂件", "考研", "久坐", "眼睛疲劳"],
++  icons: { icon: "/favicon.png" },
+   openGraph: {
+     title: "Rest Reminder — 保护你的眼睛，从每一次休息开始",
+     description: "桌面休息提醒挂件，自定义间隔自动提醒，学习数据追踪，云同步。",
+diff --git a/rest-reminder-site/src/app/page.tsx b/rest-reminder-site/src/app/page.tsx
+index b3cb1a6..ccb69dd 100644
+--- a/rest-reminder-site/src/app/page.tsx
++++ b/rest-reminder-site/src/app/page.tsx
+@@ -8,6 +8,7 @@ import FAQ from "@/components/FAQ";
+ import Download from "@/components/Download";
+ import Footer from "@/components/Footer";
+ import StickyCTA from "@/components/StickyCTA";
++import Sponsor from "@/components/Sponsor";
+ 
+ function Stats() {
+   const stats = [
+@@ -73,6 +74,7 @@ export default function Home() {
+       <Changelog />
+       <FAQ />
+       <Download />
++      <Sponsor />
+       <Footer />
+     </main>
+   );
+diff --git a/rest-reminder-site/src/components/Changelog.tsx b/rest-reminder-site/src/components/Changelog.tsx
+index 1798ab6..592d60c 100644
+--- a/rest-reminder-site/src/components/Changelog.tsx
++++ b/rest-reminder-site/src/components/Changelog.tsx
+@@ -3,8 +3,27 @@
+ const releases = [
+   {
+     version: "v4.4",
+-    date: "2026.06",
++    date: "2026.06.23",
+     tag: "最新",
++    changes: [
++      "修复启动崩溃（QTextBrowser 缺失 import），开机自启动恢复正常",
++      "趋势窗口新增饼图（学习/电脑占比）和热力图（一周时段分布）",
++      "复盘弹窗优化：更大按钮 + 金色选中态 + 15秒倒计时 + 信息栏",
++      "轮次目标弹窗优化：15秒自动提交 + 实时倒计时显示",
++      "AI 报告后台线程生成，不再卡顿 UI（QThread）",
++      "文本缓存优化：浮球文字变化时才更新，消除 repaint storm",
++      "移除趋势 tab 底部冗余按钮（查看详细趋势/复盘时间线）",
++      "修复 excepthook 导致随机崩溃（移除 sys.exit(1)）",
++      "emoji 字体修复：全局添加 Segoe UI Emoji",
++      "窗口标题动态显示当前 tab",
++      "更新官网域名至 crazy-rest-reminder.pages.dev",
++      "开源发布：移除 Pro 订阅系统，全部功能免费",
++    ],
++  },
++  {
++    version: "v4.3",
++    date: "2026.06.21",
++    tag: "",
+     changes: [
+       "UI 重构：5 标签页（今日概览/AI报告/趋势/设置/关于）",
+       "今日标签：直接展示学习时长、轮次、休息状态、复盘、连续天数",
+@@ -22,7 +41,7 @@ const releases = [
+       "20-20-20 护眼提醒：每 20 分钟轻量浮窗看远处",
+       "活动密度感知：连续活跃自动缩至 45min，空闲 5min 自动暂停",
+       "趋势分析：5 标签页（今日/周/月/季年/时段）",
+-      "请辨金句模式+每小时复盘",
++      "请辨金句模式 + 每小时复盘",
+       "AI 学习分析：自动生成日报/周报/月报/季报/年报",
+     ],
+   },
+@@ -32,7 +51,7 @@ const releases = [
+     tag: "",
+     changes: [
+       "移除看门狗，注册表直启更稳定",
+-      "Pro 版功能重构",
++      "功能模块化重构",
+     ],
+   },
+   {
+@@ -40,7 +59,7 @@ const releases = [
+     date: "2026.06",
+     tag: "",
+     changes: [
+-      "用户可配置B站收藏夹和提醒视频",
++      "用户可配置 B站收藏夹和提醒视频",
+       "设置页面：右键菜单可视化配置",
+     ],
+   },
+@@ -63,7 +82,7 @@ const releases = [
+       "全新暗色调主题",
+       "B站护眼视频自动播放",
+       "自定义收藏夹支持",
+-      "性能优化：内存占用降低40%",
++      "性能优化：内存占用降低 40%",
+     ],
+   },
+   {
+@@ -72,7 +91,7 @@ const releases = [
+     tag: "",
+     changes: [
+       "首次发布",
+-      "60分钟自动循环计时",
++      "60 分钟自动循环计时",
+       "休息提醒弹窗",
+       "基础设置面板",
+     ],
+diff --git a/rest-reminder-site/src/components/Download.tsx b/rest-reminder-site/src/components/Download.tsx
+index f25885f..68ca385 100644
+--- a/rest-reminder-site/src/components/Download.tsx
++++ b/rest-reminder-site/src/components/Download.tsx
+@@ -6,7 +6,7 @@ const steps = [
+   {
+     num: "1",
+     title: "下载安装",
+-    desc: "下载 RestReminder.exe，双击运行",
++    desc: "从 GitHub Releases 下载 RestReminder.exe，46MB 秒装",
+     img: "/screenshot-menu.png",
+   },
+   {
+@@ -77,8 +77,9 @@ export default function Download() {
+           >
+             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
+               <a
+-                href="/RestReminder.exe"
+-                download
++                href="https://github.com/kuangketongxue/library-remind/releases/latest"
++                target="_blank"
++                rel="noopener noreferrer"
+                 className="inline-flex items-center gap-2 bg-white text-[#b5651d] font-semibold px-8 py-3.5 rounded-full text-base hover:bg-[var(--fg)] hover:shadow-lg transition-all"
+               >
+                 ↓ 立即下载
+diff --git a/rest-reminder-site/src/components/Features.tsx b/rest-reminder-site/src/components/Features.tsx
+index 01a0324..40b51de 100644
+--- a/rest-reminder-site/src/components/Features.tsx
++++ b/rest-reminder-site/src/components/Features.tsx
+@@ -1,12 +1,12 @@
+ "use client";
+ 
+ const features = [
+-  { icon: "", title: "智能循环计时", desc: "60分钟学习 → 5分钟请辨倒计时 → 5分钟休息，自动循环" },
+-  { icon: "", title: "20-20-20 护眼提醒", desc: "每 20 分钟轻量浮窗提醒看远处，保护眼睛" },
+-  { icon: "", title: "学习时长追踪", desc: "学习/电脑/休息时长实时统计，连续打卡+里程碑金句" },
+-  { icon: "", title: "趋势分析", desc: "5标签页：今日/周/月/季年/时段趋势，数据可视化" },
+-  { icon: "", title: "请辨金句", desc: "休息时展示思辨金句，每日不重复" },
+-  { icon: "", title: "AI 学习分析", desc: "AI 自动生成日报/周报/月报/季报/年报，分析学习模式" },
++  { icon: "⏱️", title: "智能循环计时", desc: "60分钟学习 → 5分钟倒计时 → 5分钟休息，自动循环不打断" },
++  { icon: "👁️", title: "20-20-20 护眼提醒", desc: "每20分钟轻量浮窗提醒看远处，保护眼睛不累" },
++  { icon: "📊", title: "学习时长追踪", desc: "学习/电脑/休息时长实时统计，连续打卡+里程碑金句" },
++  { icon: "📈", title: "趋势分析", desc: "5标签页：今日/周/月/季年/时段趋势，数据可视化一目了然" },
++  { icon: "💡", title: "请辨金句", desc: "休息时展示思辨金句，每日不重复，边休息边思考" },
++  { icon: "🤖", title: "AI 学习分析", desc: "AI自动生成日报/周报/月报/季报/年报，分析你的学习模式" },
+ ];
+ 
+ const rows = [
+@@ -19,34 +19,35 @@ const rows = [
+ 
+ export default function Features() {
+   return (
+-    <section className="py-20 px-6" id="features">
++    <section className="py-24 px-6" id="features">
+       <div className="max-w-6xl mx-auto">
+         <h2 className="text-3xl md:text-[2.5rem] font-extrabold tracking-tight mb-3 font-display">核心功能</h2>
+-        <p className="text-[var(--fg-dim)] text-lg mb-12">所有功能完全免费，无隐藏收费。</p>
++        <p className="text-[var(--fg-dim)] text-lg mb-14">所有功能完全免费，无隐藏收费。</p>
+ 
+-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+-          {features.map((f) => (
+-            <div key={f.title} className="border border-[var(--border)] rounded-xl p-6 bg-[var(--surface)] hover:border-[var(--accent)] hover:bg-[var(--surface-hover)] transition-colors">
+-              <h3 className="text-[15px] font-semibold mb-1.5 tracking-tight">{f.title}</h3>
++        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
++          {features.map((f, i) => (
++            <div key={f.title} className="card p-7 group">
++              <div className="text-3xl mb-4 group-hover:scale-110 transition-transform duration-300">{f.icon}</div>
++              <h3 className="text-[15px] font-semibold mb-2 tracking-tight">{f.title}</h3>
+               <p className="text-[13px] text-[var(--fg-dim)] leading-relaxed">{f.desc}</p>
+             </div>
+           ))}
+         </div>
+ 
+         {/* Comparison table */}
+-        <div className="mt-12 border border-[var(--border)] overflow-hidden">
++        <div className="mt-16 border border-[var(--border)] overflow-hidden rounded-2xl">
+           <div className="grid grid-cols-4 text-[11px] border-b border-[var(--border)]">
+-            <div className="p-3.5 text-[var(--fg-dim)] font-semibold tracking-wider uppercase">功能</div>
+-            <div className="p-3.5 text-center font-semibold text-[var(--accent)] bg-[var(--accent-soft)]">Rest Reminder</div>
+-            <div className="p-3.5 text-center text-[var(--fg-dim)]">其他番茄钟</div>
+-            <div className="p-3.5 text-center text-[var(--fg-dim)]">系统提醒</div>
++            <div className="p-4 text-[var(--fg-dim)] font-semibold tracking-wider uppercase">功能</div>
++            <div className="p-4 text-center font-semibold text-[var(--accent)] bg-[var(--accent-soft)]">Rest Reminder</div>
++            <div className="p-4 text-center text-[var(--fg-dim)]">其他番茄钟</div>
++            <div className="p-4 text-center text-[var(--fg-dim)]">系统提醒</div>
+           </div>
+           {rows.map((r, i) => (
+-            <div key={i} className="grid grid-cols-4 text-[13px] border-b border-[var(--border)] last:border-b-0">
+-              <div className="p-3.5 text-[var(--fg-dim)]">{r.feature}</div>
+-              <div className="p-3.5 text-center text-[var(--accent)] font-medium bg-[var(--accent-soft)]">{r.rr}</div>
+-              <div className="p-3.5 text-center text-[var(--fg-dim)]">{r.fq}</div>
+-              <div className="p-3.5 text-center text-[var(--fg-dim)]">{r.xt}</div>
++            <div key={i} className="grid grid-cols-4 text-[13px] border-b border-[var(--border)] last:border-b-0 hover:bg-[var(--surface-hover)] transition-colors">
++              <div className="p-4 text-[var(--fg-dim)]">{r.feature}</div>
++              <div className="p-4 text-center text-[var(--accent)] font-medium bg-[var(--accent-soft)]">{r.rr}</div>
++              <div className="p-4 text-center text-[var(--fg-dim)]">{r.fq}</div>
++              <div className="p-4 text-center text-[var(--fg-dim)]">{r.xt}</div>
+             </div>
+           ))}
+         </div>
+diff --git a/rest-reminder-site/src/components/Footer.tsx b/rest-reminder-site/src/components/Footer.tsx
+index efad184..3f6c17d 100644
+--- a/rest-reminder-site/src/components/Footer.tsx
++++ b/rest-reminder-site/src/components/Footer.tsx
+@@ -32,7 +32,7 @@ export default function Footer() {
+           <div className="grid grid-cols-2 md:grid-cols-4 gap-10">
+             <div className="col-span-2 md:col-span-1">
+               <div className="flex items-center gap-2.5 mb-4">
+-                <div className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center text-[var(--bg)] text-sm font-bold font-display">R</div>
++                <img src="/rest-reminder-logo.png" alt="Rest Reminder" className="w-8 h-8 rounded-md" />
+                 <span className="font-semibold text-base font-display">Rest Reminder</span>
+               </div>
+               <p className="text-sm text-[var(--fg-dim)] leading-relaxed mb-4">
+@@ -48,6 +48,7 @@ export default function Footer() {
+               <h4>资源</h4>
+               <a href="#changelog">更新日志</a>
+               <a href="#faq">常见问题</a>
++              <a href="#sponsor">赞助商</a>
+             </div>
+             <div className="footer-col">
+               <h4>社区</h4>
+diff --git a/rest-reminder-site/src/components/Hero.tsx b/rest-reminder-site/src/components/Hero.tsx
+index 640ebb7..e3269ba 100644
+--- a/rest-reminder-site/src/components/Hero.tsx
++++ b/rest-reminder-site/src/components/Hero.tsx
+@@ -1,7 +1,6 @@
+ "use client";
+ 
+ import { motion } from "framer-motion";
+-import CountdownDemo from "./CountdownDemo";
+ 
+ const fade = (delay = 0) => ({
+   initial: { opacity: 0, y: 24 },
+@@ -11,65 +10,134 @@ const fade = (delay = 0) => ({
+ 
+ export default function Hero() {
+   return (
+-    <section className="relative min-h-screen flex flex-col justify-center px-6 pt-24 pb-16 overflow-hidden">
+-      {/* Subtle gradient background */}
+-      <div className="absolute top-[-20%] left-[-10%] w-[700px] h-[700px] rounded-full bg-[radial-gradient(circle,rgba(201,131,110,0.04)_0%,transparent_70%)] pointer-events-none" />
+-      <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full bg-[radial-gradient(circle,rgba(201,131,110,0.03)_0%,transparent_70%)] pointer-events-none" />
++    <section className="relative min-h-screen flex items-center px-6 pt-20 pb-16 overflow-hidden">
++      {/* Background glow */}
++      <div className="absolute top-[10%] right-[5%] w-[500px] h-[500px] rounded-full bg-[radial-gradient(circle,rgba(245,158,11,0.06)_0%,transparent_70%)] pointer-events-none" />
++      <div className="absolute bottom-[5%] left-[10%] w-[400px] h-[400px] rounded-full bg-[radial-gradient(circle,rgba(124,58,237,0.04)_0%,transparent_70%)] pointer-events-none" />
+ 
+-      <div className="relative z-10 max-w-6xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+-        {/* Left: Text */}
++      <div className="relative z-10 max-w-6xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
++        {/* Left: Text content */}
+         <div>
+-          <motion.div {...fade(0)} className="inline-flex items-center gap-2 mb-8">
+-            <span className="tag">v4.4</span>
+-            <span className="text-sm text-[var(--fg-dim)]">开源免费 · MIT协议</span>
++          <motion.div {...fade(0)} className="inline-flex items-center gap-2 mb-6">
++            <span className="text-[10px] font-semibold text-[var(--accent)] bg-[var(--accent-soft)] px-2.5 py-1 rounded-full border border-[var(--border-accent)]">
++              开源免费 · MIT 协议
++            </span>
++            <span className="text-xs text-[var(--fg-dim)]">v4.4</span>
+           </motion.div>
+ 
+           <motion.h1
+             {...fade(0.1)}
+-            className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-[-0.03em] leading-[1.05] mb-6 font-display"
++            className="text-4xl md:text-5xl lg:text-[3.5rem] font-extrabold tracking-[-0.03em] leading-[1.08] mb-5 font-display"
+           >
+-            久坐伤眼？
+-            <br />
+-            <span className="gradient-text">自动提醒你休息</span>
++            久坐伤眼？<br />
++            <span className="text-[var(--accent)]">自动提醒你休息</span>
+           </motion.h1>
+ 
+           <motion.p
+             {...fade(0.2)}
+-            className="text-lg text-[var(--fg-dim)] max-w-md leading-relaxed mb-10"
++            className="text-base text-[var(--fg-dim)] max-w-md leading-relaxed mb-8"
+           >
+-            每小时自动提醒休息，追踪学习数据，AI 自动生成多维度学习报告。
+-            <span className="block text-sm mt-3 text-[var(--accent)] font-medium">完全免费 · MIT 开源 · 无隐藏收费</span>
++            46MB 轻量桌面挂件，60 分钟自动循环。右下角浮球实时显示倒计时，到点弹出护眼视频，AI 自动生成学习报告。
+           </motion.p>
+ 
+-          <motion.div {...fade(0.3)} className="flex flex-col sm:flex-row gap-4">
+-            <a href="#download" className="btn-primary btn-shine px-8 py-3.5 text-base inline-flex items-center justify-center gap-2">
+-              ↓ 立即下载
++          <motion.div {...fade(0.3)} className="flex flex-col sm:flex-row gap-3 mb-10">
++            <a href="#download" className="btn-primary px-7 py-3 text-sm inline-flex items-center justify-center gap-2">
++              ↓ 免费下载
+             </a>
+-            <a href="#features" className="btn-ghost px-8 py-3.5 text-base inline-flex items-center justify-center">
+-              查看功能 →
++            <a href="https://github.com/kuangketongxue/library-remind" target="_blank" rel="noopener noreferrer" className="btn-ghost px-7 py-3 text-sm inline-flex items-center justify-center gap-2">
++              GitHub 开源 →
+             </a>
+           </motion.div>
+ 
+-          <motion.div {...fade(0.4)} className="flex gap-10 mt-12">
++          <motion.div {...fade(0.4)} className="flex gap-8">
+             <div>
+-              <div className="text-xl font-bold stat-number font-display">MIT</div>
+-              <div className="text-xs text-[var(--fg-dim)] mt-1">开源协议</div>
++              <div className="text-lg font-bold font-display text-[var(--accent)]">0元</div>
++              <div className="text-[11px] text-[var(--fg-dim)] mt-0.5">完全免费</div>
+             </div>
+             <div>
+-              <div className="text-xl font-bold stat-number font-display">0元</div>
+-              <div className="text-xs text-[var(--fg-dim)] mt-1">起步价</div>
++              <div className="text-lg font-bold font-display text-[var(--accent)]">46MB</div>
++              <div className="text-[11px] text-[var(--fg-dim)] mt-0.5">轻量安装</div>
+             </div>
+             <div>
+-              <div className="text-xl font-bold stat-number font-display">46MB</div>
+-              <div className="text-xs text-[var(--fg-dim)] mt-1">轻量安装</div>
++              <div className="text-lg font-bold font-display text-[var(--accent)]">MIT</div>
++              <div className="text-[11px] text-[var(--fg-dim)] mt-0.5">开源协议</div>
+             </div>
+           </motion.div>
+         </div>
+ 
+-        {/* Right: Interactive countdown demo */}
+-        <div className="flex justify-center lg:justify-end">
+-          <CountdownDemo />
+-        </div>
++        {/* Right: Product mockup with CC Switch style card */}
++        <motion.div {...fade(0.3)} className="flex justify-center lg:justify-end">
++          <div className="relative">
++            {/* Decorative elements behind */}
++            <div className="absolute -top-4 -right-4 w-24 h-24 border border-[var(--border)] rounded-full opacity-30" />
++            <div className="absolute -bottom-4 -left-4 w-16 h-16 bg-[var(--accent)] opacity-5 rounded-lg rotate-12" />
++
++            {/* Card frame */}
++            <div className="relative bg-[var(--surface-raised)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-2xl"
++                 style={{ boxShadow: '0 0 80px rgba(245,158,11,0.06), 0 25px 50px rgba(0,0,0,0.4)' }}>
++
++              {/* Browser-style top bar */}
++              <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--border)] bg-[var(--bg)]">
++                <div className="flex gap-1.5">
++                  <div className="w-3 h-3 rounded-full bg-[#ef4444] opacity-60" />
++                  <div className="w-3 h-3 rounded-full bg-[#eab308] opacity-60" />
++                  <div className="w-3 h-3 rounded-full bg-[#22c55e] opacity-60" />
++                </div>
++                <div className="flex-1 mx-3">
++                  <div className="bg-[var(--surface)] rounded-md px-3 py-1 text-[10px] text-[var(--fg-dim)] font-mono text-center">
++                    crazy-rest-reminder.pages.dev
++                  </div>
++                </div>
++              </div>
++
++              {/* Screenshot content */}
++              <div className="p-6 bg-[var(--bg)]">
++                {/* Mini app screenshot */}
++                <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] p-5 max-w-xs mx-auto">
++                  {/* Mini sidebar */}
++                  <div className="flex gap-4">
++                    <div className="flex flex-col items-center gap-3 pt-1">
++                      <div className="w-8 h-8 rounded-lg bg-[var(--accent)] flex items-center justify-center text-[var(--bg)] text-xs font-bold font-display">R</div>
++                      <div className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]" />
++                      <div className="w-1.5 h-1.5 rounded-full bg-[var(--border)]" />
++                      <div className="w-1.5 h-1.5 rounded-full bg-[var(--border)]" />
++                      <div className="w-1.5 h-1.5 rounded-full bg-[var(--border)]" />
++                    </div>
++                    <div className="flex-1 space-y-3">
++                      <div>
++                        <div className="h-3 w-16 bg-[var(--accent)] rounded mb-2 opacity-80" />
++                        <div className="h-2 w-24 bg-[var(--border)] rounded" />
++                      </div>
++                      <div className="bg-[var(--surface-raised)] rounded-lg p-3 border border-[var(--border)]">
++                        <div className="flex items-center gap-2 mb-2">
++                          <div className="w-5 h-5 rounded-full bg-[var(--accent-soft)] flex items-center justify-center text-[8px] text-[var(--accent)]">⏱</div>
++                          <div className="h-2 w-12 bg-[var(--border)] rounded" />
++                        </div>
++                        <div className="h-1.5 w-full bg-[var(--border)] rounded mb-1.5" />
++                        <div className="h-1.5 w-3/4 bg-[var(--border)] rounded" />
++                      </div>
++                      <div className="grid grid-cols-2 gap-2">
++                        <div className="bg-[var(--surface-raised)] rounded-lg p-2.5 border border-[var(--border)]">
++                          <div className="text-[var(--accent)] text-xs mb-1">📊</div>
++                          <div className="h-2 w-10 bg-[var(--border)] rounded" />
++                        </div>
++                        <div className="bg-[var(--surface-raised)] rounded-lg p-2.5 border border-[var(--border)]">
++                          <div className="text-[var(--accent)] text-xs mb-1">🎯</div>
++                          <div className="h-2 w-10 bg-[var(--border)] rounded" />
++                        </div>
++                      </div>
++                    </div>
++                  </div>
++                </div>
++
++                {/* Floating badge */}
++                <div className="absolute -bottom-3 -right-3 bg-[var(--accent)] text-[var(--bg)] text-[10px] font-bold px-3 py-1.5 rounded-lg shadow-lg">
++                  开源免费 ✓
++                </div>
++              </div>
++            </div>
++          </div>
++        </motion.div>
+       </div>
+     </section>
+   );
+diff --git a/rest-reminder-site/src/components/Navbar.tsx b/rest-reminder-site/src/components/Navbar.tsx
+index 7e73995..b0f460f 100644
+--- a/rest-reminder-site/src/components/Navbar.tsx
++++ b/rest-reminder-site/src/components/Navbar.tsx
+@@ -5,7 +5,7 @@ export default function Navbar() {
+     <nav className="fixed top-0 left-0 right-0 z-50 bg-[rgba(10,10,11,0.85)] backdrop-blur-xl border-b border-[var(--border)]">
+       <div className="max-w-6xl mx-auto flex items-center justify-between h-16 px-6">
+         <Link href="/" className="flex items-center gap-2.5">
+-          <div className="w-8 h-8 rounded-md bg-[var(--accent)] flex items-center justify-center text-[var(--bg)] text-sm font-bold font-display">R</div>
++          <img src="/rest-reminder-logo.png" alt="Rest Reminder" className="w-8 h-8 rounded-md" />
+           <span className="font-semibold text-[15px] font-display tracking-tight">Rest Reminder</span>
+         </Link>
+ 
+@@ -19,6 +19,9 @@ export default function Navbar() {
+           <a href="#faq" className="text-[13px] text-[var(--fg-dim)] hover:text-[var(--fg)] transition-colors hidden md:block">
+             FAQ
+           </a>
++          <a href="#sponsor" className="text-[13px] text-[var(--fg-dim)] hover:text-[var(--fg)] transition-colors hidden md:block">
++            赞助商
++          </a>
+           <a
+             href="https://github.com/kuangketongxue/library-remind"
+             target="_blank"
+diff --git a/rest_reminder.py b/rest_reminder.py
+index 856ca97..d8e9837 100644
+--- a/rest_reminder.py
++++ b/rest_reminder.py
+@@ -10,12 +10,11 @@
+ import sys
+ import time
+ import random
+-import hashlib
+-import uuid
++import os
+ import platform
+ import requests
+ import ctypes
+-import os
++import msvcrt
+ import tempfile
+ from datetime import datetime, timedelta
+ from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel,
+@@ -260,6 +259,7 @@ class FloatingBall(QWidget):
+             popup = QWidget(None)
+             popup.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint)
+             popup.setAttribute(Qt.WA_TranslucentBackground)
++            popup.setAttribute(Qt.WA_DeleteOnClose)
+             popup.setFixedSize(200, 130)
+ 
+             root = QFrame(popup)
+@@ -437,10 +437,11 @@ class FloatingBall(QWidget):
+             total_h = mw.computer_usage_ticks // 3600
+             total_m = (mw.computer_usage_ticks % 3600) // 60
+             computer = f'💻 {total_h}h{total_m}m'
+-        except Exception:
++        except Exception as e:
+             timer_text = '续航 60:00'
+             study = '📚 0h'
+             computer = '💻 0h0m'
++            log.debug(f'[_update_popup_text] 计算异常: {e}')
+ 
+         # 文本缓存：跳过无变化的 setText 避免 repaint storm
+         prev = getattr(popup, '_prev_texts', {})
+@@ -711,7 +712,6 @@ class SingleInstanceChecker:
+ 
+     def is_already_running(self):
+         try:
+-            import msvcrt
+             try:
+                 self.lock_handle = open(self.lock_path, 'w')
+                 msvcrt.locking(self.lock_handle.fileno(), msvcrt.LK_NBLCK, 1)
+@@ -730,39 +730,38 @@ class SingleInstanceChecker:
+             return self._fallback_check()
+ 
+     def _fallback_check(self):
+-        try:
+-            if os.path.exists(self.lock_path):
+-                try:
+-                    with open(self.lock_path, 'r') as f:
+-                        old_pid = int(f.read().strip())
+-                    if psutil.pid_exists(old_pid):
+-                        try:
+-                            proc = psutil.Process(old_pid)
+-                            cmdline = ' '.join(proc.cmdline())
+-                            if 'rest_reminder' in cmdline:
+-                                return True
+-                        except Exception:
+-                            pass
+-                    os.remove(self.lock_path)
+-                except (ValueError, IOError):
++        """文件锁降级方案：检查旧锁 → 清理 → 获取新锁"""
++        if os.path.exists(self.lock_path):
++            try:
++                with open(self.lock_path, "r") as f:
++                    old_pid = int(f.read().strip())
++                if psutil.pid_exists(old_pid):
+                     try:
+-                        os.remove(self.lock_path)
+-                    except Exception as e:
+-                        log.warning(f'[单实例] 删除旧锁文件失败: {e}')
+-            with open(self.lock_path, 'w') as f:
+-                f.write(str(os.getpid()))
+-            self.lock_file = self.lock_path
+-            atexit.register(self.cleanup)
+-            return False
+-        except Exception as e:
+-            log.error(f'备用单实例检查失败：{e}')
+-            return False
+-
++                        proc = psutil.Process(old_pid)
++                        if "rest_reminder" in " ".join(proc.cmdline()):
++                            return True
++                    except psutil.Error as e:
++                        log.debug(f"[单实例] 检查旧进程失败: {e}")
++            except (ValueError, IOError):
++                pass
++            # 旧锁已失效，直接删除
++            try:
++                os.remove(self.lock_path)
++            except Exception as e:
++                log.warning(f"[单实例] 删除旧锁文件失败: {e}")
++        # 获取新锁（原子操作）
++        lh = open(self.lock_path, "w")
++        msvcrt.locking(lh.fileno(), msvcrt.LK_NBLCK, 1)
++        lh.write(str(os.getpid()))
++        lh.flush()
++        self.lock_handle = lh
++        self.lock_file = self.lock_path
++        atexit.register(self.cleanup)
++        return False
+     def cleanup(self):
+         try:
+             if self.lock_handle:
+                 try:
+-                    import msvcrt
+                     msvcrt.locking(self.lock_handle.fileno(), msvcrt.LK_UNLCK, 1)
+                 except Exception as e:
+                     log.warning(f'[单实例] 解锁失败: {e}')
+@@ -1089,6 +1088,7 @@ class StatsWindow(QWidget):
+     """学习统计窗口 - 显示最近7天的学习/电脑使用柱状图"""
+     def __init__(self):
+         super().__init__()
++        self.setAttribute(Qt.WA_DeleteOnClose)
+         self.setWindowTitle('📊 学习统计')
+         self.setFixedSize(420, 320)
+         self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.Tool)
+@@ -1877,8 +1877,8 @@ class _ReportWorker(QThread):
+     """后台线程：生成 AI 报告，不阻塞 UI"""
+     finished = pyqtSignal(dict)
+ 
+-    def __init__(self, report_type, force_refresh=False):
+-        super().__init__()
++    def __init__(self, parent=None, report_type=None, force_refresh=False):
++        super().__init__(parent)
+         self.report_type = report_type
+         self.force_refresh = force_refresh
+ 
+@@ -1892,6 +1892,38 @@ class _ReportWorker(QThread):
+         self.finished.emit(result)
+ 
+ 
++def _create_app_icon(size=64):
++    """动态生成 ⚡ 图标（替代外部 .ico 文件，避免路径/编码/损坏问题）"""
++    from PyQt5.QtGui import QPixmap
++    pm = QPixmap(size, size)
++    pm.fill(Qt.transparent)
++    painter = QPainter(pm)
++    painter.setRenderHint(QPainter.Antialiasing)
++
++    # 外圈光晕
++    painter.setBrush(QBrush(QColor(212, 175, 55, 30)))
++    painter.setPen(Qt.NoPen)
++    painter.drawEllipse(2, 2, size - 4, size - 4)
++
++    # 内圆（深色底）
++    painter.setBrush(QBrush(QColor(20, 20, 24)))
++    painter.setPen(QPen(QColor(212, 175, 55, 120), 2))
++    painter.drawEllipse(6, 6, size - 12, size - 12)
++
++    # ⚡ 闪电图标
++    painter.setPen(QColor(212, 175, 55))
++    font_size = max(size // 3, 12)
++    painter.setFont(QFont('Segoe UI Emoji', font_size, QFont.Bold))
++    painter.drawText(pm.rect(), Qt.AlignCenter, '⚡')
++    painter.end()
++
++    icon = QIcon(pm)
++    # 多尺寸缓存，避免 PyInstaller 打包后找不到文件
++    icon.addPixmap(pm.scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation), QIcon.Normal, QIcon.Off)
++    icon.addPixmap(pm.scaled(16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation), QIcon.Normal, QIcon.On)
++    return icon
++
++
+ class RestReminderWidget(QWidget):
+     TAB_NAMES = ['今日', 'AI 报告', '趋势', '设置', '关于']  # 单一来源
+ 
+@@ -1981,10 +2013,11 @@ class RestReminderWidget(QWidget):
+ 
+         # 启动时先定位到屏幕右侧，主窗口默认隐藏（只显示小浮球）
+         self.position_to_right()
+-        # self.hide()  # 临时注释：调试黑屏问题
+-        self.show()
++        if not self.app_settings.get('silent_start', False):
++            self.show()
+         # 恢复上次运行状态（跨重启续接）
+         self._restore_active_state()
++        self._load_computer_usage()
+         # 启动时提示设目标
+         self._prompt_goal()
+ 
+@@ -1996,8 +2029,7 @@ class RestReminderWidget(QWidget):
+ 
+         self.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.WindowMinimizeButtonHint)
+ 
+-        ico_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cute_icon.ico')
+-        self.app_icon = QIcon(ico_path)
++        self.app_icon = _create_app_icon()
+         self.setWindowIcon(self.app_icon)
+         self.setObjectName('mainWindow')
+ 
+@@ -2409,114 +2441,6 @@ class RestReminderWidget(QWidget):
+             return '今天的学习已经结束，好好休息'
+         state_names = {'idle': '准备好开始学习了吗？', 'running': '保持专注，你正在进步', 'resting': '放松一下，马上回来', 'paused': '已暂停，随时可以继续'}
+         return state_names.get(self.timer_state, '精力管理，从今天开始')
+-
+-        autostart_checked = self.is_autostart_enabled()
+-        silent_checked = self.app_settings.get('silent_start', False)
+-        close_tray_checked = self.app_settings.get('close_to_tray', True)
+-        study_checked = self.app_settings.get('study_tracking', True)
+-        review_checked = self.app_settings.get('review_reminder', True)
+-        sound_checked = self.app_settings.get('sound_enabled', True)
+-
+-        autostart_row = self._make_setting_row(
+-            '⚡', '开机自启',
+-            '随系统启动自动运行精力管理',
+-            autostart_checked,
+-            lambda v: self.set_autostart(v == 1)
+-        )
+-        layout.addWidget(autostart_row)
+-
+-        silent_row = self._make_setting_row(
+-            '👻', '静默启动',
+-            '程序启动时不显示主窗口，仅在系统托盘运行',
+-            silent_checked,
+-            self._toggle_silent_start
+-        )
+-        layout.addWidget(silent_row)
+-
+-        close_tray_row = self._make_setting_row(
+-            '📦', '关闭时最小化到托盘',
+-            '点击关闭按钮时隐藏到系统托盘，不退出程序',
+-            close_tray_checked,
+-            self._toggle_close_to_tray
+-        )
+-        layout.addWidget(close_tray_row)
+-
+-        # ═══ 计时设置 ═══
+-        layout.addSpacing(8)
+-        layout.addLayout(self._make_section_header('⏱️', '计时设置'))
+-
+-        study_row = self._make_setting_row(
+-            '📚', '学习时长统计',
+-            '每次倒计时完成自动记录 1 小时学习时长',
+-            study_checked,
+-            self._toggle_study_tracking
+-        )
+-        layout.addWidget(study_row)
+-
+-        review_row = self._make_setting_row(
+-            '⭐', '复盘提醒',
+-            '每小时休息前弹出复盘评分（1-100分）',
+-            review_checked,
+-            self._toggle_review_reminder
+-        )
+-        layout.addWidget(review_row)
+-
+-        sound_row = self._make_setting_row(
+-            '🔔', '声音提醒',
+-            '倒计时结束时播放提示音',
+-            sound_checked,
+-            self._toggle_sound
+-        )
+-        layout.addWidget(sound_row)
+-
+-        # ═══ 快捷操作 ═══
+-        layout.addSpacing(8)
+-        layout.addLayout(self._make_section_header('⚡', '快捷操作'))
+-
+-        # 收藏夹按钮
+-        fav_btn = QPushButton('📂 打开 B站收藏夹')
+-        fav_btn.setFixedHeight(38)
+-        fav_btn.setCursor(Qt.PointingHandCursor)
+-        fav_btn.clicked.connect(self._open_fav_folder)
+-        layout.addWidget(fav_btn)
+-
+-        # 重置按钮
+-        reset_btn = QPushButton('🔄 重置今日数据')
+-        reset_btn.setFixedHeight(38)
+-        reset_btn.setCursor(Qt.PointingHandCursor)
+-        reset_btn.setStyleSheet('QPushButton { color: #d95757; border-color: rgba(217,87,87,0.20); } QPushButton:hover { background: rgba(217,87,87,0.12); }')
+-        reset_btn.clicked.connect(self._reset_today)
+-        layout.addWidget(reset_btn)
+-
+-        layout.addStretch()
+-
+-        scroll.setWidget(container)
+-        self._tab_content.addWidget(scroll)
+-
+-    def _open_fav_folder(self):
+-        """打开 B站收藏夹"""
+-        open_url('https://space.bilibili.com/529362421/favlist?fid=3648313921&ftype=create&spm_id_from=333.788.0.0')
+-
+-    def _reset_today(self):
+-        """重置今日数据"""
+-        reply = QMessageBox.question(self, '确认重置',
+-            '确定要清除今日所有学习数据吗？此操作不可撤销。',
+-            QMessageBox.Yes | QMessageBox.No)
+-        if reply != QMessageBox.Yes:
+-            return
+-        today = datetime.now().date().isoformat()
+-        daily_data = daily_store.load()
+-        if today in daily_data:
+-            del daily_data[today]
+-            daily_store.save(daily_data)
+-        self.study_hours_today = 0
+-        self.break_minutes_today = 0
+-        self._round_count = 0
+-        self._pending_review = False
+-        self._daily_report_shown_today = False
+-        self.update_study_display()
+-        log.info('[重置] 今日数据已清除')
+-
+     def _toggle_silent_start(self, checked):
+         self._silent_start = checked == 1
+         self.app_settings['silent_start'] = self._silent_start
+@@ -2615,7 +2539,7 @@ class RestReminderWidget(QWidget):
+         for b in self._report_buttons.values():
+             b.setEnabled(False)
+ 
+-        worker = _ReportWorker(report_type, force_refresh)
++        worker = _ReportWorker(self, report_type, force_refresh)
+         def _on_done(result):
+             for b in self._report_buttons.values():
+                 b.setEnabled(True)
+@@ -2828,7 +2752,7 @@ class RestReminderWidget(QWidget):
+         name_lbl.setStyleSheet('color: #e8e6e1;')
+         top_row.addWidget(name_lbl)
+         # 版本 badge
+-        ver_badge = QLabel('v4.3')
++        ver_badge = QLabel('v4.4')
+         ver_badge.setStyleSheet('background: rgba(255,255,255,0.08); color: #888; border-radius: 6px; padding: 3px 10px; font-size: 11px; font-family: Consolas;')
+         top_row.addWidget(ver_badge)
+         top_row.addStretch()
+@@ -2942,7 +2866,7 @@ class RestReminderWidget(QWidget):
+         browser = QTextBrowser()
+         browser.setPlainText('''v4.3 (2026-06-21)
+ ━━━━━━━━━━━━━━━━
+-• 重新设计主界面：5 tab 结构（今日 / AI 报告 / 趋势 / 使用统计 / 关于）
++• 重新设计主界面：5 tab 结构（今日 / AI 报告 / 趋势 / 设置 / 关于）
+ • 浮球独立：60×60 ⏰ 图标 + 点击弹出 info 浮层
+ • 修复趋势 tab 快速点击数据丢失问题
+ • 删除空壳 tab（路由/认证/高级）
+@@ -3041,6 +2965,7 @@ v4.1 (2026-06-17)
+                 except (RuntimeError, Exception):
+                     pass  # C++ 对象已销毁，重建
+             self._trend_window = TrendWindow()
++            self._trend_window.destroyed.connect(lambda: setattr(self, '_trend_window', None))
+             self._trend_window.show()
+             log.info('[show_stats] TrendWindow 已创建并显示')
+         except Exception as e:
+@@ -3073,8 +2998,12 @@ v4.1 (2026-06-17)
+         self.move(x, y)
+ 
+     def _get_autostart_cmd(self):
+-        # 直接启动主程序，不经过看门狗
++        # PyInstaller 打包：_MEI 临时目录不可持久化，需回退到源目录
+         script = os.path.abspath(__file__)
++        if getattr(sys, 'frozen', False):
++            # 打包模式下用 _launch.vbs（固定路径），不走 __file__
++            script_dir = os.path.dirname(os.path.abspath(sys.executable))
++            script = os.path.join(script_dir, 'rest_reminder.py')
+         pythonw = os.path.join(os.path.dirname(sys.executable), 'pythonw.exe')
+         if not os.path.exists(pythonw):
+             pythonw = sys.executable
+@@ -3516,8 +3445,7 @@ v4.1 (2026-06-17)
+             # --- 电脑使用时长简单累计 ---
+             self.update_computer_usage(now)
+ 
+-            # --- 同步浮球数据 ---
+-            self.floating_ball._update_popup_text()
++            # --- 同步浮球数据（_sync_buttons 已在各状态 handler 中调用） ---
+ 
+         except Exception as e:
+             log.error(f'[update_display 异常] {type(e).__name__}: {e}')
+@@ -3896,128 +3824,6 @@ v4.1 (2026-06-17)
+         # 同步托盘卡片 UI
+         self._update_tray_card()
+ 
+-    def _show_settings_dialog(self):
+-        """设置对话框：提醒方式 + B站收藏夹 + 测试连接"""
+-        from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QLabel, QComboBox,
+-                                     QLineEdit, QPushButton, QHBoxLayout, QMessageBox)
+-        dialog = QDialog(self)
+-        dialog.setWindowTitle('⚙️ 设置')
+-        dialog.setFixedSize(360, 400)
+-        dialog.setStyleSheet("""
+-            QDialog { background-color: #141413; color: #faf9f5; border-radius: 12px; }
+-            QLabel { color: #e8e6e1; font-size: 12px; }
+-            QComboBox { background: #1e1d1b; color: #e8e6e1; border: 1px solid #333; border-radius: 6px; padding: 6px; font-size: 12px; }
+-            QLineEdit { background: #1e1d1b; color: #e8e6e1; border: 1px solid #333; border-radius: 6px; padding: 6px; font-size: 12px; }
+-            QPushButton { background: rgba(212,175,55,0.12); color: #d4af37; border: 1px solid rgba(212,175,55,0.2); border-radius: 100px; padding: 8px; font-size: 11px; }
+-            QPushButton:hover { background: rgba(212,175,55,0.2); }
+-            QPushButton#testBtn { background: rgba(120,180,80,0.12); color: #78B450; border: 1px solid rgba(120,180,80,0.2); }
+-            QPushButton#testBtn:hover { background: rgba(120,180,80,0.2); }
+-        """)
+-        layout = QVBoxLayout(dialog)
+-        layout.setContentsMargins(20, 16, 20, 16)
+-        layout.setSpacing(8)
+-
+-        layout.addWidget(QLabel('📢 提醒方式'))
+-        mode_combo = QComboBox()
+-        mode_combo.addItems(['打开B站', '💡 请辨金句', '只弹通知', '无操作'])
+-        mode_map = {'打开B站': 'video', '💡 请辨金句': 'quote', '只弹通知': 'notify', '无操作': 'none'}
+-        current_mode = self.app_settings.get('reminder_mode', 'video')
+-        for i, (k, v) in enumerate(mode_map.items()):
+-            if v == current_mode:
+-                mode_combo.setCurrentIndex(i)
+-                break
+-        layout.addWidget(mode_combo)
+-
+-        layout.addWidget(QLabel('🎬 B站收藏夹 ID'))
+-        fid_input = QLineEdit()
+-        fid_input.setText(self.app_settings.get('bilibili_fid', '3648313921'))
+-        fid_input.setPlaceholderText('收藏夹 media_id')
+-        layout.addWidget(fid_input)
+-
+-        layout.addWidget(QLabel('👤 B站用户 ID'))
+-        mid_input = QLineEdit()
+-        mid_input.setText(self.app_settings.get('bilibili_mid', '529362421'))
+-        mid_input.setPlaceholderText('用户 mid')
+-        layout.addWidget(mid_input)
+-
+-        test_btn = QPushButton('🔍 测试收藏夹连接')
+-        test_btn.setObjectName('testBtn')
+-        layout.addWidget(test_btn)
+-        test_result = QLabel('')
+-        test_result.setStyleSheet('font-size: 11px; background: transparent;')
+-        layout.addWidget(test_result)
+-
+-        def _set_result(text, color):
+-            test_result.setText(text)
+-            test_result.setStyleSheet(f'color: {color}; font-size: 11px; background: transparent;')
+-            test_btn.setText('🔍 测试收藏夹连接')
+-            test_btn.setEnabled(True)
+-
+-        def test_bilibili():
+-            fid = fid_input.text().strip()
+-            if not fid:
+-                _set_result('⚠️ 请先填写收藏夹 ID', '#ff8844')
+-                return
+-            test_btn.setEnabled(False)
+-            test_btn.setText('测试中...')
+-            QApplication.processEvents()
+-            import threading
+-            def _do_test():
+-                try:
+-                    import requests
+-                    url = f'https://api.bilibili.com/x/v3/fav/folder/info?media_id={fid}'
+-                    h = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://www.bilibili.com'}
+-                    try:
+-                        r = requests.get(url, headers=h, timeout=5)
+-                        data = r.json()
+-                        code = data.get('code', -1)
+-                    except requests.Timeout:
+-                        QTimer.singleShot(0, lambda: _set_result('⚠️ 网络超时', '#ff8844'))
+-                        return
+-                    except requests.ConnectionError:
+-                        QTimer.singleShot(0, lambda: _set_result('⚠️ 无法连接B站API', '#ff8844'))
+-                        return
+-                    if code == 0:
+-                        d = data.get('data', {})
+-                        QTimer.singleShot(0, lambda: _set_result(f'✅ 收藏夹「{d.get("title","?")}」· {d.get("media_count",0)} 个视频', '#78B450'))
+-                    elif code == -400:
+-                        QTimer.singleShot(0, lambda: _set_result('❌ 收藏夹不存在', '#ff4444'))
+-                    else:
+-                        QTimer.singleShot(0, lambda: _set_result(f'⚠️ API 错误 ({code})', '#ff8844'))
+-                except Exception as e:
+-                    QTimer.singleShot(0, lambda: _set_result(f'❌ 错误: {str(e)[:30]}', '#ff4444'))
+-            threading.Thread(target=_do_test, daemon=True).start()
+-
+-        test_btn.clicked.connect(test_bilibili)
+-        layout.addSpacing(6)
+-
+-        btn_row = QHBoxLayout()
+-        save_btn = QPushButton('保存')
+-        close_btn = QPushButton('关闭')
+-        btn_row.addWidget(save_btn)
+-        btn_row.addWidget(close_btn)
+-        layout.addLayout(btn_row)
+-
+-        def save_settings():
+-            self.app_settings['reminder_mode'] = mode_map.get(mode_combo.currentText(), 'video')
+-            self.app_settings['bilibili_fid'] = fid_input.text().strip()
+-            self.app_settings['bilibili_mid'] = mid_input.text().strip()
+-            LocalSync.save_settings(self.app_settings)
+-            mode_names = {'video': '打开B站', 'quote': '💡 请辨金句', 'notify': '只弹通知', 'none': '无操作'}
+-            self.tray_icon.showMessage('设置', '设置已保存', QSystemTrayIcon.Information, 1500)
+-            log.info(f'[设置] 提醒方式切换为: {self.app_settings["reminder_mode"]}')
+-            dialog.close()
+-
+-        save_btn.clicked.connect(save_settings)
+-        close_btn.clicked.connect(dialog.close)
+-        dialog.exec_()
+-
+-        new_state = not self.is_autostart_enabled()
+-        if self.set_autostart(new_state):
+-            tip = '已开启' if new_state else '已关闭'
+-            self.autostart_btn.setText('✅ 自启' if new_state else '🔄 自启')
+-            self.tray_icon.showMessage('休息提醒', f'开机自启动{tip}', QSystemTrayIcon.Information, 2000)
+-
+     def _show_ai_report(self):
+         """显示 AI 学习分析报告"""
+         try:
+@@ -4137,6 +3943,15 @@ v4.1 (2026-06-17)
+             except Exception as e:
+                 log.warning(f'[恢复] break_start 解析失败: {e}')
+ 
++        # 恢复休息结束时间（仅限今天）
++        if self._rest_end_time is None and state.get('rest_end_time'):
++            try:
++                ret = datetime.fromisoformat(state['rest_end_time'])
++                if ret.date() == datetime.now().date():
++                    self._rest_end_time = ret
++            except Exception as e:
++                log.warning(f'[恢复] rest_end_time 解析失败: {e}')
++
+         self.played_today = set(state.get('played_today', []))
+         self._round_count = state.get('round_count', 0)
+         self.update_study_display()
+@@ -4153,6 +3968,7 @@ v4.1 (2026-06-17)
+             'timer_state': self.timer_state,
+             'remaining': round(remaining),
+             'break_start': self.break_start.isoformat() if self.break_start else None,
++            'rest_end_time': self._rest_end_time.isoformat() if self._rest_end_time else None,
+             'break_minutes': self.break_minutes_today,
+             'played_today': list(self.played_today),
+             'activity_interval': self._activity_interval,
+@@ -4343,7 +4159,11 @@ v4.1 (2026-06-17)
+         try:
+             event.ignore()
+             self._save_active_state()
+-            self.hide()  # 直接隐藏，不移到边缘
++            self._save_computer_usage()
++            if self.app_settings.get('close_to_tray', True):
++                self.hide()
++            else:
++                self.quit_app()
+         except Exception as e:
+             log.error(f'[closeEvent 异常] {type(e).__name__}: {e}')
+ 
+@@ -4351,8 +4171,12 @@ v4.1 (2026-06-17)
+         try:
+             self._save_active_state()
+             self._save_computer_usage()
+-            self.timer.stop()
+             self.tray_icon.hide()
++            if hasattr(self, 'floating_ball'):
++                self.floating_ball.hide()
++            if hasattr(self, 'countdown_overlay'):
++                self.countdown_overlay.hide_overlay()
++            self.timer.stop()
+             QApplication.quit()
+         except Exception as e:
+             log.error(f'[quit_app 异常] {type(e).__name__}: {e}')
+@@ -4365,7 +4189,7 @@ def main():
+     if _single_instance.is_already_running():
+         log.warning('休息提醒程序已经在运行中！')
+         if '--silent' not in sys.argv:
+-            a = QApplication(sys.argv)
++            a = QApplication([])
+             QMessageBox.warning(None, '已在运行', '程序已在运行中！\n请检查系统托盘图标。')
+         sys.exit(0)
+ 
+@@ -4382,9 +4206,8 @@ def main():
+         ctypes.windll.user32.SetProcessDPIAware()
+     except Exception:
+         log.error("[DPIAware] 设置失败")
+-        pass
+ 
+-    app = QApplication(sys.argv)
++    app = QApplication([])
+     app.setQuitOnLastWindowClosed(False)
+ 
+     silent = '--silent' in sys.argv
+diff --git a/run.bat b/run.bat
+index c215955..48d5ba2 100644
+--- a/run.bat
++++ b/run.bat
+@@ -1,36 +1,25 @@
+ @echo off
+ chcp 65001 >nul
+ echo ====================================
+-echo    休息提醒挂件 - 启动脚本
++echo   Rest Reminder - Start Script
+ echo ====================================
+ echo.
+ 
+-REM 检查Python是否安装
+-python --version >nul 2>&1
+-if errorlevel 1 (
+-    echo [错误] 未检测到Python，请先安装Python 3.7+
+-    echo 下载地址: https://www.python.org/downloads/
++set "PYTHON=C:\Python314\python.exe"
++set "APP_DIR=%~dp0"
++
++if not exist "%PYTHON%" (
++    echo [ERROR] python.exe not found
+     pause
+     exit /b 1
+ )
+ 
+-echo [信息] 正在后台启动休息提醒挂件...
++echo [INFO] Python: %PYTHON%
++echo [INFO] Script: %APP_DIR%rest_reminder.py
+ echo.
+ 
+-REM 使用pythonw启动程序（无控制台窗口，独立进程）
+-start "" pythonw rest_reminder.py
+-
+-if errorlevel 1 (
+-    echo [错误] 程序启动失败
+-    echo 请检查是否已安装依赖: pip install -r requirements.txt
+-    pause
+-    exit /b 1
+-)
++start "" /b "%PYTHON%" "%APP_DIR%rest_reminder.py" --silent
+ 
+-echo [成功] 程序已在后台启动
+-echo 挂件将显示在屏幕右侧
+-echo 可通过系统托盘图标控制显示/隐藏
+-echo.
+-echo 注意：关闭此窗口不会影响程序运行
++echo [DONE] Launched. Check system tray.
+ echo.
+ timeout /t 3 >nul
+diff --git a/storage.py b/storage.py
+index c642c56..7f2e01b 100644
+--- a/storage.py
++++ b/storage.py
+@@ -5,10 +5,12 @@
+ import json
+ import os
+ import sys
++import tempfile
+ 
+ if getattr(sys, 'frozen', False):
+-    # PyInstaller 打包：数据文件放在 exe 所在目录
+-    _BASE_DIR = os.path.dirname(sys.executable)
++    # PyInstaller 打包：数据文件放在 AppData/RestReminder/
++    _BASE_DIR = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'RestReminder')
++    os.makedirs(_BASE_DIR, exist_ok=True)
+ else:
+     # 源码运行：数据文件放在 storage.py 所在目录
+     _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+@@ -43,9 +45,19 @@ class JSONStore:
+             return self._default
+ 
+     def save(self, data):
+-        """将 data 完整写入文件（覆盖）。"""
+-        with open(self._path, 'w', encoding='utf-8') as f:
+-            json.dump(data, f, ensure_ascii=self._ensure_ascii, indent=self._indent)
++        """将 data 完整写入文件（原子写入，避免崩溃导致文件损坏）。"""
++        dir_name = os.path.dirname(self._path)
++        fd, tmp = tempfile.mkstemp(dir=dir_name, suffix='.tmp')
++        try:
++            with os.fdopen(fd, 'w', encoding='utf-8') as f:
++                json.dump(data, f, ensure_ascii=self._ensure_ascii, indent=self._indent)
++            os.replace(tmp, self._path)
++        except Exception:
++            try:
++                os.remove(tmp)
++            except Exception:
++                pass
++            raise
+ 
+     def get(self, key, default=None):
+         """读取单个 key，不存在时返回 default。"""
+diff --git "a/\344\270\200\351\224\256\345\256\211\350\243\205.bat" "b/\344\270\200\351\224\256\345\256\211\350\243\205.bat"
+index fcbeae2..b2266e6 100644
+--- "a/\344\270\200\351\224\256\345\256\211\350\243\205.bat"
++++ "b/\344\270\200\351\224\256\345\256\211\350\243\205.bat"
+@@ -22,6 +22,9 @@ echo.
+ pause
+ echo.
+ 
++set "PYTHONW=C:\Python314\pythonw.exe"
++set "APP_DIR=%~dp0"
++
+ REM ========================================
+ REM 步骤1: 检查Python
+ REM ========================================
+@@ -42,36 +45,7 @@ if errorlevel 1 (
+ 
+ for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PYTHON_VERSION=%%i
+ echo ✓ Python %PYTHON_VERSION% 已安装
+-
+-REM 检测 WindowsApps 代理（Microsoft Store 的 Python 别名）
+-REM 代理的 pythonw.exe 通常 < 100KB，会导致启动双实例
+-set "PYTHONW_EXE=pythonw"
+-for /f "delims=" %%P in ('where pythonw 2^>nul') do (
+-    set "PYTHONW_EXE=%%P"
+-    goto :check_pythonw
+-)
+-:check_pythonw
+-echo %PYTHONW_EXE% | findstr /I "WindowsApps" >nul
+-if not errorlevel 1 (
+-    echo ⚠ 检测到 WindowsApps 代理 Python，正在查找真实安装...
+-    for /f "delims=" %%P in ('where pythonw 2^>nul') do (
+-        echo %%P | findstr /I "WindowsApps" >nul
+-        if errorlevel 1 (
+-            set "PYTHONW_EXE=%%P"
+-            goto :found_real_pythonw
+-        )
+-    )
+-    REM 回退：从 python.exe 推断 pythonw.exe 位置
+-    for /f "delims=" %%P in ('where python 2^>nul') do (
+-        set "PYDIR=%%~dpP"
+-        if exist "%PYDIR%pythonw.exe" (
+-            set "PYTHONW_EXE=%PYDIR%pythonw.exe"
+-            goto :found_real_pythonw
+-        )
+-    )
+-)
+-:found_real_pythonw
+-echo ✓ 使用 pythonw: %PYTHONW_EXE%
++echo ✓ 使用 pythonw: %PYTHONW%
+ echo.
+ 
+ REM ========================================
+@@ -81,11 +55,11 @@ echo [2/4] 安装依赖包...
+ echo 正在安装 PyQt5, requests, psutil 到项目本地目录...
+ echo.
+ python -m pip install --upgrade pip >nul 2>&1
+-python -m pip install --upgrade --target "%~dp0vendor" -r "%~dp0requirements.txt"
++python -m pip install --upgrade --target "%APP_DIR%vendor" PyQt5 requests psutil
+ if errorlevel 1 (
+     echo.
+     echo ✗ 依赖安装失败
+-    echo 请检查网络连接或手动运行: python -m pip install --upgrade --target "%~dp0vendor" -r "%~dp0requirements.txt"
++    echo 请检查网络连接或手动运行: pip install --target vendor PyQt5 requests psutil
+     echo.
+     pause
+     exit /b 1
+@@ -99,15 +73,13 @@ REM ========================================
+ echo [3/4] 设置开机自启动...
+ 
+ set CURRENT_DIR=%~dp0
+-REM PYTHONW_EXE 已在步骤1中检测（优先非 WindowsApps 的真实 Python）
+ 
+-REM 使用PowerShell创建快捷方式到Startup文件夹（更可靠）
+ set STARTUP_FOLDER=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
+ powershell -ExecutionPolicy Bypass -Command "^&
+     `$WshShell = New-Object -ComObject WScript.Shell;^n
+-    `$Shortcut = `$WshShell.CreateShortcut('%STARTUP_FOLDER%\\休息提醒.lnk');^n
+-    `$Shortcut.TargetPath = '%PYTHONW_EXE%';^n
+-    `$Shortcut.Arguments = '\"%~dp0rest_reminder.py\" --silent';^n
++    `$Shortcut = `$WshShell.CreateShortcut('%STARTUP_FOLDER%\休息提醒.lnk');^n
++    `$Shortcut.TargetPath = '%PYTHONW%';^n
++    `$Shortcut.Arguments = '\"%APP_DIR%rest_reminder.py\" --silent';^n
+     `$Shortcut.WorkingDirectory = '%CURRENT_DIR%';^n
+     `$Shortcut.Description = '每小时休息提醒挂件（自动启动）';^n
+     `$Shortcut.WindowStyle = 7;^n
+@@ -126,23 +98,19 @@ REM 步骤4: 启动程序
+ REM ========================================
+ echo [4/4] 启动休息提醒...
+ 
+-REM 检查是否已有程序在运行
+ tasklist /FI "IMAGENAME eq pythonw.exe" 2>NUL | find /I "rest_reminder.py" >NUL
+ if not errorlevel 1 (
+     echo 检测到程序已在运行
+     echo 如需重新安装，请先退出程序。
+     echo.
+ ) else (
+-    REM 静默启动主程序（使用检测到的真实 Python 路径）
+-    start "" /b "%PYTHONW_EXE%" "%CURRENT_DIR%rest_reminder.py" --silent
++    start "" /b "%PYTHONW%" "%APP_DIR%rest_reminder.py" --silent
+ )
+ 
+-REM 等待程序初始化
+ timeout /t 3 >nul
+ 
+ echo ✓ 程序已启动
+ echo.
+-
+ echo ╔════════════════════════════════════════╗
+ echo ║          ✓ 安装完成！                  ║
+ echo ╚════════════════════════════════════════╝

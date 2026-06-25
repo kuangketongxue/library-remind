@@ -4,11 +4,11 @@
 PyQt5 桌面挂件，品牌名「⚡ 精力管理」。开源 MIT，AI 学习分析。
 
 ## 技术栈
-Python 3.7+ / PyQt5 / requests / psutil / Win32 API (ctypes)
+Python 3.14+ / PyQt5 / requests / psutil / Win32 API (ctypes)
 
 ## 关键文件
 ```
-rest_reminder.py              — 主程序（~3900行，含所有 UI + 逻辑）
+rest_reminder.py              — 主程序（4326行，含所有 UI + 逻辑）
 storage.py                    — 统一 JSON 存储层（JSONStore 类）
 RestReminder.spec             — PyInstaller 配置（含 hiddenimports=['storage']）
 产品规格-v4.3.md              — v4.3 完整产品规格
@@ -35,7 +35,7 @@ pyinstaller RestReminder.spec
 见全局 `~/.claude/CLAUDE.md`（firecrawl×3 + tavily×2 + zhihu + global + opencli 并行）。
 
 ## 踩坑记录（必读）
-- **子目录模块需显式加入 sys.path**：`rest-reminder-pro/` 等子目录不会被 Python 自动发现，启动时 `sys.path.insert(0, subdir)`（2026-06-20）
+- **子目录模块需显式加入 sys.path**：嵌套子目录（如 `rest-reminder-site/`）不会被 Python 自动发现，启动时 `sys.path.insert(0, subdir)`（2026-06-20）
 - **setWindowFlags 必须在 setGeometry 之前**：`FramelessWindowHint` 重建窗口导致几何尺寸丢失，窗口变 48x48（2026-06-20）
 - **WA_DeleteOnClose 后操作 C++ 对象**：关闭后 C++ 对象销毁，_clear_tab 用 `sip.isdeleted()` 检查，_refresh_active_tab 加 `AttributeError` catch（2026-06-20）
 - **读数据时不要写文件**：UI 展示方法不应触发 save_daily_stats() 写入（2026-06-20）
@@ -51,6 +51,5 @@ pyinstaller RestReminder.spec
 ## 禁止事项
 - 不创建庆祝/确认类临时文件
 - 不写重复修复报告
-- 不向 GitHub 推送 rest-reminder-pro/（含 Agnes AI key）
-- 不把 Pro 收费逻辑写在代码里，收费功能以后单独加（2026-06-20）
+- 不把收费逻辑写在代码里（v4.4 全免费）
 - 活动密度感知已删除，不在任何文档/代码中引用（2026-06-23）

@@ -5,10 +5,12 @@
 import json
 import os
 import sys
+import tempfile
 
 if getattr(sys, 'frozen', False):
-    # PyInstaller 打包：数据文件放在 exe 所在目录
-    _BASE_DIR = os.path.dirname(sys.executable)
+    # PyInstaller 打包：数据文件放在 AppData/RestReminder/
+    _BASE_DIR = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'RestReminder')
+    os.makedirs(_BASE_DIR, exist_ok=True)
 else:
     # 源码运行：数据文件放在 storage.py 所在目录
     _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -43,9 +45,19 @@ class JSONStore:
             return self._default
 
     def save(self, data):
-        """将 data 完整写入文件（覆盖）。"""
-        with open(self._path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=self._ensure_ascii, indent=self._indent)
+        """将 data 完整写入文件（原子写入，避免崩溃导致文件损坏）。"""
+        dir_name = os.path.dirname(self._path)
+        fd, tmp = tempfile.mkstemp(dir=dir_name, suffix='.tmp')
+        try:
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=self._ensure_ascii, indent=self._indent)
+            os.replace(tmp, self._path)
+        except Exception:
+            try:
+                os.remove(tmp)
+            except Exception:
+                pass
+            raise
 
     def get(self, key, default=None):
         """读取单个 key，不存在时返回 default。"""

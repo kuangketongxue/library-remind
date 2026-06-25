@@ -5,8 +5,8 @@ a = Analysis(
     ['rest_reminder.py'],
     pathex=[],
     binaries=[],
-    datas=[('cute_icon.ico', '.'), ('cute_icon.png', '.')],
-    hiddenimports=['storage'],
+    datas=[],
+    hiddenimports=['storage', 'PyQt5.QtWidgets'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -35,5 +35,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['cute_icon.ico'],
+    icon=[],
 )
