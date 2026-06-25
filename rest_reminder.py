@@ -16,11 +16,11 @@ import requests
 import ctypes
 import msvcrt
 import tempfile
-import sip
+from PyQt5 import sip
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel,
-                             QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox, QShortcut, QFrame, QTabWidget, QStackedWidget, QComboBox, QLineEdit, QScrollArea, QDialog, QSlider, QSpinBox, QGroupBox, QTextBrowser)
-from PyQt5.QtCore import QTimer, Qt, QPoint, QEvent, QThread, pyqtSignal
+                             QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox, QShortcut, QFrame, QTabWidget, QStackedWidget, QComboBox, QLineEdit, QScrollArea, QDialog, QSlider, QSpinBox, QGroupBox, QTextBrowser, QToolTip)
+from PyQt5.QtCore import QTimer, Qt, QPoint, QEvent, QThread, pyqtSignal, QRect
 from PyQt5.QtGui import QIcon, QFont, QPainter, QColor, QBrush, QPen, QKeySequence
 from PyQt5.QtWidgets import QGraphicsDropShadowEffect
 from tray_card import TrayCardWidget
@@ -118,7 +118,7 @@ STREAK_MILESTONE = {
 
 STREAK_THRESHOLD_HOURS = 4  # 每日学习满此小时数才算打卡
 
-_SUBJECTS = ['语', '数', '英', '物', '化', '政']
+_SUBJECTS = ['语', '数', '英', '物', '化', '政', '其他']
 _LABELS = ['专注', '疲劳', '收获大', '走神', '其他']
 
 _SCORE_COLORS_OLD = {1: '#ff4444', 2: '#ff8844', 3: '#fcc419', 4: '#78B450', 5: '#51cf66'}
@@ -220,10 +220,10 @@ class FloatingBall(QWidget):
         painter.setPen(QPen(QColor(212, 175, 55, 80), 1.5))
         painter.drawEllipse(2, 2, 56, 56)
 
-        # ⏰ 图标
+        # ⚡ 图标
         painter.setPen(QColor(212, 175, 55))
         painter.setFont(QFont('Arial', 22, QFont.Bold))
-        painter.drawText(self.rect(), Qt.AlignCenter, '⏰')
+        painter.drawText(self.rect(), Qt.AlignCenter, '⚡')
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -365,43 +365,6 @@ class FloatingBall(QWidget):
         popup.show()
         popup.raise_()
 
-    @staticmethod
-    def _md_to_html(text):
-        """轻量 markdown → HTML（只处理常用语法，不引入第三方库）"""
-        lines = text.split('\n')
-        out = []
-        in_code = False
-        code_buf = []
-        for line in lines:
-            if line.strip().startswith('```'):
-                if in_code:
-                    out.append('</pre>')
-                    in_code = False
-                else:
-                    out.append('<pre style="background:#18181f;border:1px solid #252530;border-radius:8px;padding:10px;font-size:12px;font-family:Consolas,monospace;color:#e8e4dc;overflow-x:auto;">')
-                    in_code = True
-                continue
-            if in_code:
-                code_buf.append(line)
-                continue
-            # 标题
-            if line.startswith('# '):
-                out.append(f'<h1 style="color:#e8e6e1;font-size:18px;font-weight:bold;margin:16px 0 8px;">{line[2:]}</h1>')
-            elif line.startswith('## '):
-                out.append(f'<h2 style="color:#d4af37;font-size:15px;font-weight:bold;margin:12px 0 6px;">{line[3:]}</h2>')
-            elif line.startswith('### '):
-                out.append(f'<h3 style="color:#c4b8a0;font-size:13px;font-weight:bold;margin:10px 0 4px;">{line[4:]}</h3>')
-            elif line.startswith('- '):
-                out.append(f'<li style="margin-left:16px;color:#b8b4ac;line-height:1.8;">{line[2:]}</li>')
-            elif line.strip().startswith('> '):
-                out.append(f'<blockquote style="border-left:3px solid #d4af37;padding-left:10px;color:#888;margin:6px 0;">{line.strip()[2:]}</blockquote>')
-            elif line.strip() == '---':
-                out.append('<hr style="border:none;border-top:1px solid #252530;margin:12px 0;">')
-            elif line.strip():
-                out.append(f'<p style="color:#b8b4ac;line-height:1.7;margin:4px 0;">{line}</p>')
-        if in_code:
-            out.append('</pre>')
-        return '\n'.join(out)
 
     def _update_popup_text(self):
         """只更新 popup 的文字内容（不重建 widget，带文本缓存避免重复 setText）"""
@@ -1083,6 +1046,7 @@ class StatsWindow(QWidget):
             QPushButton#closeBtn:hover { color: #faf9f5; background-color: rgba(255,255,255,15); }
         """)
         self._drag_pos = None
+        self._bar_rects = []  # 存储柱子矩形区域用于 tooltip
 
         # 关闭按钮
         close_btn = QPushButton('✕', self)
@@ -1091,6 +1055,8 @@ class StatsWindow(QWidget):
         close_btn.move(388, 4)
         close_btn.setCursor(Qt.PointingHandCursor)
         close_btn.clicked.connect(self.close)
+
+        self.setMouseTracking(True)
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -1108,46 +1074,40 @@ class StatsWindow(QWidget):
         for i in range(6, -1, -1):
             d = (today - timedelta(days=i)).isoformat()
             label = (today - timedelta(days=i)).strftime('%m/%d')
-            data = history.get(d, {'study': 0, 'computer': 0})
-            days.append({'label': label, 'study': data.get('study', 0), 'computer': data.get('computer', 0)})
+            data = history.get(d, {})
+            days.append({'label': label, 'study': data.get('study', 0)})
 
         # 找最大值
-        max_val = max(max(d['study'], d['computer']) for d in days) if days else 1
-        max_val = max(max_val, 1)
+        vals = [d['study'] for d in days]
+        max_val = max(max(vals, default=0), 1)
 
         # 画柱状图
         chart_top = 50
         chart_bottom = 260
         chart_height = chart_bottom - chart_top
-        bar_width = 20
-        gap = (380 - 7 * bar_width * 2) / 8
+        bar_width = 24
+        gap = (380 - 7 * bar_width) / 8
 
+        self._bar_rects = []
         for i, d in enumerate(days):
-            x = 30 + i * (bar_width * 2 + gap)
+            x = int(30 + gap + i * (bar_width + gap))
 
             # 学习柱子（绿色）
             h = int((d['study'] / max_val) * chart_height)
             painter.setBrush(QBrush(QColor('#788C57')))
             painter.setPen(Qt.NoPen)
-            painter.drawRoundedRect(int(x), chart_bottom - h, bar_width, h, 3, 3)
-
-            # 电脑使用柱子（橙色）
-            h2 = int((d['computer'] / max_val) * chart_height)
-            painter.setBrush(QBrush(QColor('#d97757')))
-            painter.drawRoundedRect(int(x + bar_width + 2), chart_bottom - h2, bar_width, h2, 3, 3)
+            painter.drawRoundedRect(x, chart_bottom - h, bar_width, h, 3, 3)
+            self._bar_rects.append((QRect(x, chart_bottom - h, bar_width, h), d['label'], d['study'], '学习'))
 
             # 日期标签
             painter.setPen(QColor('#b0aea5'))
             painter.setFont(QFont('Microsoft YaHei', 8))
-            painter.drawText(int(x), chart_bottom + 15, d['label'])
+            painter.drawText(x + 2, chart_bottom + 15, d['label'])
 
             # 数值标签
             if d['study'] > 0:
                 painter.setPen(QColor('#788C57'))
-                painter.drawText(int(x), chart_bottom - h - 5, f"{d['study']:.1f}")
-            if d['computer'] > 0:
-                painter.setPen(QColor('#d97757'))
-                painter.drawText(int(x + bar_width + 2), chart_bottom - h2 - 5, f"{d['computer']:.1f}")
+                painter.drawText(x + 2, chart_bottom - h - 5, f"{d['study']:.1f}")
 
         # 图例
         painter.setBrush(QBrush(QColor('#788C57')))
@@ -1156,23 +1116,30 @@ class StatsWindow(QWidget):
         painter.setFont(QFont('Microsoft YaHei', 9))
         painter.drawText(48, 296, '学习')
 
-        painter.setBrush(QBrush(QColor('#d97757')))
-        painter.drawRect(100, 285, 12, 12)
-        painter.drawText(118, 296, '电脑使用')
-
         # 总计
         total_study = sum(d['study'] for d in days)
         painter.setPen(QColor('#6a9bcc'))
         painter.setFont(QFont('Microsoft YaHei', 9))
-        painter.drawText(250, 296, f'本周学习：{total_study:.1f} 小时')
+        painter.drawText(100, 296, f'本周学习 {total_study:.1f}h')
+
+    def mouseMoveEvent(self, event):
+        # Tooltip 优先
+        pos = event.pos()
+        for rect, label, value, _ in self._bar_rects:
+            if rect.contains(pos):
+                QToolTip.showText(
+                    self.mapToGlobal(event.pos()),
+                    f'{label} {value:.1f}h',
+                    self, rect, 2000
+                )
+                return
+        # 拖拽
+        if self._drag_pos is not None:
+            self.move(event.globalPos() - self._drag_pos)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self._drag_pos = event.globalPos() - self.frameGeometry().topLeft()
-
-    def mouseMoveEvent(self, event):
-        if self._drag_pos is not None:
-            self.move(event.globalPos() - self._drag_pos)
 
     def mouseReleaseEvent(self, event):
         self._drag_pos = None
@@ -1402,13 +1369,16 @@ class TrendWindow(QWidget):
             label = (today - timedelta(days=i)).strftime('%m/%d')
             data = stats.get(d, {})
             days.append({
-                'label': label, 'study': data.get('study', 0), 'computer': data.get('computer', 0)
+                'label': label, 'study': data.get('study', 0)
             })
 
         layout = self._clear_tab(self._week_tab)
         if not layout:
             return
-        self._draw_dual_bar(layout, days)
+        t = QLabel('📅 近7天学习时长')
+        t.setStyleSheet('color: #b0aea5; font-size: 12px; background: transparent;')
+        layout.addWidget(t)
+        self._draw_single_bar(layout, days)
 
     # ── Tab 3: 月趋势 ──
     def _draw_monthly_trend(self):
@@ -1421,17 +1391,16 @@ class TrendWindow(QWidget):
             week_end = week_start + timedelta(days=6)
             if week_end > today:
                 week_end = today
-            study = computer = 0
+            study = 0
             d = week_start
             while d <= week_end:
                 k = d.isoformat()
                 if k in stats:
                     study += stats[k].get('study', 0)
-                    computer += stats[k].get('computer', 0)
                 d += timedelta(days=1)
             weeks.append({
                 'label': f'{week_start.month}/{week_start.day}',
-                'study': round(study, 1), 'computer': round(computer, 1)
+                'study': round(study, 1)
             })
 
         layout = self._clear_tab(self._month_tab)
@@ -1439,7 +1408,7 @@ class TrendWindow(QWidget):
         t = QLabel('📅 最近5周趋势（周聚合）')
         t.setStyleSheet('color: #b0aea5; font-size: 12px; background: transparent;')
         layout.addWidget(t)
-        self._draw_dual_bar(layout, weeks)
+        self._draw_single_bar(layout, weeks)
 
     # ── Tab 4: 季/年趋势 ──
     def _draw_quarterly_trend(self):
@@ -1452,9 +1421,8 @@ class TrendWindow(QWidget):
                 d = datetime.strptime(d_str, '%Y-%m-%d').date()
                 key = d.strftime('%Y-%m')
                 if key not in months:
-                    months[key] = {'study': 0, 'computer': 0, 'count': 0}
+                    months[key] = {'study': 0, 'count': 0}
                 months[key]['study'] += data.get('study', 0)
-                months[key]['computer'] += data.get('computer', 0)
                 months[key]['count'] += 1
             except Exception:
                 log.warning("[趋势] 日期解析跳过")
@@ -1475,8 +1443,7 @@ class TrendWindow(QWidget):
             d = months[m]
             month_data.append({
                 'label': m[5:],  # MM
-                'study': round(d['study'], 1),
-                'computer': round(d['computer'], 1)
+                'study': round(d['study'], 1)
             })
 
         layout = self._clear_tab(self._quarter_tab)
@@ -1485,7 +1452,7 @@ class TrendWindow(QWidget):
         layout.addWidget(t)
 
         if len(month_data) >= 2:
-            self._draw_dual_bar(layout, month_data)
+            self._draw_single_bar(layout, month_data)
         else:
             layout.addWidget(QLabel('📭 数据不足，再积累几天就能看到趋势了'))
             layout.addStretch()
@@ -1656,116 +1623,64 @@ class TrendWindow(QWidget):
 
         layout.addStretch()
 
-    # ── 双柱状图绘制（复用） ──
-    def _draw_dual_bar(self, layout, data):
-        """在 layout 中绘制学习(绿)+电脑(橙)双柱图"""
+    # ── 单柱状图绘制（学习时长 + 悬浮提示） ──
+    def _draw_single_bar(self, layout, data):
+        """在 layout 中绘制学习时长单柱图，鼠标悬浮显示数值"""
         chart = QWidget()
-        chart.setFixedHeight(220)
+        chart.setFixedHeight(200)
         chart.setStyleSheet('background: transparent;')
+        chart.setMouseTracking(True)
 
         def paint_chart(painter, chart_widget):
             painter.setRenderHint(QPainter.Antialiasing)
             n = len(data)
             if n == 0:
                 return
-            max_val = max(max(d['study'], d['computer']) for d in data)
-            max_val = max(max_val, 1)
+            vals = [d['study'] for d in data]
+            max_val = max(max(vals, default=0), 1)
             w = chart_widget.width()
             h = chart_widget.height()
             chart_top = 10
             chart_bottom = h - 36
             chart_height = chart_bottom - chart_top
-            bar_w = min(18, int((w - 60) / (n * 2 + 1)))
-            gap = int((w - 60 - n * bar_w * 2) / (n + 1))
+            bar_w = min(28, int((w - 60) / (n + 1)))
+            gap = int((w - 60 - n * bar_w) / (n + 1))
 
+            chart_widget._bar_rects = []
             for i, d in enumerate(data):
-                x = 30 + gap + i * (bar_w * 2 + gap)
+                x = 30 + gap + i * (bar_w + gap)
+                bar_h = int((d['study'] / max_val) * chart_height)
 
-                # 学习（绿）
-                h_study = int((d['study'] / max_val) * chart_height)
-                painter.setBrush(QBrush(QColor('#78B450')))
+                # 柱子（绿色）
+                painter.setBrush(QBrush(QColor('#788C57')))
                 painter.setPen(Qt.NoPen)
-                painter.drawRoundedRect(x, chart_bottom - h_study, bar_w, h_study, 2, 2)
+                painter.drawRoundedRect(x, chart_bottom - bar_h, bar_w, bar_h, 3, 3)
 
-                # 电脑（橙）
-                h_comp = int((d['computer'] / max_val) * chart_height)
-                painter.setBrush(QBrush(QColor('#d97757')))
-                painter.drawRoundedRect(x + bar_w + 2, chart_bottom - h_comp, bar_w, h_comp, 2, 2)
+                # 记录位置用于 tooltip
+                chart_widget._bar_rects.append((QRect(x, chart_bottom - bar_h, bar_w, bar_h), d['label'], d['study']))
 
                 # 日期
                 painter.setPen(QColor('#888'))
                 painter.setFont(QFont('Microsoft YaHei', 8))
-                painter.drawText(x, chart_bottom + 14, d['label'])
+                painter.drawText(x + bar_w // 2 - 8, chart_bottom + 14, d['label'])
 
-                # 数值（仅非零时显示）
+                # 数值（非零时显示）
                 if d['study'] > 0:
-                    painter.setPen(QColor('#78B450'))
-                    painter.drawText(x, chart_bottom - h_study - 4, f"{d['study']:.1f}")
-                if d['computer'] > 0:
-                    painter.setPen(QColor('#d97757'))
-                    painter.drawText(x + bar_w + 2, chart_bottom - h_comp - 4, f"{d['computer']:.1f}")
+                    painter.setPen(QColor('#788C57'))
+                    painter.drawText(x + bar_w // 2 - 8, chart_bottom - bar_h - 4, f"{d['study']:.1f}")
 
         chart.paintEvent = lambda e: paint_chart(QPainter(chart), chart)
+
+        def on_mouse_move(e):
+            pos = e.pos()
+            for rect, label, value in chart._bar_rects:
+                if rect.contains(pos):
+                    QToolTip.showText(chart.mapToGlobal(e.pos()), f'{label} 学习 {value:.1f}h', chart, rect, 2000)
+                    return
+            QToolTip.hideText()
+
+        chart.mouseMoveEvent = on_mouse_move
         layout.addWidget(chart)
-
-        # 图例
-        legend = QLabel('🟢 学习  🟠 电脑使用')
-        legend.setStyleSheet('color: #888; font-size: 11px; background: transparent;')
-        layout.addWidget(legend)
-
-    # ── 饼图绘制 ──
-    def _draw_pie_chart(self, layout, study_total, computer_total, title='学习 vs 电脑'):
-        """在 layout 中绘制饼图（学习 vs 电脑使用占比）"""
-        from math import pi as PI
-        total = study_total + computer_total
-        card = QFrame()
-        card.setObjectName('statCard')
-        cl = QVBoxLayout(card)
-        cl.setContentsMargins(16, 14, 16, 14)
-        cl.setSpacing(8)
-
-        t = QLabel(f'📊 {title}')
-        t.setStyleSheet('color: #b0aea5; font-size: 12px; background: transparent;')
-        cl.addWidget(t)
-
-        pie_widget = QWidget()
-        pie_widget.setFixedSize(200, 200)
-        pie_widget.setStyleSheet('background: transparent;')
-
-        def paint_pie(e):
-            p = QPainter(pie_widget)
-            p.setRenderHint(QPainter.Antialiasing)
-            cx, cy = 100, 100
-            r = 80
-            if total > 0:
-                # 学习扇区
-                study_angle = (study_total / total) * 360
-                p.setBrush(QBrush(QColor('#78B450')))
-                p.setPen(Qt.NoPen)
-                p.drawPie(int(cx - r), int(cy - r), int(r * 2), int(r * 2), 0, int(study_angle * 16))
-                # 电脑扇区
-                p.setBrush(QBrush(QColor('#d97757')))
-                comp_angle = (computer_total / total) * 360
-                p.drawPie(int(cx - r), int(cy - r), int(r * 2), int(r * 2), int(study_angle * 16), int(comp_angle * 16))
-            # 中心文字
-            p.setPen(QColor('#e8e6e1'))
-            p.setFont(QFont('Georgia', 14, QFont.Bold))
-            if total > 0:
-                pct = int(study_total / total * 100)
-                p.drawText(int(cx - 20), int(cy + 5), f'{pct}%')
-            else:
-                p.drawText(int(cx - 30), int(cy + 5), '无数据')
-
-        pie_widget.paintEvent = paint_pie
-        cl.addWidget(pie_widget, 0, Qt.AlignCenter)
-
-        # 图例 + 统计
-        study_pct = f'{study_total / total * 100:.0f}%' if total > 0 else '0%'
-        comp_pct = f'{computer_total / total * 100:.0f}%' if total > 0 else '0%'
-        info = QLabel(f'🟢 学习 {study_total:.1f}h ({study_pct})  🟠 电脑 {computer_total:.1f}h ({comp_pct})')
-        info.setStyleSheet('color: #b0aea5; font-size: 11px; background: transparent;')
-        cl.addWidget(info, 0, Qt.AlignCenter)
-        layout.addWidget(card)
 
     # ── 热力图绘制 ──
     def _draw_heatmap(self, layout, data, x_labels, y_labels, title='时段热力图'):
@@ -1826,10 +1741,8 @@ class TrendWindow(QWidget):
 
         # 总计
         total_study = sum(d['study'] for d in data)
-        total_comp = sum(d['computer'] for d in data)
         avg_study = round(total_study / len(data), 1)
-        avg_comp = round(total_comp / len(data), 1)
-        summary = QLabel(f'总计: 学习 {total_study:.1f}h · 电脑 {total_comp:.1f}h  |  日均: 学习 {avg_study}h · 电脑 {avg_comp}h')
+        summary = QLabel(f'总计: 学习 {total_study:.1f}h  |  日均: 学习 {avg_study}h')
         summary.setStyleSheet('color: #6a8cbb; font-size: 11px; background: transparent;')
         layout.addWidget(summary)
 
@@ -1847,6 +1760,43 @@ class TrendWindow(QWidget):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
             self.close()
+
+
+def _md_to_html(text):
+    """轻量 markdown → HTML（只处理常用语法，不引入第三方库）"""
+    lines = text.split('\n')
+    out = []
+    in_code = False
+    code_buf = []
+    for line in lines:
+        if line.strip().startswith('```'):
+            if in_code:
+                out.append('</pre>')
+                in_code = False
+            else:
+                out.append('<pre style="background:#18181f;border:1px solid #252530;border-radius:8px;padding:10px;font-size:12px;font-family:Consolas,monospace;color:#e8e4dc;overflow-x:auto;">')
+                in_code = True
+            continue
+        if in_code:
+            code_buf.append(line)
+            continue
+        if line.startswith('# '):
+            out.append(f'<h1 style="color:#e8e6e1;font-size:18px;font-weight:bold;margin:16px 0 8px;">{line[2:]}</h1>')
+        elif line.startswith('## '):
+            out.append(f'<h2 style="color:#d4af37;font-size:15px;font-weight:bold;margin:12px 0 6px;">{line[3:]}</h2>')
+        elif line.startswith('### '):
+            out.append(f'<h3 style="color:#c4b8a0;font-size:13px;font-weight:bold;margin:10px 0 4px;">{line[4:]}</h3>')
+        elif line.startswith('- '):
+            out.append(f'<li style="margin-left:16px;color:#b8b4ac;line-height:1.8;">{line[2:]}</li>')
+        elif line.strip().startswith('> '):
+            out.append(f'<blockquote style="border-left:3px solid #d4af37;padding-left:10px;color:#888;margin:6px 0;">{line.strip()[2:]}</blockquote>')
+        elif line.strip() == '---':
+            out.append('<hr style="border:none;border-top:1px solid #252530;margin:12px 0;">')
+        elif line.strip():
+            out.append(f'<p style="color:#b8b4ac;line-height:1.7;margin:4px 0;">{line}</p>')
+    if in_code:
+        out.append('</pre>')
+    return '\n'.join(out)
 
 
 def _build_report_data(report_type):
@@ -1967,7 +1917,7 @@ def _call_ai(prompt, model='sensenova-6.7-flash-lite'):
                     return {'ok': True, 'content': content, 'provider': url}
             else:
                 last_err = f'HTTP {resp.status_code}: {resp.text[:200]}'
-        except Exception as e:
+        except (requests.exceptions.RequestException, ValueError, json.JSONDecodeError) as e:
             last_err = str(e)
 
     return {'ok': False, 'error': f'所有 AI 服务不可用。最后错误：{last_err}'}
@@ -2727,7 +2677,7 @@ class RestReminderWidget(QWidget):
             for b in self._report_buttons.values():
                 b.setEnabled(True)
             if result.get("ok"):
-                self._report_view.setHtml(self._md_to_html(result['content']))
+                self._report_view.setHtml(_md_to_html(result['content']))
             elif result.get("error"):
                 self._report_view.setHtml(f'<p style="color:#c95454;">⚠️ AI 请求失败: {result["error"]}</p><p style="color:#888;">点击「刷新」重试。</p>')
         worker.finished.connect(_on_done)
@@ -2769,7 +2719,7 @@ class RestReminderWidget(QWidget):
             d = (today - timedelta(days=i)).isoformat()
             data = history_store.load().get(d, {})
             days.append({'label': (today - timedelta(days=i)).strftime('%m/%d'),
-                         'study': data.get('study', 0), 'computer': data.get('computer', 0)})
+                         'study': data.get('study', 0)})
 
         def paint_mini(e):
             p = QPainter(mini_chart)
@@ -2777,37 +2727,49 @@ class RestReminderWidget(QWidget):
             w, h = mini_chart.width(), mini_chart.height()
             n = len(days)
             if n == 0: return
-            mx = max(max(d['study'], d['computer']) for d in days) or 1
-            bw = min(14, int((w - 40) / (n * 2 + 1)))
-            gap = int((w - 40 - n * bw * 2) / (n + 1))
+            vals = [d['study'] for d in days]
+            mx = max(max(vals, default=0), 1)
+            bw = min(22, int((w - 40) / (n + 1)))
+            gap = int((w - 40 - n * bw) / (n + 1))
             bottom = h - 28
             ch = bottom - 8
+            mini_chart._bar_rects = []
             for i, d in enumerate(days):
-                x = 20 + gap + i * (bw * 2 + gap)
-                h1_val = int(d['study'] / mx * ch)
-                p.setBrush(QBrush(QColor('#78B450')))
+                x = 20 + gap + i * (bw + gap)
+                bh = int(d['study'] / mx * ch)
+                p.setBrush(QBrush(QColor('#788C57')))
                 p.setPen(Qt.NoPen)
-                p.drawRoundedRect(x, bottom - h1_val, bw, h1_val, 2, 2)
-                h2_val = int(d['computer'] / mx * ch)
-                p.setBrush(QBrush(QColor('#d97757')))
-                p.drawRoundedRect(x + bw + 2, bottom - h2_val, bw, h2_val, 2, 2)
+                p.drawRoundedRect(x, bottom - bh, bw, bh, 2, 2)
+                mini_chart._bar_rects.append((QRect(x, bottom - bh, bw, bh), d['label'], d['study']))
                 p.setPen(QColor('#666'))
                 p.setFont(QFont('Microsoft YaHei', 8))
-                p.drawText(x - 2, bottom + 14, d['label'])
+                p.drawText(x + bw // 2 - 8, bottom + 14, d['label'])
+                if d['study'] > 0:
+                    p.setPen(QColor('#788C57'))
+                    p.drawText(x + bw // 2 - 8, bottom - bh - 4, f"{d['study']:.1f}")
         mini_chart.paintEvent = paint_mini
+
+        def on_mini_move(e):
+            pos = e.pos()
+            for rect, label, value in mini_chart._bar_rects:
+                if rect.contains(pos):
+                    QToolTip.showText(mini_chart.mapToGlobal(e.pos()), f'{label} 学习 {value:.1f}h', mini_chart, rect, 2000)
+                    return
+            QToolTip.hideText()
+        mini_chart.mouseMoveEvent = on_mini_move
+        mini_chart.setMouseTracking(True)
         tc_layout.addWidget(mini_chart)
         # 强制触发 paintEvent（QScrollArea 内嵌 widget 不会自动触发）
         mini_chart.update()
 
         # 图例
-        legend = QLabel('🟢 学习  🟠 电脑')
+        legend = QLabel('🟢 学习时长')
         legend.setStyleSheet('color: #888; font-size: 11px; background: transparent;')
         tc_layout.addWidget(legend)
 
         # 总计
         ts = sum(d['study'] for d in days)
-        tc = sum(d['computer'] for d in days)
-        summary = QLabel(f'近7天 · 学习 {ts:.1f}h · 电脑 {tc:.1f}h')
+        summary = QLabel(f'近7天 · 学习 {ts:.1f}h')
         summary.setStyleSheet('color: #6a8cbb; font-size: 11px; background: transparent;')
         tc_layout.addWidget(summary)
         layout.addWidget(trend_card)

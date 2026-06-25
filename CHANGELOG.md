@@ -2,6 +2,27 @@
 
 所有重要版本更新记录。
 
+## v5.0.0 (2026-06-25)
+
+### 🎉 新增功能
+- **柱状图悬浮提示**：鼠标移到趋势分析任意柱子即可看到具体学习时长数值
+- **复盘学科新增「其他」**：支持复盘/健身/阅读/考试等非学科场景
+- **AI 报告后台线程**：QThread 异步生成，不再阻塞 UI
+
+### 🐛 Bug 修复
+- **P0** 修复 AI 报告卡死：`_md_to_html` 定义在 `FloatingBall` 类中，`RestReminderWidget` 调用时抛 `AttributeError`，报告界面永远停在"正在生成报告"
+- **P0** 修复 StatsWindow tooltip 不显示：两个 `mouseMoveEvent` 定义互相覆盖，tooltip 处理器被拖拽处理器覆盖
+- **P0** 修复 PyQt5 sip 导入兼容性：Python 3.14 下 `import sip` 失败，改为 `from PyQt5 import sip`
+- **P1** 修复 QToolTip / QRect 未导入导致崩溃
+
+### 🗑️ 重构
+- **趋势分析全面重构**：彻底移除电脑使用时长统计（6处代码引用），改为纯学习时长单柱图
+- **删除双柱图 + 饼图**：移除 `_draw_dual_bar` 和 `_draw_pie_chart`，统一使用 `_draw_single_bar`
+- **清理所有 computer 引用**：删除所有 `computer` 数据字段和图例
+- **浮球图标**：⏰ → ⚡
+- **AI 错误处理优化**：区分网络请求异常和响应解析异常
+- **代码质量**：移除冗余变量初始化、统一 `max_val` 计算方式
+
 ## v4.4.0 (2026-06-23)
 
 ### 🎨 UI 重构：5标签页主界面

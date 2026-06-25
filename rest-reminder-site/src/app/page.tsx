@@ -34,8 +34,8 @@ function Stats() {
 function HowItWorks() {
   const steps = [
     { num: "1", title: "下载安装", desc: "从 GitHub Releases 下载 RestReminder.exe，46MB 秒装", img: "download" },
-    { num: "2", title: "开始计时", desc: "右下角出现浮球，点击开始学习，60分钟自动循环", img: "timer" },
-    { num: "3", title: "查看数据", desc: "学习时长、连续打卡一目了然，AI 自动生成学习报告", img: "stats" },
+    { num: "2", title: "开始计时", desc: "右下角出现浮球，点击开始，60分钟自动循环休息", img: "timer" },
+    { num: "3", title: "查看数据", desc: "学习时长、趋势分析、AI报告一目了然", img: "stats" },
   ];
   return (
     <section className="py-24 px-6">
@@ -63,9 +63,6 @@ function HowItWorks() {
                       </div>
                       <div className="flex items-center gap-2 text-xs text-[var(--fg-dim)]">
                         <span className="text-[var(--accent)]">📊</span> 学习统计
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-[var(--fg-dim)]">
-                        <span className="text-[var(--accent)]">🔥</span> 连续打卡 5 天
                       </div>
                       <div className="flex items-center gap-2 text-xs text-[var(--fg-dim)]">
                         <span className="text-[var(--accent)]">💡</span> 提醒方式

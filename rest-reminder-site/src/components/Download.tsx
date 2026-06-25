@@ -12,13 +12,13 @@ const steps = [
   {
     num: "2",
     title: "开始计时",
-    desc: "右下角出现浮球，点击开始",
+    desc: "右下角出现浮球，点击开始学习，60分钟自动循环",
     img: "/screenshot-main.png",
   },
   {
     num: "3",
     title: "查看数据",
-    desc: "学习时长、打卡天数一目了然",
+    desc: "学习时长、连续打卡一目了然，AI 自动生成学习报告",
     img: "/screenshot-stats.png",
   },
 ];
@@ -94,7 +94,7 @@ export default function Download() {
               </a>
             </div>
             <p className="text-white/70 text-sm">
-              支持 Windows 10/11 · v4.4 · MIT 开源
+              支持 Windows 10/11 · v5.0 · MIT 开源
             </p>
           </motion.div>
         </div>
