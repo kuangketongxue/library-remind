@@ -12,6 +12,7 @@ import random
 import os
 import json
 import platform
+import re
 import requests
 import ctypes
 import msvcrt
@@ -1793,6 +1794,8 @@ def _md_to_html(text):
         elif line.strip() == '---':
             out.append('<hr style="border:none;border-top:1px solid #252530;margin:12px 0;">')
         elif line.strip():
+            # **粗体**
+            line = re.sub(r'\*\*(.+?)\*\*', r'<strong style="color:#e8e6e1;">\1</strong>', line)
             out.append(f'<p style="color:#b8b4ac;line-height:1.7;margin:4px 0;">{line}</p>')
     if in_code:
         out.append('</pre>')
@@ -1959,7 +1962,11 @@ def generate_report(report_type, force_refresh=False):
             f"- 平均复盘质量：{data['avg_quality']}/100\n"
             f"- 高频标签：{', '.join(f'{t}({c})' for t, c in data['top_tags']) or '无'}\n"
             f"- 最近记录：{data['records'][:5]}\n\n"
-            f"请输出结构化的 Markdown 格式报告，包含：\n"
+            f"格式要求：\n"
+            f"- 用 ## 标题分节，用 **粗体** 突出关键数字（时长、轮次、分数等）\n"
+            f"- 不要用 * 斜体或星号列表，用 - 开头的列表项\n"
+            f"- 每段控制在 2-3 行，简洁易读\n"
+            f"包含以下内容：\n"
             f"1. 概览（时长/轮次/质量）\n"
             f"2. 趋势分析\n"
             f"3. 改进建议（3-5条）\n"
