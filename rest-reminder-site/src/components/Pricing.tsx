@@ -5,10 +5,9 @@ import { SectionHeader, ScaleIn } from "./Animations";
 const features = [
   { text: "60分钟循环休息提醒", included: true },
   { text: "20-20-20 护眼提醒", included: true },
-  { text: "活动密度感知+自动暂停", included: true },
-  { text: "学习/电脑/休息时长追踪", included: true },
-  { text: "连续打卡+里程碑金句", included: true },
+  { text: "学习时长 + 连续打卡", included: true },
   { text: "趋势分析（5标签页）", included: true },
+  { text: "复盘记录（学科+标签+评分1-100）", included: true },
   { text: "AI 学习分析（日报/周报/月报/季报/年报）", included: true, highlight: true },
   { text: "开机自启+跨重启续接", included: true },
 ];

@@ -109,7 +109,6 @@ function HowItWorks() {
                     </div>
                     <div className="flex gap-3 mt-2 text-[8px]">
                       <span className="flex items-center gap-1"><span className="w-2 h-2 bg-[var(--accent)] rounded-sm" /> 学习</span>
-                      <span className="flex items-center gap-1"><span className="w-2 h-2 bg-[var(--border)] rounded-sm" /> 电脑使用</span>
                     </div>
                   </div>
                 )}

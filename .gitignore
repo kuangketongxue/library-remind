@@ -50,6 +50,11 @@ daily_tracker_state.json
 .stats_history.json
 .settings.json
 .streak.json
+.app_state.json
+.daily_log.json
+.review_log.json
+.goal.json
+.wisdom_quotes.json
 
 # 临时文件
 *.cmd
@@ -85,7 +90,6 @@ LARK_CLI使用说明.md
 完全独立启动.vbs
 
 # 本地用户数据
-.review_log.json
 
 # AI 模块（含 API key，不进入开源）
 rest-reminder-pro/
@@ -94,8 +98,6 @@ rest-reminder-pro/
 sensenova_vision.py
 
 # 目标 & 金句本地数据
-.goal.json
-.wisdom_quotes.json
 
 # 内部开发笔记（不进入开源）
 .learnings/
