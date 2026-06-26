@@ -22,6 +22,9 @@ export default function Navbar() {
           <a href="#sponsor" className="text-[13px] text-[var(--fg-dim)] hover:text-[var(--fg)] transition-colors hidden md:block">
             赞助商
           </a>
+          <a href="/docs" className="text-[13px] text-[var(--fg-dim)] hover:text-[var(--fg)] transition-colors hidden md:block">
+            文档
+          </a>
           <a
             href="https://github.com/kuangketongxue/library-remind"
             target="_blank"

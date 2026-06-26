@@ -1,14 +1,8 @@
 import Hero from "@/components/Hero";
 import Features from "@/components/Features";
-import WhyChoose from "@/components/WhyChoose";
-import Testimonials from "@/components/Testimonials";
-import Pricing from "@/components/Pricing";
 import Changelog from "@/components/Changelog";
-import FAQ from "@/components/FAQ";
 import Download from "@/components/Download";
 import Footer from "@/components/Footer";
-import StickyCTA from "@/components/StickyCTA";
-import Sponsor from "@/components/Sponsor";
 
 function Stats() {
   const stats = [
@@ -34,16 +28,11 @@ function Stats() {
 export default function Home() {
   return (
     <main className="flex-1">
-      <StickyCTA />
       <Hero />
       <Stats />
       <Features />
-      <WhyChoose />
-      <Testimonials />
       <Changelog />
-      <FAQ />
       <Download />
-      <Sponsor />
       <Footer />
     </main>
   );

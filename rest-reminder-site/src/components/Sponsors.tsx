@@ -1,9 +1,6 @@
 "use client";
 
-const sponsors = [
-  { name: "Cloudflare", desc: "全球 CDN 加速，Pages 托管", url: "https://cloudflare.com", logo: "" },
-  { name: "Supabase", desc: "开源数据库 + 托管服务", url: "https://supabase.com", logo: "" },
-];
+const sponsors: { name: string; desc: string; url: string }[] = [];
 
 export default function Sponsors() {
   return (

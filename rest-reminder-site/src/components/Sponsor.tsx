@@ -86,7 +86,7 @@ export default function Sponsor() {
               <p className="text-xs text-[var(--fg-dim)] leading-relaxed">
                 美团旗下图像生成模型，6B 参数，中文理解与文字渲染表现亮眼，为项目提供视觉内容生成能力。
               </p>
-              <a href="https://huggingface.co/meituan-longcat" target="_blank" rel="noopener noreferrer" className="text-[11px] text-[var(--accent)] hover:underline mt-3 inline-block">HuggingFace →</a>
+              <a href="https://longcat.chat/platform/docs/zh/" target="_blank" rel="noopener noreferrer" className="text-[11px] text-[var(--accent)] hover:underline mt-3 inline-block">LongCat 平台文档 →</a>
             </div>
 
             {/* StepFun */}
@@ -128,30 +128,18 @@ export default function Sponsor() {
         {/* More sponsors */}
         <motion.div {...fade(0.2)}>
           <h3 className="text-2xl font-bold text-center mb-3 font-display">更多赞助商</h3>
-          <p className="text-[var(--fg-dim)] text-center mb-10">感谢这些持续支持 Rest Reminder 的伙伴</p>
+          <p className="text-[var(--fg-dim)] text-center mb-10">即将开放，敬请期待</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto">
-            {sponsors.map((s, i) => (
-              <motion.div
-                key={s.name}
-                initial={{ opacity: 0, y: 12 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.03, duration: 0.4 }}
-                className="card p-5 flex items-center gap-4 group"
-              >
-                <div className="w-10 h-10 rounded-lg bg-[var(--surface-raised)] flex items-center justify-center text-lg font-bold text-[var(--accent)] group-hover:bg-[var(--accent-soft)] transition-colors">
-                  {s.name[0]}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h5 className="text-sm font-semibold truncate">{s.name}</h5>
-                  <p className="text-xs text-[var(--fg-dim)] truncate">{s.desc}</p>
-                </div>
-                <svg className="w-4 h-4 text-[var(--fg-dim)] opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                </svg>
-              </motion.div>
-            ))}
+            <div className="card p-5 flex items-center gap-4 opacity-40">
+              <div className="w-10 h-10 rounded-lg bg-[var(--surface-raised)] flex items-center justify-center text-lg font-bold text-[var(--accent)]">
+                ?
+              </div>
+              <div className="flex-1 min-w-0">
+                <h5 className="text-sm font-semibold truncate">即将公布</h5>
+                <p className="text-xs text-[var(--fg-dim)] truncate">敬请期待</p>
+              </div>
+            </div>
           </div>
         </motion.div>
 
