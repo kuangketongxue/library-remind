@@ -40,7 +40,7 @@ if _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v4.4'
+VERSION = 'v5.1.0'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=1_000_000, backupCount=3, encoding='utf-8')
@@ -488,7 +488,7 @@ class FloatingBall(QWidget):
         menu.addSeparator()
 
         # 隐藏挂件
-        action_hide = menu.addAction("👁‍🗨  隐藏挂件")
+        action_hide = menu.addAction("👁  隐藏挂件")
         action_hide.triggered.connect(self.hide)
 
         menu.addSeparator()
@@ -1392,6 +1392,9 @@ class TrendWindow(QWidget):
             week_end = week_start + timedelta(days=6)
             if week_end > today:
                 week_end = today
+            # 只聚合到今天的周
+            if week_start > today:
+                continue
             study = 0
             d = week_start
             while d <= week_end:
@@ -1458,9 +1461,9 @@ class TrendWindow(QWidget):
             layout.addWidget(QLabel('📭 数据不足，再积累几天就能看到趋势了'))
             layout.addStretch()
 
-        # 总览统计
+        # 总览统计（仅统计展示的最近6个月）
         total_study = sum(d['study'] for d in month_data)
-        total_days = sum(d['count'] for d in months.values())
+        total_days = sum(months[m]['count'] for m in recent)
         avg_study = round(total_study / total_days, 1) if total_days else 0
         summary = QLabel(f'📊 统计周期内共 {total_days} 天 · 日均学习 {avg_study}h · 总学习 {total_study:.0f}h')
         summary.setStyleSheet('color: #6a8cbb; font-size: 11px; background: transparent; padding: 6px 0;')
@@ -1470,6 +1473,10 @@ class TrendWindow(QWidget):
     def _draw_time_analysis(self):
         reviews = review_store.load()
         layout = self._clear_tab(self._time_tab)
+
+        # 判断评分格式（新旧兼容）
+        all_scores = [e['score'] for entries in reviews.values() for e in entries if isinstance(e, dict)]
+        is_old = _is_old_format(all_scores) if all_scores else False
 
         # ── 近7天日均评分对比（新增） ──
         today = datetime.now().date()
@@ -1513,7 +1520,7 @@ class TrendWindow(QWidget):
                 fill = QWidget()
                 if d['count'] > 0:
                     fill_style = _score_to_color(d['avg'])
-                    fill.setFixedWidth(_score_bar_width(d['avg']))
+                    fill.setFixedWidth(_score_bar_width(d['avg'], is_old=is_old))
                     fill.setFixedHeight(14)
                 else:
                     fill.setFixedWidth(0)
@@ -1524,7 +1531,8 @@ class TrendWindow(QWidget):
                 row.addWidget(bar_bg, 1)
 
                 if d['count'] > 0:
-                    sl = QLabel(f'{d["avg"]}分')
+                    sufx = '⭐' if is_old else '分'
+                    sl = QLabel(f'{d["avg"]}{sufx}')
                     sl.setStyleSheet(f'color: #b0aea5; font-size: 11px; background: transparent; min-width: 36px;')
                     sl.setFixedWidth(36)
                     row.addWidget(sl)
@@ -1568,7 +1576,8 @@ class TrendWindow(QWidget):
         # 最高/最低时段
         best_h = max(avg_scores, key=avg_scores.get)
         worst_h = min(avg_scores, key=avg_scores.get)
-        info = QLabel(f'🏆 最佳时段: {best_h}:00-{best_h+1}:00 ({avg_scores[best_h]}分) · ⚠️ 待改进: {worst_h}:00-{worst_h+1}:00 ({avg_scores[worst_h]}分)')
+        sufx = '⭐' if is_old else '分'
+        info = QLabel(f'🏆 最佳时段: {best_h}:00-{best_h+1}:00 ({avg_scores[best_h]}{sufx}) · ⚠️ 待改进: {worst_h}:00-{worst_h+1}:00 ({avg_scores[worst_h]}{sufx})')
         info.setStyleSheet('color: #b0aea5; font-size: 11px; background: transparent; padding-bottom: 4px;')
         layout.addWidget(info)
 
@@ -1592,7 +1601,7 @@ class TrendWindow(QWidget):
 
             fill = QWidget()
             fill_style = _score_to_color(avg)
-            fill.setFixedWidth(_score_bar_width(avg))
+            fill.setFixedWidth(_score_bar_width(avg, is_old=is_old))
             fill.setFixedHeight(16)
             fill.setStyleSheet(f'background: {fill_style}; border-radius: 3px;')
             bar_l.addWidget(fill)
@@ -2343,7 +2352,6 @@ class RestReminderWidget(QWidget):
         """
         for sym, slot, tip, style in [
                 ('−', self.showMinimized, '最小化', None),
-                ('□', self.showMaximized, '最大化', None),
                 ('✕', self.close, '关闭', close_style)]:
             b = QPushButton(sym)
             b.setFixedSize(32, 32)
@@ -2411,7 +2419,7 @@ class RestReminderWidget(QWidget):
         return slider
 
     def _make_stat_card(self, icon, title, value, color):
-        """统一风格的数据卡片"""
+        """统一风格的数据卡片（暴露 _value_label 供刷新）"""
         card = QFrame()
         card.setObjectName('statCard')
         c = QVBoxLayout(card)
@@ -2426,6 +2434,7 @@ class RestReminderWidget(QWidget):
         title_lbl = QLabel(title)
         title_lbl.setStyleSheet('color: #888; font-size: 11px; background: transparent;')
         c.addWidget(title_lbl)
+        card._value_label = val_lbl
         return card
 
     def _make_section_header(self, icon, title):
@@ -2519,6 +2528,10 @@ class RestReminderWidget(QWidget):
         break_card = self._make_stat_card('☕', '休息时长', f'{LocalSync.load_break_minutes():.0f}分钟', '#d97757')
         cards_row.addWidget(break_card)
 
+        self._today_refs['study_card'] = study_card
+        self._today_refs['round_card'] = round_card
+        self._today_refs['break_card'] = break_card
+
         layout.addLayout(cards_row)
         layout.addSpacing(8)
 
@@ -2530,18 +2543,21 @@ class RestReminderWidget(QWidget):
         sc.setSpacing(6)
         state_names = {'idle': '⏸ 待机', 'running': '▶ 学习中', 'resting': '☕ 休息中', 'paused': '⏸ 已暂停'}
         state_lbl = QLabel(f'状态：{state_names.get(self.timer_state, self.timer_state)}')
+        state_lbl.setObjectName('stateLabel')
         state_lbl.setStyleSheet('color: #e8e6e1; font-size: 14px;')
         sc.addWidget(state_lbl)
         if self.timer_state == 'running' and self.start_time:
             elapsed = (time.time() - self.start_time) / 60
             remaining = max(0, 60 - elapsed)
             timer_lbl = QLabel(f'⏱ 本轮剩余：{remaining:.0f} 分钟')
+            timer_lbl.setObjectName('timerLabel')
             timer_lbl.setStyleSheet('color: #6a8cbb; font-size: 12px;')
             sc.addWidget(timer_lbl)
         elif self.timer_state == 'resting' and self.break_start:
             elapsed = (time.time() - self.break_start) / 60
             remaining = max(0, 5 - elapsed)
             timer_lbl = QLabel(f'⏱ 休息剩余：{remaining:.0f} 分钟')
+            timer_lbl.setObjectName('timerLabel')
             timer_lbl.setStyleSheet('color: #d97757; font-size: 12px;')
             sc.addWidget(timer_lbl)
         layout.addWidget(status_card)
@@ -2576,6 +2592,8 @@ class RestReminderWidget(QWidget):
         self._update_countdown_display()
         log.info('[CountdownCard] 距离22:00卡片已构建')
         layout.addWidget(countdown_card)
+        self._today_refs['cd_bar'] = cd_bar
+        self._today_refs['cd_time'] = cd_time
         layout.addSpacing(8)
 
         # ── 复盘摘要 ──
@@ -2593,7 +2611,10 @@ class RestReminderWidget(QWidget):
             rc_title.setStyleSheet('color: #e8e6e1; font-size: 13px; font-weight: bold;')
             rc.addWidget(rc_title)
             b = info['best']; w = info['worst']
-            rc_detail = QLabel(f'🏆 最佳 {b["score"]}{sufx} ({b["time"]})  ⚠️ 最低 {w["score"]}{sufx} ({w["time"]})')
+            if b and w:
+                rc_detail = QLabel(f'🏆 最佳 {b["score"]}{sufx} ({b["time"]})  ⚠️ 最低 {w["score"]}{sufx} ({w["time"]})')
+            else:
+                rc_detail = QLabel(f'🏆 平均 {info["avg"]:.1f}{sufx}')
             rc_detail.setStyleSheet('color: #888; font-size: 11px;')
             rc.addWidget(rc_detail)
             layout.addWidget(review_card)
@@ -2602,8 +2623,10 @@ class RestReminderWidget(QWidget):
         # ── 连续打卡 ──
         streak = LocalSync.load_streak()
         streak_card = self._make_stat_card('🔥', '连续打卡', f'{streak["current_streak"]} 天（最佳 {streak["best_streak"]} 天）', '#d4af37')
-        layout.addWidget(streak_card)
+        # 今日 tab 显示元素引用（供 update_display 每秒刷新）
+        self._today_refs = {}
 
+        layout.addWidget(streak_card)
         layout.addStretch()
         scroll.setWidget(container)
         self._tab_content.addWidget(scroll)
@@ -3630,6 +3653,9 @@ v4.1 (2026-06-17)
             self._update_countdown(now)
             self._update_countdown_display()
 
+            # --- 刷新今日 tab 动态内容 ---
+            self._refresh_general_tab()
+
             # --- 每 15 秒电池检测 ---
             self._battery_tick += 1
             if self._battery_tick >= 15:
@@ -3658,6 +3684,36 @@ v4.1 (2026-06-17)
         """更新通用 tab 中的数据标签"""
         if hasattr(self, 'study_info_label'):
             self.study_info_label.setText(f'{self.study_hours_today:.1f}h')
+
+    def _refresh_general_tab(self):
+        """每秒刷新今日 tab 中的动态元素（数据卡片 + 状态 + 倒计时）"""
+        try:
+            refs = getattr(self, '_today_refs', {})
+            if not refs:
+                return
+
+            # 数据卡片
+            sc = refs.get('study_card')
+            if sc and hasattr(sc, '_value_label'):
+                sc._value_label.setText(f'{self.study_hours_today:.1f}h')
+
+            rc = refs.get('round_card')
+            if rc and hasattr(rc, '_value_label'):
+                rc._value_label.setText(f'第 {self._round_count + 1} 轮')
+
+            bc = refs.get('break_card')
+            if bc and hasattr(bc, '_value_label'):
+                bc._value_label.setText(f'{int(self.break_minutes_today)} 分钟')
+
+            # 状态标签
+            state_lbl = self.findChild(QLabel, 'stateLabel')
+            if state_lbl and not sip.isdeleted(state_lbl):
+                state_names = {'idle': '⏸ 待机', 'running': '▶ 学习中', 'resting': '☕ 休息中', 'paused': '⏸ 已暂停'}
+                state_lbl.setText(f'状态：{state_names.get(self.timer_state, self.timer_state)}')
+
+            # 倒计时显示由 _update_countdown_display 统一处理（已在 update_display 调用）
+        except (RuntimeError, Exception):
+            pass  # WA_DeleteOnClose 后 C++ 对象已销毁
 
     def _build_review_dialog(self, title, label):
         """构建复盘评分对话框：学科6选1 + 标签5选1 + 评分滑块1-100，1分钟自动提交，金色选中态"""
@@ -4023,76 +4079,6 @@ v4.1 (2026-06-17)
         # 同步托盘卡片 UI
         self._update_tray_card()
 
-    def _show_ai_report(self):
-        """显示 AI 学习分析报告"""
-
-        # 选择报告类型
-        from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout,
-                                     QPushButton, QTextBrowser, QLabel, QMessageBox)
-        dialog = QDialog(self)
-        dialog.setWindowTitle('🤖 AI 学习报告')
-        dialog.setFixedSize(600, 500)
-        dialog.setStyleSheet("""
-            QDialog { background-color: #0c0c10; color: #e8e6e1; }
-            QTextBrowser { background: #14141a; color: #e8e6e1; border: 1px solid #222; border-radius: 8px; padding: 12px; font-size: 13px; }
-            QPushButton { background: rgba(212,175,55,0.12); color: #d4af37; border: 1px solid rgba(212,175,55,0.2); border-radius: 100px; padding: 8px 16px; font-size: 11px; }
-            QPushButton:hover { background: rgba(212,175,55,0.2); }
-        """)
-
-        layout = QVBoxLayout(dialog)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setSpacing(8)
-
-        layout.addWidget(QLabel('选择报告类型：'))
-
-        type_btns = QHBoxLayout()
-        types = [('日报', 'daily'), ('周报', 'weekly'), ('月报', 'monthly'),
-                 ('季报', 'quarterly'), ('年报', 'yearly')]
-        report_view = QTextBrowser()
-        report_view.setOpenExternalLinks(True)
-
-        def fetch_report(report_type, label):
-            # 先请求缓存
-            result = generate_report(report_type, force_refresh=False)
-            if result.get("ok"):
-                report_view.setPlainText(result['content'])
-            elif result.get("error"):
-                report_view.setPlainText(f'⚠️ AI 请求失败: {result["error"]}\n\n点击「刷新」重试。')
-            else:
-                report_view.setPlainText('⏳ 正在生成报告...\n\nAI 分析中，请稍候...')
-
-        # 类型按钮 — 用 *args 吸收 clicked 信号的 bool 参数
-        for label, rtype in types:
-            btn = QPushButton(label)
-            def _on_type(*args, t=rtype, l=label):
-                _current_type['type'] = t
-                fetch_report(t, l)
-            btn.clicked.connect(_on_type)
-            type_btns.addWidget(btn)
-
-        layout.addLayout(type_btns)
-        layout.addWidget(report_view)
-
-        # 刷新按钮 — 刷新当前选中类型
-        refresh_btn = QPushButton('🔄 刷新')
-        _current_type = {'type': 'daily'}
-
-        def do_refresh():
-            fetch_report(_current_type['type'],
-                         {'daily': '日报', 'weekly': '周报', 'monthly': '月报',
-                          'quarterly': '季报', 'yearly': '年报'}.get(_current_type['type'], '日报'))
-
-        refresh_btn.clicked.connect(do_refresh)
-        layout.addWidget(refresh_btn)
-
-        close_btn = QPushButton('关闭')
-        close_btn.clicked.connect(dialog.close)
-        layout.addWidget(close_btn)
-
-        # 默认显示日报
-        fetch_report('daily', '日报')
-        dialog.exec_()
-
     def _restore_active_state(self):
         """启动时恢复上次运行状态（跨重启续接）"""
         state = LocalSync.load_app_state()
@@ -4187,9 +4173,8 @@ v4.1 (2026-06-17)
             y_data = hist.get(yesterday, {})
             y_study = y_data.get('study', 0) if isinstance(y_data, dict) else 0
             if y_study >= STREAK_THRESHOLD_HOURS:
-                streak['current_streak'] = 1
                 streak['last_streak_date'] = yesterday
-                log.info(f'[打卡] 从历史恢复：昨日{y_study}h >= {STREAK_THRESHOLD_HOURS}h，连续 {streak["current_streak"]} 天')
+                log.info(f'[打卡] 从历史恢复：昨日{y_study}h >= {STREAK_THRESHOLD_HOURS}h')
 
         if streak.get('last_streak_date') != today:
             streak['current_streak'] = streak.get('current_streak', 0) + 1
