@@ -183,13 +183,14 @@ def _get_streak_milestone(streak):
 
 
 class FloatingBall(QWidget):
-    """浮球（⏰ 60×60）— 点击弹出 info 浮层，右键菜单"""
+    """浮球（⏰ 60×60）— 点击弹出 info 浮层，右键菜单，休息时显示环形进度条"""
     def __init__(self, main_window):
         super().__init__()
         self.main_window = main_window
         self.dragging = False
         self.drag_position = None
         self.click_time = None
+        self._progress = 0.0  # 0.0~1.0 环形进度（休息倒计时用）
 
         self.setWindowFlags(
             Qt.WindowStaysOnTopHint |
@@ -207,24 +208,45 @@ class FloatingBall(QWidget):
 
         self.show()
 
+    def set_progress(self, ratio):
+        """设置环形进度 0.0~1.0（1=满圈，0=空圈），触发重绘"""
+        if abs(self._progress - ratio) > 0.005:
+            self._progress = max(0.0, min(1.0, ratio))
+            self.update()
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
-        # 外层光晕
-        painter.setBrush(QBrush(QColor(212, 175, 55, 25)))
-        painter.setPen(Qt.NoPen)
-        painter.drawEllipse(-4, -4, 68, 68)
+        cx, cy = 30, 30  # 中心
+        radius = 26      # 内圈半径
 
-        # 内层圆
+        # ── 休息时：环形进度条 ──
+        if self._progress > 0.001:
+            # 背景环（暗色底）
+            bg_pen = QPen(QColor(40, 40, 48), 4)
+            bg_pen.setCapStyle(Qt.RoundCap)
+            painter.setPen(bg_pen)
+            painter.drawArc(cx - radius, cy - radius, radius * 2, radius * 2, 0, 5760)
+
+            # 进度环（琥珀色渐变用纯色近似）
+            progress_pen = QPen(QColor(212, 175, 55), 4)
+            progress_pen.setCapStyle(Qt.RoundCap)
+            painter.setPen(progress_pen)
+            span_angle = int(5760 * self._progress)
+            painter.drawArc(cx - radius, cy - radius, radius * 2, radius * 2, 0, span_angle)
+
+        # ── 内层圆 ──
         painter.setBrush(QBrush(QColor(20, 20, 24)))
-        painter.setPen(QPen(QColor(212, 175, 55, 80), 1.5))
-        painter.drawEllipse(2, 2, 56, 56)
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(4, 4, 52, 52)
 
-        # ⚡ 图标
+        # ⚡ / ☕ 图标
+        mw = self.main_window
+        icon = '☕' if mw.timer_state == 'resting' else '⚡'
         painter.setPen(QColor(212, 175, 55))
         painter.setFont(QFont('Arial', 22, QFont.Bold))
-        painter.drawText(self.rect(), Qt.AlignCenter, '⚡')
+        painter.drawText(self.rect(), Qt.AlignCenter, icon)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -2546,20 +2568,11 @@ class RestReminderWidget(QWidget):
         state_lbl.setObjectName('stateLabel')
         state_lbl.setStyleSheet('color: #e8e6e1; font-size: 14px;')
         sc.addWidget(state_lbl)
-        if self.timer_state == 'running' and self.start_time:
-            elapsed = (time.time() - self.start_time) / 60
-            remaining = max(0, 60 - elapsed)
-            timer_lbl = QLabel(f'⏱ 本轮剩余：{remaining:.0f} 分钟')
-            timer_lbl.setObjectName('timerLabel')
-            timer_lbl.setStyleSheet('color: #6a8cbb; font-size: 12px;')
-            sc.addWidget(timer_lbl)
-        elif self.timer_state == 'resting' and self.break_start:
-            elapsed = (time.time() - self.break_start) / 60
-            remaining = max(0, 5 - elapsed)
-            timer_lbl = QLabel(f'⏱ 休息剩余：{remaining:.0f} 分钟')
-            timer_lbl.setObjectName('timerLabel')
-            timer_lbl.setStyleSheet('color: #d97757; font-size: 12px;')
-            sc.addWidget(timer_lbl)
+        # 计时器标签（始终创建，由 _refresh_general_tab 每秒更新）
+        timer_lbl = QLabel('')
+        timer_lbl.setObjectName('timerLabel')
+        timer_lbl.setStyleSheet('color: #6a8cbb; font-size: 12px;')
+        sc.addWidget(timer_lbl)
         layout.addWidget(status_card)
         layout.addSpacing(8)
 
@@ -2576,8 +2589,7 @@ class RestReminderWidget(QWidget):
         cd_bar.setObjectName('countdownBar')
         cd_bar.setMaximum(100)
         cd_bar.setValue(0)
-        cd_bar.setTextVisible(True)
-        cd_bar.setFormat('%p%')
+        cd_bar.setTextVisible(False)
         cd_bar.setFixedHeight(16)
         cd_bar.setStyleSheet("""
             QProgressBar { background: rgba(255,255,255,0.06); border: none; border-radius: 4px; }
@@ -3454,12 +3466,18 @@ v4.1 (2026-06-17)
         return datetime.now().hour >= 22
 
     def _handle_idle(self):
-        """处理空闲状态 - 托盘提示 + popup 更新"""
+        """处理空闲状态 - 托盘提示 + popup 更新 + 清除浮球进度"""
         self._sync_buttons()
         self.tray_icon.setToolTip(f'⚡ 精力管理 · 续航 {self._activity_interval}min')
+        if hasattr(self, 'floating_ball') and self.floating_ball._progress > 0:
+            self.floating_ball.set_progress(0.0)
 
     def _handle_running(self, now):
         """处理运行状态 - 固定60分钟倒计时 -> 5分钟请辨 -> 5分钟休息"""
+        # 浮球：确保清除环形进度
+        if hasattr(self, 'floating_ball') and self.floating_ball._progress > 0:
+            self.floating_ball.set_progress(0.0)
+
         elapsed = (now - self.start_time).total_seconds()
         total_seconds = 60 * 60  # 固定60分钟
         remaining = max(total_seconds - elapsed, 0)
@@ -3494,7 +3512,7 @@ v4.1 (2026-06-17)
 
 
     def _handle_resting(self, now):
-        """处理休息状态 - 5分钟休息倒计时"""
+        """处理休息状态 - 5分钟休息倒计时 + 累加休息时长 + 浮球环形进度"""
         if now >= self._rest_end_time:
             # 休息结束
             self._round_count += 1
@@ -3503,6 +3521,10 @@ v4.1 (2026-06-17)
             self.update_study_display()
             LocalSync.increment_study_hour(self.study_hours_today)
             log.info(f'[计时] 休息结束，第{self._round_count}轮完成')
+
+            # 浮球：恢复⚡图标，清除进度
+            if hasattr(self, 'floating_ball'):
+                self.floating_ball.set_progress(0.0)
 
             # 每3轮后（第3、6、9...轮）打开护眼视频，否则打开收藏夹
             if self._round_count % 3 == 0:
@@ -3533,17 +3555,28 @@ v4.1 (2026-06-17)
                 3000
             )
         else:
+            # 累加休息时长（每秒 +1/60 分钟）
+            self.break_minutes_today = round(self.break_minutes_today + 1/60, 2)
+
+            # 浮球环形进度条：从 100% 到 0%
+            remaining = (self._rest_end_time - now).total_seconds()
+            rest_total = 5 * 60  # 5分钟 = 300秒
+            progress = max(0.0, min(1.0, remaining / rest_total))
+            if hasattr(self, 'floating_ball'):
+                self.floating_ball.set_progress(progress)
+
             # 显示休息倒计时（通过 popup）
             self._sync_buttons()
-            remaining = (self._rest_end_time - now).total_seconds()
             mins = int(remaining // 60)
             secs = int(remaining % 60)
             self.tray_icon.setToolTip(f'⚡ 精力管理 · 休息中 {mins}:{secs:02d}')
 
     def _handle_paused(self, now):
-        """处理暂停状态 - 托盘提示 + popup 更新"""
+        """处理暂停状态 - 托盘提示 + popup 更新 + 清除浮球进度"""
         self._sync_buttons()
         self.tray_icon.setToolTip('⚡ 精力管理 · ⏸ 已暂停')
+        if hasattr(self, 'floating_ball') and self.floating_ball._progress > 0:
+            self.floating_ball.set_progress(0.0)
         if self._study_countdown_active:
             self._study_countdown_active = False
             self.countdown_overlay.hide_overlay()
@@ -3686,7 +3719,7 @@ v4.1 (2026-06-17)
             self.study_info_label.setText(f'{self.study_hours_today:.1f}h')
 
     def _refresh_general_tab(self):
-        """每秒刷新今日 tab 中的动态元素（数据卡片 + 状态 + 倒计时）"""
+        """每秒刷新今日 tab 中的动态元素（数据卡片 + 状态 + 倒计时 + 休息时长）"""
         try:
             refs = getattr(self, '_today_refs', {})
             if not refs:
@@ -3703,15 +3736,30 @@ v4.1 (2026-06-17)
 
             bc = refs.get('break_card')
             if bc and hasattr(bc, '_value_label'):
-                bc._value_label.setText(f'{int(self.break_minutes_today)} 分钟')
+                bc._value_label.setText(f'{self.break_minutes_today:.1f} 分钟')
 
-            # 状态标签
+            # 状态标签 + 计时器标签
             state_lbl = self.findChild(QLabel, 'stateLabel')
             if state_lbl and not sip.isdeleted(state_lbl):
                 state_names = {'idle': '⏸ 待机', 'running': '▶ 学习中', 'resting': '☕ 休息中', 'paused': '⏸ 已暂停'}
                 state_lbl.setText(f'状态：{state_names.get(self.timer_state, self.timer_state)}')
 
-            # 倒计时显示由 _update_countdown_display 统一处理（已在 update_display 调用）
+            # 计时器标签（本轮剩余/休息剩余）
+            timer_lbl = self.findChild(QLabel, 'timerLabel')
+            if timer_lbl and not sip.isdeleted(timer_lbl):
+                if self.timer_state == 'running' and self.start_time:
+                    elapsed = (time.time() - self.start_time) / 60
+                    remaining = max(0, 60 - elapsed)
+                    timer_lbl.setText(f'⏱ 本轮剩余：{remaining:.0f} 分钟')
+                    timer_lbl.setStyleSheet('color: #6a8cbb; font-size: 12px;')
+                elif self.timer_state == 'resting' and self._rest_end_time:
+                    remaining = max(0, (self._rest_end_time - datetime.now()).total_seconds() / 60)
+                    timer_lbl.setText(f'⏱ 休息剩余：{remaining:.0f} 分钟')
+                    timer_lbl.setStyleSheet('color: #d97757; font-size: 12px;')
+                elif self.timer_state == 'paused' and self.remaining_when_paused:
+                    remaining = max(0, self.remaining_when_paused / 60)
+                    timer_lbl.setText(f'⏱ 暂停剩余：{remaining:.0f} 分钟')
+                    timer_lbl.setStyleSheet('color: #888; font-size: 12px;')
         except (RuntimeError, Exception):
             pass  # WA_DeleteOnClose 后 C++ 对象已销毁
 
