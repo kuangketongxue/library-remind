@@ -92,6 +92,7 @@ idle ──[开始]──> running ──[60min结束]──> resting ──[5mi
 - `**粗体**` → `<strong style="color:#e8e6e1">`（金色高亮）
 - `*斜体*` → `<em style="color:#c4b8a0">`
 - `* bullet` → `• bullet`（AI 常用星号当列表标记）
+- Markdown 表格 `| 列 | 列 |` → `<table>` 带金色表头（2026-06-26 新增）
 - 代码块 ` ``` ` → `<pre>` 带语法样式
 - 标题 `#` / `##` / `###` → 对应 h1/h2/h3
 - 列表 `- ` → `<li>`

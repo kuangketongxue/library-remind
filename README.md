@@ -2,78 +2,82 @@
 
 # 🖥️ Rest Reminder
 
-**智能桌面久坐提醒 · 学习工作两不误**
+**Smart Desktop Break Reminder · Study & Work in Balance**
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.14+-yellow.svg)](https://python.org)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010/11-lightgrey.svg)]()
+[![Python](https://img.shields.io/badge/python-3.14%2B-yellow.svg)](https://python.org)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg)]()
 
-[📥 免费下载](https://github.com/kuangketongxue/library-remind/releases/latest) · [🌐 官网](https://crazy-rest-reminder.pages.dev/) · [💬 反馈](https://github.com/kuangketongxue/library-remind/issues)
+[📥 Download](https://github.com/kuangketongxue/library-remind/releases/latest) · [🌐 Website](https://crazy-rest-reminder.pages.dev/) · [💬 Issues](https://github.com/kuangketongxue/library-remind/issues)
+
+<a href="https://starcharts.cc/kuangketongxue/library-remind">
+  <img src="https://starcharts.cc/kuangketongxue/library-remind/star-history.svg?bg=0c0c10&hideIssues=true" alt="Star History" height="200">
+</a>
 
 </div>
 
 ---
 
-## ✨ 功能一览
+## ✨ Features
 
-| 功能 | 说明 |
-|------|------|
-| 60分钟循环休息提醒 | 学习→休息→自动开B站收藏夹 |
-| **5标签页主界面** | 今日概览/AI报告/趋势分析/设置/关于，所有内容直接展示 |
-| **复盘记录** | 每小时学科+标签+评分1-100，数据落盘 |
-| B站收藏夹视频 | 固定收藏夹（每3轮护眼视频） |
-| 学习时长追踪 | 本地持久化（每次倒计时完成=1小时） |
-| 🤖 **AI 学习分析** | 日报/周报/月报/季报/年报 |
-| 开机自启 + 托盘 + 浮球 | 后台常驻 |
+| Feature | Description |
+|---------|-------------|
+| **60-min Focus Cycle** | Study → 5-min mindfulness countdown → 5-min break → auto-open Bilibili |
+| **5-Tab Dashboard** | Today / AI Report / Trends / Settings / About — everything visible at a glance |
+| **Review Logging** | Subject + tags + score (1-100) after each session |
+| **🤖 AI Analysis** | Daily / weekly / monthly / quarterly / yearly reports |
+| **Trend Charts** | Study hours bar chart with hover tooltips |
+| **20-20-20 Eye Care** | Gentle overlay reminder every 20 minutes |
+| **Tray + Floating Ball** | Always running in background, one-click control |
+| **Auto-start** | Launch on system login |
 
-## 🚀 快速开始
+## 🚀 Quick Start
 
 ```
-双击 _launch.vbs
-# 或
+# Run directly
 python rest_reminder.py
+
+# Or double-click
+_launch.vbs
 ```
 
-## 📁 项目结构
+## 📁 Project Structure
 
 ```
-├── rest_reminder.py        # 主程序（4326行）
-├── storage.py              # 统一 JSON 存储层
-├── vendor/                 # 本地依赖包（PyQt5/psutil/requests）
-├── _launch.vbs             # 静默启动（后台无窗口）
-├── run.bat                 # 启动脚本
-├── 一键安装.bat             # 安装+依赖+自启动
-├── RestReminder.spec       # PyInstaller 配置
-├── requirements.txt        # 依赖声明
-├── .settings.json          # 用户设置（API key 等，本地，不提交）
-├── docs/ARCHITECTURE.md    # 架构文档
-├── rest-reminder-site/     # 网站源码（Next.js）
-└── 数据文件（.daily_log.json 等）  # 本地持久化
+├── rest_reminder.py        # Main app (3836 lines)
+├── storage.py              # Unified JSON storage layer
+├── tray_card.py            # Floating tray card widget
+├── vendor/                 # Bundled dependencies
+├── RestReminder.spec       # PyInstaller config
+├── docs/ARCHITECTURE.md    # Architecture docs
+├── rest-reminder-site/     # Website (Next.js)
+└── README.zh.md            # 中文版
+└── README.ja.md            # 日本語版
 ```
 
-## 🎨 设计
+## 🎨 Design
 
-Claude 风格：深炭黑背景 + 珊瑚色 accent + Inter 字体 + 极简线条。
+Dark charcoal background + coral accent + Inter font + minimal lines.
 
-## 🔒 隐私声明
+## 🔒 Privacy
 
-所有数据存储在本地，不联网，不上传任何信息。
+All data stored locally. No cloud sync, no tracking, no data uploads.
 
 ## 📄 License
 
-[MIT License](LICENSE) — 自由使用、修改、分发
+MIT — free to use, modify, distribute.
 
-## 🙏 贡献者
+## 🙏 Contributors
 
-| 贡献者 | 角色 |
-|--------|------|
-| **binlo** | 项目所有者 · 产品设计 · 核心功能 |
-| **Claude (Anthropic)** | AI 开发助手 · 代码生成 · 架构设计 |
+| Contributor | Role |
+|-------------|------|
+| **binlo** | Product design · Core features |
+| **Claude (Anthropic)** | AI dev assistant · Code generation |
 
 ---
 
 <div align="center">
 
-**如果觉得有用，点个 ⭐ Star 支持一下！**
+**If you find it useful, give it a ⭐ Star!**
 
 </div>
