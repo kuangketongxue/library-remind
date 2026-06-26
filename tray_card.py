@@ -221,7 +221,7 @@ class TrayCardWidget(QWidget):
                 t.setFont(QFont('Microsoft YaHei', 10, QFont.Bold))
                 t.setStyleSheet('color: #e8e6e1; background: transparent;')
                 col.addWidget(t)
-                desc = QLabel('最近7天学习 / 电脑使用图表')
+                desc = QLabel('最近7天学习趋势图表')
                 desc.setFont(QFont('Microsoft YaHei', 8))
                 desc.setStyleSheet('color: #666; background: transparent;')
                 col.addWidget(desc)
