@@ -10,23 +10,10 @@ export default function Navbar() {
         </Link>
 
         <div className="flex items-center gap-6">
-          <a href="#features" className="text-[13px] text-[var(--fg-dim)] hover:text-[var(--fg)] transition-colors hidden sm:block">
-            功能
-          </a>
-          <a href="#changelog" className="text-[13px] text-[var(--fg-dim)] hover:text-[var(--fg)] transition-colors hidden md:block">
-            更新日志
-          </a>
-          <a href="#faq" className="text-[13px] text-[var(--fg-dim)] hover:text-[var(--fg)] transition-colors hidden md:block">
-            FAQ
-          </a>
-          <a href="#sponsor" className="text-[13px] text-[var(--fg-dim)] hover:text-[var(--fg)] transition-colors hidden md:block">
-            赞助商
-          </a>
           <a href="/docs" className="text-[13px] text-[var(--fg-dim)] hover:text-[var(--fg)] transition-colors hidden md:block">
             文档
           </a>
-          <a
-            href="https://github.com/kuangketongxue/library-remind"
+          <a href="https://github.com/kuangketongxue/library-remind"
             target="_blank"
             rel="noopener noreferrer"
             className="text-[13px] text-[var(--fg-dim)] hover:text-[var(--fg)] transition-colors hidden sm:block"

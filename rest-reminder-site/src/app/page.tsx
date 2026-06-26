@@ -1,5 +1,6 @@
 import Hero from "@/components/Hero";
 import Download from "@/components/Download";
+import Sponsor from "@/components/Sponsor";
 import Footer from "@/components/Footer";
 
 function Stats() {
@@ -29,6 +30,7 @@ export default function Home() {
       <Hero />
       <Stats />
       <Download />
+      <Sponsor />
       <Footer />
     </main>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-interface TocItem {
+export interface TocItem {
   id: string;
   label: string;
   level: number;
