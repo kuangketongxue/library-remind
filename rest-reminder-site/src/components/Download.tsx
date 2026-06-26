@@ -77,7 +77,7 @@ export default function Download() {
           >
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
               <a
-                href="https://github.com/kuangketongxue/library-remind/releases/latest"
+                href="https://github.com/kuangketongxue/library-remind/releases"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 bg-white text-[#b5651d] font-semibold px-8 py-3.5 rounded-full text-base hover:bg-[var(--fg)] hover:shadow-lg transition-all"

@@ -1,6 +1,23 @@
 "use client";
 
 import DocsNav from "@/components/DocsNav";
+import DocsTOC, { type TocItem } from "@/components/DocsTOC";
+
+const tocItems: TocItem[] = [
+  { id: "快速开始", label: "快速开始", level: 2 },
+  { id: "下载运行", label: "1. 下载运行", level: 3 },
+  { id: "设定目标", label: "2. 设定目标", level: 3 },
+  { id: "开始学习", label: "3. 开始学习", level: 3 },
+  { id: "复盘追踪", label: "4. 复盘追踪", level: 3 },
+  { id: "功能说明", label: "功能说明", level: 2 },
+  { id: "60分钟循环", label: "60 分钟专注循环", level: 3 },
+  { id: "护眼提醒", label: "20-20-20 护眼提醒", level: 3 },
+  { id: "学习追踪", label: "学习时长追踪", level: 3 },
+  { id: "趋势分析", label: "趋势分析", level: 3 },
+  { id: "ai分析", label: "AI 学习分析", level: 3 },
+  { id: "更新日志", label: "更新日志", level: 2 },
+  { id: "常见问题", label: "常见问题", level: 2 },
+];
 
 export default function DocsPage() {
   return (
@@ -9,45 +26,49 @@ export default function DocsPage() {
         {/* 左侧导航 */}
         <DocsNav />
 
-        {/* 右侧内容 */}
+        {/* 中间内容 */}
         <div className="flex-1 min-w-0 px-6 py-12">
           <div className="max-w-3xl">
-            <h1 className="text-3xl font-extrabold tracking-tight mb-2 font-display">文档</h1>
-            <p className="text-[var(--fg-dim)] mb-10">Rest Reminder 使用指南、更新日志与常见问题。</p>
+            <h1 className="text-3xl font-extrabold tracking-tight mb-2 font-display">
+              文档
+            </h1>
+            <p className="text-[var(--fg-dim)] mb-10">
+              Rest Reminder 使用指南、更新日志与常见问题。
+            </p>
 
             {/* 快速开始 */}
-            <section className="mb-12">
-              <h2 className="text-xl font-bold mb-1 font-display">快速开始</h2>
-              <p className="text-[var(--fg-dim)] text-sm mb-4">5 分钟上手 Rest Reminder</p>
+            <section className="mb-16" id="快速开始">
+              <h2 className="text-2xl font-bold mb-1 font-display">快速开始</h2>
+              <p className="text-[var(--fg-dim)] text-sm mb-6">5 分钟上手 Rest Reminder</p>
 
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-base font-semibold mb-2">1. 下载运行</h3>
+              <div className="space-y-8">
+                <div id="下载运行">
+                  <h3 className="text-base font-semibold mb-2 font-display">1. 下载运行</h3>
                   <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                    双击 <code className="bg-[var(--surface-raised)] px-1.5 py-0.5 rounded text-xs">_launch.vbs</code> 启动程序，
-                    或在命令行运行 <code className="bg-[var(--surface-raised)] px-1.5 py-0.5 rounded text-xs">python rest_reminder.py</code>。
+                    双击 <code className="bg-[var(--surface-raised)] px-1.5 py-0.5 rounded text-xs font-mono">_launch.vbs</code> 启动程序，
+                    或在命令行运行 <code className="bg-[var(--surface-raised)] px-1.5 py-0.5 rounded text-xs font-mono">python rest_reminder.py</code>。
                     首次运行会自动创建数据文件（.daily_log.json 等）。
                   </p>
                 </div>
 
-                <div>
-                  <h3 className="text-base font-semibold mb-2">2. 设定今日目标</h3>
+                <div id="设定目标">
+                  <h3 className="text-base font-semibold mb-2 font-display">2. 设定今日目标</h3>
                   <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
                     启动后弹出目标对话框，输入今天主要学习内容，选择预计轮次。
                     目标是可选的，随时可以从主界面重新设定。
                   </p>
                 </div>
 
-                <div>
-                  <h3 className="text-base font-semibold mb-2">3. 开始学习</h3>
+                <div id="开始学习">
+                  <h3 className="text-base font-semibold mb-2 font-display">3. 开始学习</h3>
                   <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                    点击浮球弹出信息面板，按 <code className="bg-[var(--surface-raised)] px-1.5 py-0.5 rounded text-xs">▶ 开始学习</code> 启动 60 分钟倒计时。
+                    点击浮球弹出信息面板，按 <code className="bg-[var(--surface-raised)] px-1.5 py-0.5 rounded text-xs font-mono">▶ 开始学习</code> 启动 60 分钟倒计时。
                     倒计时结束后自动进入 5 分钟休息，休息结束自动打开 B 站收藏夹。
                   </p>
                 </div>
 
-                <div>
-                  <h3 className="text-base font-semibold mb-2">4. 复盘与追踪</h3>
+                <div id="复盘追踪">
+                  <h3 className="text-base font-semibold mb-2 font-display">4. 复盘与追踪</h3>
                   <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
                     每小时休息时弹出复盘评分（1-100 分），记录学科和标签。
                     主界面「今日」tab 实时显示学习时长、轮次、连续打卡天数。
@@ -57,37 +78,47 @@ export default function DocsPage() {
             </section>
 
             {/* 功能说明 */}
-            <section className="mb-12">
-              <h2 className="text-xl font-bold mb-1 font-display">功能说明</h2>
-              <p className="text-[var(--fg-dim)] text-sm mb-4">核心功能一览</p>
+            <section className="mb-16" id="功能说明">
+              <h2 className="text-2xl font-bold mb-1 font-display">功能说明</h2>
+              <p className="text-[var(--fg-dim)] text-sm mb-6">核心功能一览</p>
 
               <div className="space-y-4">
-                <div className="border border-[var(--border)] rounded-xl p-5">
-                  <h3 className="text-sm font-semibold mb-1">⏱ 60 分钟专注循环</h3>
-                  <p className="text-[var(--fg-dim)] text-sm">学习 60 分钟 → 5 分钟请辨倒计时（显示金句） → 5 分钟休息 → 自动打开 B 站收藏夹，循环往复。</p>
+                <div className="border border-[var(--border)] rounded-xl p-5" id="60分钟循环">
+                  <h3 className="text-sm font-semibold mb-1.5">⏱ 60 分钟专注循环</h3>
+                  <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
+                    学习 60 分钟 → 5 分钟请辨倒计时（显示金句） → 5 分钟休息 → 自动打开 B 站收藏夹，循环往复。
+                  </p>
                 </div>
-                <div className="border border-[var(--border)] rounded-xl p-5">
-                  <h3 className="text-sm font-semibold mb-1">👁 20-20-20 护眼提醒</h3>
-                  <p className="text-[var(--fg-dim)] text-sm">每 20 分钟弹出轻量浮窗，提醒看 6 米外 20 秒，15 秒自动消失，不打断学习流。</p>
+                <div className="border border-[var(--border)] rounded-xl p-5" id="护眼提醒">
+                  <h3 className="text-sm font-semibold mb-1.5">👁 20-20-20 护眼提醒</h3>
+                  <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
+                    每 20 分钟弹出轻量浮窗，提醒看 6 米外 20 秒，15 秒自动消失，不打断学习流。
+                  </p>
                 </div>
-                <div className="border border-[var(--border)] rounded-xl p-5">
-                  <h3 className="text-sm font-semibold mb-1">📊 学习时长追踪</h3>
-                  <p className="text-[var(--fg-dim)] text-sm">实时统计学习时长，连续打卡 + 里程碑金句 + 每小时复盘评分，数据持久化到本地。</p>
+                <div className="border border-[var(--border)] rounded-xl p-5" id="学习追踪">
+                  <h3 className="text-sm font-semibold mb-1.5">📊 学习时长追踪</h3>
+                  <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
+                    实时统计学习时长，连续打卡 + 里程碑金句 + 每小时复盘评分，数据持久化到本地。
+                  </p>
                 </div>
-                <div className="border border-[var(--border)] rounded-xl p-5">
-                  <h3 className="text-sm font-semibold mb-1">📈 趋势分析</h3>
-                  <p className="text-[var(--fg-dim)] text-sm">5 标签页趋势图（今日复盘/周趋势/月趋势/季年趋势/时段分析），柱状图 + 热力图双视图，鼠标悬浮查看数值。</p>
+                <div className="border border-[var(--border)] rounded-xl p-5" id="趋势分析">
+                  <h3 className="text-sm font-semibold mb-1.5">📈 趋势分析</h3>
+                  <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
+                    5 标签页趋势图（今日复盘/周趋势/月趋势/季年趋势/时段分析），柱状图 + 热力图双视图，鼠标悬浮查看数值。
+                  </p>
                 </div>
-                <div className="border border-[var(--border)] rounded-xl p-5">
-                  <h3 className="text-sm font-semibold mb-1">🤖 AI 学习分析</h3>
-                  <p className="text-[var(--fg-dim)] text-sm">AI 自动生成日报/周报/月报/季报/年报，分析学习节奏和专注模式。基于 SenseNova API，无需付费。</p>
+                <div className="border border-[var(--border)] rounded-xl p-5" id="ai分析">
+                  <h3 className="text-sm font-semibold mb-1.5">🤖 AI 学习分析</h3>
+                  <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
+                    AI 自动生成日报/周报/月报/季报/年报，分析学习节奏和专注模式。基于 SenseNova API，无需付费。
+                  </p>
                 </div>
               </div>
             </section>
 
             {/* 更新日志 */}
-            <section className="mb-12">
-              <h2 className="text-xl font-bold mb-1 font-display">更新日志</h2>
+            <section className="mb-16" id="更新日志">
+              <h2 className="text-2xl font-bold mb-1 font-display">更新日志</h2>
               <p className="text-[var(--fg-dim)] text-sm mb-6">版本迭代记录</p>
 
               <div className="space-y-6">
@@ -141,13 +172,21 @@ export default function DocsPage() {
               </div>
 
               <p className="text-[var(--fg-dim)] text-sm mt-6">
-                完整更新日志见 <a href="https://github.com/kuangketongxue/library-remind/blob/main/CHANGELOG.md" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">GitHub CHANGELOG.md</a>
+                完整更新日志见{" "}
+                <a
+                  href="https://github.com/kuangketongxue/library-remind/blob/main/CHANGELOG.md"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[var(--accent)] hover:underline"
+                >
+                  GitHub CHANGELOG.md
+                </a>
               </p>
             </section>
 
             {/* 常见问题 */}
-            <section className="mb-12">
-              <h2 className="text-xl font-bold mb-1 font-display">常见问题</h2>
+            <section className="mb-16" id="常见问题">
+              <h2 className="text-2xl font-bold mb-1 font-display">常见问题</h2>
               <p className="text-[var(--fg-dim)] text-sm mb-6">遇到问题？看看这里有没有答案</p>
 
               <div className="space-y-4">
@@ -174,6 +213,11 @@ export default function DocsPage() {
               </div>
             </section>
           </div>
+        </div>
+
+        {/* 右侧 TOC */}
+        <div className="hidden xl:block w-48 shrink-0">
+          <DocsTOC items={tocItems} />
         </div>
       </div>
     </main>

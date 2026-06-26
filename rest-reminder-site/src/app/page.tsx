@@ -1,6 +1,4 @@
 import Hero from "@/components/Hero";
-import Features from "@/components/Features";
-import Changelog from "@/components/Changelog";
 import Download from "@/components/Download";
 import Footer from "@/components/Footer";
 
@@ -30,8 +28,6 @@ export default function Home() {
     <main className="flex-1">
       <Hero />
       <Stats />
-      <Features />
-      <Changelog />
       <Download />
       <Footer />
     </main>
