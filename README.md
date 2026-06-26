@@ -17,7 +17,7 @@
   <img src="https://img.shields.io/badge/python-3.14%2B-yellow?style=for-the-badge" alt="Python">
 </a>
 
-[📥 Download](https://github.com/kuangketongxue/library-remind/releases/latest) · [🌐 Website](https://crazy-rest-reminder.pages.dev/) · [💬 Issues](https://github.com/kuangketongxue/library-remind/issues)
+[📥 Download](https://github.com/kuangketongxue/library-remind/releases/latest) · [🌐 Website](https://crazy-rest-reminder.pages.dev/) · [💬 Issues](https://github.com/kuangketongxue/library-remind/issues) · [中文](README.zh.md) · [日本語](README.ja.md)
 
 <a href="https://starcharts.cc/kuangketongxue/library-remind">
   <img src="https://starcharts.cc/kuangketongxue/library-remind/star-history.svg?bg=0c0c10&hideIssues=true" alt="Star History" height="180">
@@ -85,6 +85,6 @@ MIT — free to use, modify, distribute.
 
 **If you find it useful, give it a ⭐ Star!**
 
-[中文](README.zh.md) · [日本語](README.ja.md)
+
 
 </div>
