@@ -29,7 +29,7 @@
 
 A Windows desktop widget that reminds you to take breaks during long study sessions. 60-minute focus cycles, AI-powered learning analysis, and a calm dark UI that stays out of your way.
 
-**Preferred setup**: double-click `_launch.vbs` or run `python rest_reminder.py`.
+**Preferred setup**: double-click `_launch.bat` or run `python rest_reminder.py`.
 
 ## ✨ Features
 
@@ -51,13 +51,13 @@ A Windows desktop widget that reminds you to take breaks during long study sessi
 python rest_reminder.py
 
 # Or double-click
-_launch.vbs
+_launch.bat
 ```
 
 ## 📁 Project Structure
 
 ```
-├── rest_reminder.py        # Main app (3836 lines)
+├── rest_reminder.py        # Main app (~4413 lines)
 ├── storage.py              # Unified JSON storage layer
 ├── tray_card.py            # Floating tray card widget
 ├── vendor/                 # Bundled dependencies

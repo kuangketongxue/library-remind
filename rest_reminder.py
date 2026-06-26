@@ -2519,6 +2519,7 @@ class RestReminderWidget(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet('QScrollArea { border: none; background: #0d0d12; }')
+        self._today_refs = {}
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.setContentsMargins(20, 16, 20, 16)

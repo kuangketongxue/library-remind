@@ -48,7 +48,7 @@ _launch.vbs
 ## 📁 项目结构
 
 ```
-├── rest_reminder.py        # 主程序（3836行）
+├── rest_reminder.py        # 主程序（4413行）
 ├── storage.py              # 统一 JSON 存储层
 ├── tray_card.py            # 托盘卡片组件
 ├── vendor/                 # 本地依赖包
