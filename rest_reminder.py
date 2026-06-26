@@ -1764,13 +1764,32 @@ class TrendWindow(QWidget):
 
 
 def _md_to_html(text):
-    """轻量 markdown → HTML（只处理常用语法，不引入第三方库）"""
+    """轻量 markdown → HTML（带表格支持）"""
     lines = text.split('\n')
     out = []
     in_code = False
-    code_buf = []
+    table_buf = []
+    in_table = False
+
+    def _flush_table():
+        nonlocal in_table
+        if not table_buf:
+            return
+        rows_html = []
+        for i, row in enumerate(table_buf):
+            cells = [c.strip() for c in row.strip('|').split('|')]
+            if i == 0:
+                row_html = '<tr>' + ''.join(f'<th style="border:1px solid #252530;padding:6px 12px;color:#d4af37;font-weight:bold;">{c}</th>' for c in cells) + '</tr>'
+            else:
+                row_html = '<tr>' + ''.join(f'<td style="border:1px solid #252530;padding:6px 12px;color:#b8b4ac;">{c}</td>' for c in cells) + '</tr>'
+            rows_html.append(row_html)
+        out.append(f'<table style="border-collapse:collapse;width:100%;margin:8px 0;font-size:13px;">{"".join(rows_html)}</table>')
+        table_buf.clear()
+        in_table = False
+
     for line in lines:
         if line.strip().startswith('```'):
+            _flush_table()
             if in_code:
                 out.append('</pre>')
                 in_code = False
@@ -1779,8 +1798,14 @@ def _md_to_html(text):
                 in_code = True
             continue
         if in_code:
-            code_buf.append(line)
+            out.append(line)
             continue
+        if '|' in line and not line.strip().startswith('|--'):
+            in_table = True
+            table_buf.append(line)
+            continue
+        if in_table:
+            _flush_table()
         if line.startswith('# '):
             out.append(f'<h1 style="color:#e8e6e1;font-size:18px;font-weight:bold;margin:16px 0 8px;">{line[2:]}</h1>')
         elif line.startswith('## '):
@@ -1794,14 +1819,12 @@ def _md_to_html(text):
         elif line.strip() == '---':
             out.append('<hr style="border:none;border-top:1px solid #252530;margin:12px 0;">')
         elif line.strip():
-            # **粗体** → <strong>
             line = re.sub(r'\*\*(.+?)\*\*', r'<strong style="color:#e8e6e1;">\1</strong>', line)
-            # *斜体* → <em>
             line = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'<em style="color:#c4b8a0;">\1</em>', line)
-            # * bullet → • bullet（AI 常用 * 当列表标记）
             if re.match(r'^\*\s', line):
                 line = '•' + line[1:]
             out.append(f'<p style="color:#b8b4ac;line-height:1.7;margin:4px 0;">{line}</p>')
+    _flush_table()
     if in_code:
         out.append('</pre>')
     return '\n'.join(out)
@@ -1814,13 +1837,13 @@ def _build_report_data(report_type):
     reviews = review_store.load() or {}
     daily = daily_store.load() or {}
 
-    # 筛选日期范围
+    # 筛选日期范围（days-1 因为包含当天）
     ranges = {
         'daily': 1, 'weekly': 7, 'monthly': 30,
         'quarterly': 90, 'yearly': 365
     }
     days = ranges.get(report_type, 7)
-    start = today - timedelta(days=days)
+    start = today - timedelta(days=days - 1)  # daily→今天, weekly→近7天
     records = []
     for d, v in sorted(history.items()):
         try:
@@ -1968,10 +1991,11 @@ def generate_report(report_type, force_refresh=False):
             f"- 高频标签：{', '.join(f'{t}({c})' for t, c in data['top_tags']) or '无'}\n"
             f"- 最近记录：{data['records'][:5]}\n\n"
             f"格式要求：\n"
-            f"- 用 ## 标题分节，用 **粗体** 突出关键数字（时长、轮次、分数等）\n"
-            f"- 不要用 * 斜体或星号列表，用 - 开头的列表项\n"
-            f"- 每段控制在 2-3 行，简洁易读\n"
-            f"包含以下内容：\n"
+            f"- 用 ## 标题分节\n"
+            f"- 关键数字用 **粗体** 突出\n"
+            f"- 用 - 开头的列表项，不要用表格（|...|）\n"
+            f"- 每段 2-3 行，简洁\n"
+            f"包含：\n"
             f"1. 概览（时长/轮次/质量）\n"
             f"2. 趋势分析\n"
             f"3. 改进建议（3-5条）\n"
@@ -3294,6 +3318,8 @@ v4.1 (2026-06-17)
                 self._set_reminder_mode('none')
             elif action == 'show_stats':
                 self.show_stats()
+            elif action == 'set_goal':
+                self._show_goal_dialog()
             elif action == 'export_data':
                 self.export_weekly_data()
             elif action == 'quit_app':

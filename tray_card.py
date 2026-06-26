@@ -134,6 +134,7 @@ class TrayCardWidget(QWidget):
         mode_map = {'video': '打开B站', 'quote': '💡 请辨金句', 'notify': '通知', 'none': '无操作'}
 
         for icon, title, action_name in [
+            ('🎯', '设定今日目标', 'set_goal'),
             ('👁', '显示/隐藏窗口', 'toggle_visibility'),
             ('🔁', '开机自启动', 'toggle_autostart'),
             ('🔔', '提醒方式', 'reminder_mode'),
@@ -253,6 +254,29 @@ class TrayCardWidget(QWidget):
                 hint.setFont(QFont('Consolas', 8))
                 hint.setStyleSheet('color: #555; background: transparent;')
                 rl.addWidget(hint)
+                layout.addWidget(row)
+                layout.addSpacing(2)
+
+            elif action_name == 'set_goal':
+                row = ClickableRow(lambda: self.action_requested.emit(action_name))
+                rl = row.layout()
+                icon_lbl = self._make_icon(icon)
+                rl.addWidget(icon_lbl)
+                col = QVBoxLayout()
+                col.setSpacing(1)
+                t = QLabel(title)
+                t.setFont(QFont('Microsoft YaHei', 10, QFont.Bold))
+                t.setStyleSheet('color: #d4af37; background: transparent;')
+                col.addWidget(t)
+                desc = QLabel('重新设定今日学习目标')
+                desc.setFont(QFont('Microsoft YaHei', 8))
+                desc.setStyleSheet('color: #888; background: transparent;')
+                col.addWidget(desc)
+                rl.addLayout(col)
+                rl.addStretch()
+                arrow = QLabel('↗')
+                arrow.setStyleSheet('color: #d4af37; font-size: 12px; background: transparent;')
+                rl.addWidget(arrow)
                 layout.addWidget(row)
                 layout.addSpacing(2)
 
