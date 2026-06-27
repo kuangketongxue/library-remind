@@ -1931,6 +1931,7 @@ def _build_report_data(report_type):
         'avg_quality': avg_quality,
         'top_tags': top_tags,
         'records': records[-10:],  # 最近10条
+        'review_records': review_records,  # 复盘明细
     }
 
 
@@ -1947,10 +1948,10 @@ def _call_ai(prompt, model='sensenova-6.7-flash-lite'):
     body = {
         'model': model,
         'messages': [
-            {'role': 'system', 'content': '你是学习分析助手，根据用户的学习数据给出简洁有用的分析报告。用中文回答。'},
+            {'role': 'system', 'content': '你是专业的学习分析顾问。根据用户的学习复盘数据，生成深度、具体、有洞察力的分析报告。用中文回答。'},
             {'role': 'user', 'content': prompt},
         ],
-        'max_tokens': 800,
+        'max_tokens': 2048,
         'temperature': 0.7,
     }
 
@@ -1985,6 +1986,48 @@ def _call_ai(prompt, model='sensenova-6.7-flash-lite'):
     return {'ok': False, 'error': f'所有 AI 服务不可用。最后错误：{last_err}'}
 
 
+
+
+def _local_fallback_report(report_type, data):
+    """AI 不可用时的本地降级报告"""
+    type_names = {'daily': '日报', 'weekly': '周报', 'monthly': '月报', 'quarterly': '季报', 'yearly': '年报'}
+    name = type_names.get(report_type, report_type)
+
+    daily_lines = []
+    for r in data.get('records', []):
+        date = r.get('date', '?')
+        study = r.get('study', 0)
+        daily_lines.append(f"  - {date}：学习 {study}h")
+    daily_detail = '\n'.join(daily_lines) if daily_lines else '  - 暂无记录'
+
+    review_lines = []
+    for entry in data.get('review_records', []):
+        review_lines.append(
+            f"  - {entry.get('time', '?')} | {entry.get('subject', '未记录')} | {entry.get('label', '')} | {entry.get('score', '?')}分"
+        )
+    review_detail = '\n'.join(review_lines) if review_lines else '  - 暂无复盘记录'
+
+    tags_str = ', '.join(f'{t}({c})' for t, c in data.get('top_tags', [])) or '无'
+
+    lines = [
+        f'## {name}（数据摘要）',
+        f'**时间范围**：{data["date_range"]}',
+        f'**学习时长**：**{data["total_study_hours"]} 小时**',
+        f'**完成轮次**：**{data["sessions"]} 轮**',
+        f'**平均复盘质量**：**{data["avg_quality"]}/100**',
+        f'**高频标签**：{tags_str}',
+        '',
+        '## 每日学习记录',
+        daily_detail,
+        '',
+        '## 复盘记录',
+        review_detail,
+        '',
+        '> 注：AI 服务不可用，以上为本地数据摘要。配置 API Key 后可生成深度分析报告。',
+    ]
+    return '\n'.join(lines)
+
+
 def generate_report(report_type, force_refresh=False):
     """生成 AI 学习分析报告（内联，不再依赖 pro_features）"""
     try:
@@ -2008,29 +2051,66 @@ def generate_report(report_type, force_refresh=False):
             except Exception:
                 cache = {}
 
-        # 生成数据
+        # 生成数据（含复盘明细）
         data = _build_report_data(report_type)
 
         type_names = {'daily': '日报', 'weekly': '周报', 'monthly': '月报', 'quarterly': '季报', 'yearly': '年报'}
         name = type_names.get(report_type, report_type)
 
+        # 构建每日学习明细
+        daily_lines = []
+        for r in data.get('records', []):
+            daily_lines.append(f"  - {r.get('date', '?')}：学习 {r.get('study', 0)} 小时")
+        daily_detail = '\n'.join(daily_lines) if daily_lines else '  暂无记录'
+
+        # 构建复盘明细（时间、学科、标签、评分）
+        review_detail_lines = []
+        for entry in data.get('review_records', []):
+            review_detail_lines.append(
+                f"  - {entry.get('time', '?')} | 学科:{entry.get('subject', '未记录')} | 标签:{entry.get('label', '')} | 评分:{entry.get('score', '?')}/100"
+            )
+        review_detail_text = '\n'.join(review_detail_lines) if review_detail_lines else '  暂无复盘记录'
+
+        # 标签分布
+        tags_str = ', '.join(f'{t}({c}次)' for t, c in data.get('top_tags', [])) or '无'
+
         prompt = (
-            f"请根据以下学习数据生成一份{name}（时间范围：{data['date_range']}）：\n"
-            f"- 学习时长：{data['total_study_hours']} 小时\n"
-            f"- 完成轮次：{data['sessions']} 轮\n"
+            f"你是专业的学习分析顾问。请根据以下详细数据生成一份有深度的{name}，字数不少于 400 字。\n"
+            f"时间范围：{data['date_range']}，共 {data['days']} 天。\n"
+            f"\n"
+            f"## 核心数据\n"
+            f"- 总学习时长：{data['total_study_hours']} 小时（{data['sessions']} 轮）\n"
             f"- 平均复盘质量：{data['avg_quality']}/100\n"
-            f"- 高频标签：{', '.join(f'{t}({c})' for t, c in data['top_tags']) or '无'}\n"
-            f"- 最近记录：{data['records'][:5]}\n\n"
-            f"格式要求：\n"
-            f"- 用 ## 标题分节\n"
-            f"- 关键数字用 **粗体** 突出\n"
-            f"- 用 - 开头的列表项，不要用表格（|...|）\n"
-            f"- 每段 2-3 行，简洁\n"
-            f"包含：\n"
-            f"1. 概览（时长/轮次/质量）\n"
-            f"2. 趋势分析\n"
-            f"3. 改进建议（3-5条）\n"
-            f"4. 亮点总结"
+            f"- 高频标签：{tags_str}\n"
+            f"\n"
+            f"## 每日学习明细\n"
+            f"{daily_detail}\n"
+            f"\n"
+            f"## 复盘记录（每条 = 1小时学习后的自评）\n"
+            f"{review_detail_text}\n"
+            f"\n"
+            f"## 格式要求\n"
+            f"1. 用 ## 标题分节，结构清晰\n"
+            f"2. 关键数字用 **粗体** 突出\n"
+            f"3. 用 - 列表项，不要用表格\n"
+            f"4. 每段 2-4 行，要有实质内容，不要空泛\n"
+            f"5. 建议中要结合具体的评分、学科、标签数据\n"
+            f"\n"
+            f"## 必须包含的 5 个章节\n"
+            f"### 概览\n"
+            f"总结本周期学习时长、完成轮次、复盘质量，用数据说话。\n"
+            f"\n"
+            f"### 趋势分析\n"
+            f"分析学习时长的日/周变化趋势，哪些天表现好/差，结合复盘评分解释原因。\n"
+            f"\n"
+            f"### 学科分布\n"
+            f"根据复盘中的学科和标签分布，分析各学科投入情况。\n"
+            f"\n"
+            f"### 改进建议（5-7条，每条要有具体行动）\n"
+            f"基于数据提出可落地的改进建议。\n"
+            f"\n"
+            f"### 亮点总结\n"
+            f"肯定本周期的成就和进步，指出可保持的优点。\n"
         )
 
         result = _call_ai(prompt)
@@ -2046,12 +2126,14 @@ def generate_report(report_type, force_refresh=False):
                 pass
             return {'ok': True, 'content': report_text}
 
-        return result
+        # AI 不可用，返回本地降级报告
+        log.warning(f'[generate_report] AI 不可用，使用本地降级报告：{result.get("error", "")}')
+        fallback = _local_fallback_report(report_type, data)
+        return {'ok': True, 'content': fallback, 'from_cache': False, 'fallback': True}
 
     except Exception as e:
         log.error(f'[generate_report] 报告生成失败: {e}')
         return {'ok': False, 'error': f'报告生成失败：{e}'}
-
 
 class _ReportWorker(QThread):
     """后台线程：生成 AI 报告，不阻塞 UI"""
