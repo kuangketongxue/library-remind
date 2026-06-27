@@ -1,17 +1,19 @@
 ---
 date: 2026-06-27
-status: paused
+status: current
 ---
 
 ## Handoff — 2026-06-27
 
-### 已完成并推送（c23eca9）
+### 已完成
 - Hook 全面盘点修复（9个bug）
 - 休息提醒自启动快捷方式（Startup 文件夹）
-- `_today_refs` 崩溃修复 → 验证通过（pythonw.exe PID 运行中）
-- .jpg 文件关联恢复 Photos（从 Doubao 恢复）
-- 文档行号统一为 4413（CLAUDE/AGENTS/README/zh/CHANGELOG）
-- 启动方式修正 `_launch.vbs` → `_launch.bat`
+- `_today_refs` 崩溃修复（`_build_general_tab` 第2604行已初始化，第2722行冗余初始化已删除）
+- AI 报告升级：max_tokens 2048、prompt 充实、400+字、5章节、本地降级报告
+- 官网"关于"页面优化：版本同步VERSION常量、环境诊断增强(内存/磁盘/AI)
+- 官网更新日志读取CHANGELOG.md（不再硬编码）
+- GitHub Actions 自动部署 Cloudflare Pages（.github/workflows/deploy.yml）
+- 官网 Changelog 组件与代码同步（v5.1/v5.0/v4.4/v4.3）
 
 ### 待处理
 
