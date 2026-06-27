@@ -2278,7 +2278,7 @@ class RestReminderWidget(QWidget):
         self._prompt_goal()
 
     def init_ui(self):
-        self.setWindowTitle('休息提醒 v4.4')
+        self.setWindowTitle(f'休息提醒 {VERSION}')
         self.widget_width = 960
         self.widget_height = 680
         self.setGeometry(100, 100, self.widget_width, self.widget_height)
@@ -2407,7 +2407,7 @@ class RestReminderWidget(QWidget):
         sb_layout.addStretch()
 
         # 底部版本标签
-        ver_lbl = QLabel('v4.4')
+        ver_lbl = QLabel(VERSION)
         ver_lbl.setAlignment(Qt.AlignCenter)
         ver_lbl.setStyleSheet('color: #444; font-size: 10px; font-family: Consolas; background: transparent;')
         sb_layout.addWidget(ver_lbl)
@@ -2594,7 +2594,7 @@ class RestReminderWidget(QWidget):
         self._tab_content.setCurrentIndex(idx)
         # 更新窗口标题以反映当前 tab
         title_map = {'今日': '📊 今日', 'AI 报告': '🤖 AI 学习报告', '趋势': '📈 学习趋势', '设置': '⚙️ 设置', '关于': 'ℹ️ 关于'}
-        self.setWindowTitle(f'休息提醒 v4.4 — {title_map.get(name, name)}')
+        self.setWindowTitle(f'休息提醒 {VERSION} — {title_map.get(name, name)}')
 
     def _build_general_tab(self):
         """今日 tab：学习概览 + 今日数据"""
@@ -3046,18 +3046,18 @@ class RestReminderWidget(QWidget):
         icon_lbl.setFont(QFont('Segoe UI Emoji', 24))
         icon_lbl.setStyleSheet('background: transparent;')
         top_row.addWidget(icon_lbl)
-        name_lbl = QLabel('精力管理')
+        name_lbl = QLabel('休息提醒')
         name_lbl.setFont(QFont('Georgia, "Noto Serif SC", serif', 16, QFont.Bold))
         name_lbl.setStyleSheet('color: #e8e6e1;')
         top_row.addWidget(name_lbl)
         # 版本 badge
-        ver_badge = QLabel('v4.4')
+        ver_badge = QLabel(VERSION)
         ver_badge.setStyleSheet('background: rgba(255,255,255,0.08); color: #888; border-radius: 6px; padding: 3px 10px; font-size: 11px; font-family: Consolas;')
         top_row.addWidget(ver_badge)
         top_row.addStretch()
         ac.addLayout(top_row)
 
-        desc_lbl = QLabel('开源 MIT · 桌面休息提醒挂件')
+        desc_lbl = QLabel('开源 MIT · 专注计时 + 休息提醒 + AI 学习分析 · v5.1')
         desc_lbl.setStyleSheet('color: #666; font-size: 12px;')
         ac.addWidget(desc_lbl)
 
@@ -3081,7 +3081,7 @@ class RestReminderWidget(QWidget):
         layout.addSpacing(8)
 
         # ── 本地环境检查 ──
-        env_title = QLabel('本地环境检查')
+        env_title = QLabel('环境诊断')
         env_title.setFont(QFont('Georgia, "Noto Serif SC", serif', 14, QFont.Bold))
         layout.addWidget(env_title)
 
@@ -3089,15 +3089,14 @@ class RestReminderWidget(QWidget):
         env_card.setObjectName('sectionCard')
         ec = QVBoxLayout(env_card)
         ec.setContentsMargins(16, 14, 16, 14)
-        ec.setSpacing(8)
+        ec.setSpacing(6)
 
         # 刷新按钮行
         env_btn_row = QHBoxLayout()
         env_btn_row.setSpacing(8)
         for text, slot in [
-            ('🔍 诊断安装冲突', self._diagnose_env),
+            ('🔍 诊断', self._diagnose_env),
             ('🔄 刷新', self._refresh_env_check),
-            ('⬆️ 全部升级', self._upgrade_all),
         ]:
             btn = QPushButton(text)
             btn.setFixedHeight(30)
@@ -3107,12 +3106,17 @@ class RestReminderWidget(QWidget):
         env_btn_row.addStretch()
         ec.addLayout(env_btn_row)
 
-        # 环境项（Python / PyQt5 / 平台）
-        for name, check_fn in [
-            ('Python', self._check_python),
-            ('PyQt5', self._check_pyqt5),
-            ('平台', self._check_platform),
-        ]:
+        ec.addSpacing(4)
+
+        # 环境项（Python / PyQt5 / 平台 / 内存 / 磁盘）
+        env_items = [
+            ('Python', self._check_python, None),
+            ('PyQt5', self._check_pyqt5, None),
+            ('平台', self._check_platform, None),
+            ('内存', self._check_memory, None),
+            ('磁盘', self._check_disk, None),
+        ]
+        for name, check_fn, _ in env_items:
             row = QHBoxLayout()
             row.setSpacing(8)
             icon = QLabel('◆')
@@ -3128,12 +3132,78 @@ class RestReminderWidget(QWidget):
             version_lbl.setObjectName(f'env_{name}')
             row.addWidget(version_lbl)
             row.addStretch()
-            refresh_btn = QPushButton('⟳')
-            refresh_btn.setFixedSize(24, 24)
-            refresh_btn.setStyleSheet('background: transparent; border: none; color: #555; font-size: 14px;')
-            refresh_btn.clicked.connect(check_fn)
-            row.addWidget(refresh_btn)
             ec.addLayout(row)
+
+        ec.addSpacing(4)
+
+        # 数据文件状态
+        data_title = QLabel('数据文件')
+        data_title.setStyleSheet('color: #888; font-size: 12px; font-weight: bold; padding-top: 4px;')
+        ec.addWidget(data_title)
+
+        data_items = [
+            ('学习记录', '.daily_log.json'),
+            ('复盘记录', '.review_log.json'),
+            ('设置', '.settings.json'),
+            ('连续打卡', '.streak.json'),
+            ('历史统计', '.stats_history.json'),
+        ]
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        for name, filename in data_items:
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            icon = QLabel('◇')
+            icon.setStyleSheet('color: #444; font-size: 10px; background: transparent;')
+            icon.setFixedWidth(16)
+            row.addWidget(icon)
+            name_lbl = QLabel(name)
+            name_lbl.setStyleSheet('color: #666; font-size: 12px;')
+            name_lbl.setFixedWidth(60)
+            row.addWidget(name_lbl)
+            fpath = os.path.join(base_dir, filename)
+            if os.path.exists(fpath):
+                size = os.path.getsize(fpath)
+                size_str = f'{size:,} B' if size < 1024 else f'{size/1024:.1f} KB'
+                status_lbl = QLabel(f'✓ {size_str}')
+                status_lbl.setStyleSheet('color: #78B450; font-size: 12px; font-family: Consolas;')
+            else:
+                status_lbl = QLabel('未创建')
+                status_lbl.setStyleSheet('color: #555; font-size: 12px; font-family: Consolas;')
+            row.addWidget(status_lbl)
+            row.addStretch()
+            ec.addLayout(row)
+
+        ec.addSpacing(4)
+
+        # AI 服务状态
+        ai_title = QLabel('AI 服务')
+        ai_title.setStyleSheet('color: #888; font-size: 12px; font-weight: bold; padding-top: 4px;')
+        ec.addWidget(ai_title)
+
+        ai_row = QHBoxLayout()
+        ai_row.setSpacing(8)
+        ai_icon = QLabel('◇')
+        ai_icon.setStyleSheet('color: #444; font-size: 10px; background: transparent;')
+        ai_icon.setFixedWidth(16)
+        ai_row.addWidget(ai_icon)
+        ai_name = QLabel('配置')
+        ai_name.setStyleSheet('color: #666; font-size: 12px;')
+        ai_name.setFixedWidth(60)
+        ai_row.addWidget(ai_name)
+        sn_key = self.app_settings.get('sensenova_api_key', '')
+        ag_key = self.app_settings.get('agnes_api_key', '')
+        if sn_key:
+            ai_status = QLabel('✓ SenseNova 已配置')
+            ai_status.setStyleSheet('color: #78B450; font-size: 12px; font-family: Consolas;')
+        elif ag_key:
+            ai_status = QLabel('✓ Agnes 已配置')
+            ai_status.setStyleSheet('color: #78B450; font-size: 12px; font-family: Consolas;')
+        else:
+            ai_status = QLabel('未配置（报告使用本地数据）')
+            ai_status.setStyleSheet('color: #fcc419; font-size: 12px; font-family: Consolas;')
+        ai_row.addWidget(ai_status)
+        ai_row.addStretch()
+        ec.addLayout(ai_row)
 
         layout.addWidget(env_card)
 
@@ -3152,39 +3222,24 @@ class RestReminderWidget(QWidget):
         open_url('https://github.com/kuangketongxue/library-remind')
 
     def _show_changelog(self):
-        """显示更新日志"""
+        """显示更新日志（从 CHANGELOG.md 读取）"""
         from PyQt5.QtWidgets import QDialog, QVBoxLayout, QTextBrowser, QPushButton
+        changelog_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'CHANGELOG.md')
+        try:
+            with open(changelog_path, 'r', encoding='utf-8') as f:
+                text = f.read()
+        except Exception:
+            text = '无法读取 CHANGELOG.md'
         dialog = QDialog(self)
         dialog.setWindowTitle('📋 更新日志')
-        dialog.setFixedSize(500, 400)
+        dialog.setFixedSize(560, 480)
         dialog.setStyleSheet("""
             QDialog { background-color: #0c0c10; color: #e8e6e1; }
             QTextBrowser { background: #14141a; color: #e8e6e1; border: 1px solid #222; border-radius: 8px; padding: 12px; font-size: 13px; font-family: Consolas; }
         """)
         layout = QVBoxLayout(dialog)
         browser = QTextBrowser()
-        browser.setPlainText('''v4.3 (2026-06-21)
-━━━━━━━━━━━━━━━━
-• 重新设计主界面：5 tab 结构（今日 / AI 报告 / 趋势 / 设置 / 关于）
-• 浮球独立：60×60 ⏰ 图标 + 点击弹出 info 浮层
-• 修复趋势 tab 快速点击数据丢失问题
-• 删除空壳 tab（路由/认证/高级）
-• 计时规则变更：60分钟学习→5分钟休息→固定B站收藏夹
-• 新增趋势 tab 内嵌 7 天迷你柱图
-
-v4.2 (2026-06-18)
-━━━━━━━━━━━━━━━━
-• AI 报告：日报/周报/月报/季报/年报
-• TTS 语音播报报告
-• 缓存系统
-• Anthropic 风格界面
-
-v4.1 (2026-06-17)
-━━━━━━━━━━━━━━━━
-• 首次公开发布
-• 基础番茄钟 + 休息提醒
-• B站收藏夹自动播放
-• 系统托盘支持''')
+        browser.setPlainText(text)
         layout.addWidget(browser)
         close_btn = QPushButton('关闭')
         close_btn.clicked.connect(dialog.accept)
@@ -3202,6 +3257,8 @@ v4.1 (2026-06-17)
         self._check_python()
         self._check_pyqt5()
         self._check_platform()
+        self._check_memory()
+        self._check_disk()
 
     def _check_python(self):
         lbl = self.findChild(QLabel, 'env_Python')
@@ -3223,32 +3280,68 @@ v4.1 (2026-06-17)
         if lbl:
             lbl.setText(f'{platform.system()} {platform.machine()}')
 
+    def _check_memory(self):
+        lbl = self.findChild(QLabel, 'env_内存')
+        if lbl:
+            try:
+                mem = psutil.virtual_memory()
+                used_gb = mem.used / (1024**3)
+                total_gb = mem.total / (1024**3)
+                pct = mem.percent
+                color = '#ff4444' if pct > 90 else '#fcc419' if pct > 75 else '#78B450'
+                lbl.setText(f'{used_gb:.1f} / {total_gb:.0f} GB ({pct}%)')
+                lbl.setStyleSheet(f'color: {color}; font-size: 12px; font-family: Consolas;')
+            except Exception:
+                lbl.setText('检测失败')
+
+    def _check_disk(self):
+        lbl = self.findChild(QLabel, 'env_磁盘')
+        if lbl:
+            try:
+                disk = psutil.disk_usage(os.path.dirname(os.path.abspath(__file__)))
+                free_gb = disk.free / (1024**3)
+                total_gb = disk.total / (1024**3)
+                pct = disk.percent
+                color = '#ff4444' if pct > 95 else '#fcc419' if pct > 85 else '#78B450'
+                lbl.setText(f'剩余 {free_gb:.1f} GB / 共 {total_gb:.0f} GB ({100-pct:.0f}% 可用)')
+                lbl.setStyleSheet(f'color: {color}; font-size: 12px; font-family: Consolas;')
+            except Exception:
+                lbl.setText('检测失败')
+
     def _diagnose_env(self):
-        """诊断安装冲突"""
+        """诊断环境状态"""
         from PyQt5.QtWidgets import QMessageBox
-        issues = []
+        diag_lines = [
+            f'Python {platform.python_version()}',
+            f'平台: {platform.system()} {platform.machine()}',
+        ]
         try:
-            import PyQt5
-            issues.append(f'✅ PyQt5 {PyQt5.QT_VERSION_STR}')
+            from PyQt5.QtCore import QT_VERSION_STR
+            diag_lines.append(f'PyQt5 {QT_VERSION_STR}')
         except ImportError:
-            issues.append('❌ PyQt5 未安装')
+            diag_lines.append('❌ PyQt5 未安装')
         try:
             import requests
-            issues.append(f'✅ requests {requests.__version__}')
+            diag_lines.append(f'requests {requests.__version__}')
         except ImportError:
-            issues.append('❌ requests 未安装')
+            diag_lines.append('❌ requests 未安装')
         try:
             import psutil
-            issues.append(f'✅ psutil {psutil.__version__}')
+            mem = psutil.virtual_memory()
+            diag_lines.append(f'内存: {mem.used/(1024**3):.1f}/{mem.total/(1024**3):.0f} GB ({mem.percent}%)')
         except ImportError:
-            issues.append('❌ psutil 未安装')
-        QMessageBox.information(self, '环境诊断', '\n'.join(issues))
+            diag_lines.append('❌ psutil 未安装')
 
-    def _upgrade_all(self):
-        """全部升级（打开 pip 升级命令）"""
-        from PyQt5.QtWidgets import QMessageBox
-        QMessageBox.information(self, '全部升级',
-            '请在终端运行：\npip install --upgrade PyQt5 requests psutil')
+        sn_key = self.app_settings.get('sensenova_api_key', '')
+        ag_key = self.app_settings.get('agnes_api_key', '')
+        if sn_key:
+            diag_lines.append('AI: SenseNova ✓')
+        elif ag_key:
+            diag_lines.append('AI: Agnes ✓')
+        else:
+            diag_lines.append('AI: 未配置（使用本地报告）')
+
+        QMessageBox.information(self, '环境诊断', '\n'.join(diag_lines))
 
     def show_stats(self):
         """显示趋势分析窗口（每次重建，避免 WA_DeleteOnClose 后引用失效）"""
