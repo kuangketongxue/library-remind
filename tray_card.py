@@ -211,7 +211,7 @@ class TrayCardWidget(QWidget):
                 layout.addWidget(sep_light)
                 layout.addSpacing(4)
 
-                row = ClickableRow(lambda: self.action_requested.emit(action_name))
+                row = ClickableRow(lambda an=action_name: self.action_requested.emit(an))
                 rl = row.layout()
                 icon_lbl = self._make_icon(icon)
                 rl.addWidget(icon_lbl)
@@ -234,7 +234,7 @@ class TrayCardWidget(QWidget):
                 layout.addSpacing(2)
 
             elif action_name == 'export_data':
-                row = ClickableRow(lambda: self.action_requested.emit(action_name))
+                row = ClickableRow(lambda an=action_name: self.action_requested.emit(an))
                 rl = row.layout()
                 icon_lbl = self._make_icon(icon)
                 rl.addWidget(icon_lbl)
@@ -258,7 +258,7 @@ class TrayCardWidget(QWidget):
                 layout.addSpacing(2)
 
             elif action_name == 'set_goal':
-                row = ClickableRow(lambda: self.action_requested.emit(action_name))
+                row = ClickableRow(lambda an=action_name: self.action_requested.emit(an))
                 rl = row.layout()
                 icon_lbl = self._make_icon(icon)
                 rl.addWidget(icon_lbl)
@@ -281,7 +281,7 @@ class TrayCardWidget(QWidget):
                 layout.addSpacing(2)
 
             else:  # toggle_visibility
-                row = ClickableRow(lambda: self.action_requested.emit(action_name))
+                row = ClickableRow(lambda an=action_name: self.action_requested.emit(an))
                 rl = row.layout()
                 icon_lbl = self._make_icon(icon)
                 rl.addWidget(icon_lbl)

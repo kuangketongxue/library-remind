@@ -5,6 +5,7 @@
 import json
 import os
 import sys
+import copy
 import tempfile
 
 if getattr(sys, 'frozen', False):
@@ -14,7 +15,7 @@ if getattr(sys, 'frozen', False):
 else:
     # 源码运行：数据文件放在 storage.py 所在目录
     _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-_NO_DEFAULT = object()  # sentinel：区分"未传 default" 和 "显式 default=None"
+_NO_DEFAULT = object()  # sentinel：区分“未传 default” 和 “显式 default=None”
 
 
 class JSONStore:
@@ -31,18 +32,18 @@ class JSONStore:
         self._indent = indent
 
     def load(self):
-        """加载整个文件内容，文件不存在或解析失败时返回 default。"""
+        """加载整个文件内容，文件不存在或解析失败时返回 default 的深拷贝。"""
         if not os.path.exists(self._path):
             if self._default is _NO_DEFAULT:
                 raise FileNotFoundError(self._path)
-            return self._default
+            return copy.deepcopy(self._default)
         try:
             with open(self._path, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception:
             if self._default is _NO_DEFAULT:
                 raise
-            return self._default
+            return copy.deepcopy(self._default)
 
     def save(self, data):
         """将 data 完整写入文件（原子写入，避免崩溃导致文件损坏）。"""

@@ -53,12 +53,12 @@ from logging.handlers import RotatingFileHandler
 from storage import JSONStore
 
 # 子目录模块需显式加入 sys.path
-_PRO_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest-reminder-pro')
-if _PRO_DIR not in sys.path:
+_PRO_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest-reminder-site')
+if os.path.isdir(_PRO_DIR) and _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v5.2.0'
+VERSION = 'v5.3.0'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=1_000_000, backupCount=3, encoding='utf-8')
@@ -331,6 +331,8 @@ class FloatingBall(QWidget):
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton and self.dragging:
             self.dragging = False
+            if self.click_time is None:
+                return
             delta = (datetime.now() - self.click_time).total_seconds()
             if delta < 0.3:
                 # 短点击 → 弹出 info 浮层
@@ -351,7 +353,6 @@ class FloatingBall(QWidget):
             popup = QWidget(None)
             popup.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint)
             popup.setAttribute(Qt.WA_TranslucentBackground)
-            popup.setAttribute(Qt.WA_DeleteOnClose)
             popup.setFixedSize(200, 130)
 
             root = QFrame(popup)
@@ -804,14 +805,18 @@ class SingleInstanceChecker:
             except Exception as e:
                 log.warning(f"[单实例] 删除旧锁文件失败: {e}")
         # 获取新锁（原子操作）
-        lh = open(self.lock_path, "w")
-        msvcrt.locking(lh.fileno(), msvcrt.LK_NBLCK, 1)
-        lh.write(str(os.getpid()))
-        lh.flush()
-        self.lock_handle = lh
-        self.lock_file = self.lock_path
-        atexit.register(self.cleanup)
-        return False
+        try:
+            lh = open(self.lock_path, "w")
+            msvcrt.locking(lh.fileno(), msvcrt.LK_NBLCK, 1)
+            lh.write(str(os.getpid()))
+            lh.flush()
+            self.lock_handle = lh
+            self.lock_file = self.lock_path
+            atexit.register(self.cleanup)
+            return False
+        except Exception as e:
+            log.warning(f"[单实例] 获取新锁失败，允许启动: {e}")
+            return False
     def cleanup(self):
         try:
             if self.lock_handle:
@@ -1167,6 +1172,11 @@ class StatsWindow(QWidget):
         close_btn.clicked.connect(self.close)
 
         self.setMouseTracking(True)
+        self._cached_history = LocalSync.load_weekly_stats()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._cached_history = LocalSync.load_weekly_stats()
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -1178,7 +1188,7 @@ class StatsWindow(QWidget):
         painter.drawText(20, 25, '📊 最近7天学习统计')
 
         # 获取数据
-        history = LocalSync.load_weekly_stats()
+        history = self._cached_history
         today = datetime.now().date()
         days = []
         for i in range(6, -1, -1):
@@ -1445,7 +1455,7 @@ class TrendWindow(QWidget):
             fill = QWidget()
             score = e['score']
             fill_color = _score_to_color(score)
-            fill.setFixedWidth(_score_bar_width(score, is_old=False))
+            fill.setFixedWidth(_score_bar_width(score, is_old=info['is_old']))
             fill.setFixedHeight(18)
             fill.setStyleSheet(f'background: {fill_color}; border-radius: 3px;')
             bar_l.addWidget(fill)
@@ -1729,16 +1739,22 @@ class TrendWindow(QWidget):
 
         # ── 热力图：一周各时段学习强度 ──
         hm_data = [[0] * 24 for _ in range(7)]
-        stats = history_store.load()
-        for d_str, ddata in stats.items():
+        reviews = review_store.load()
+        for d_str, entries in reviews.items():
             try:
                 dt = datetime.strptime(d_str, '%Y-%m-%d')
-                dow = dt.weekday()  # 0=Mon
-                hm_data[dow][dt.hour] += ddata.get('study', 0)
+                dow = dt.weekday()
+                for entry in (entries if isinstance(entries, list) else [entries]):
+                    if isinstance(entry, dict) and 'time' in entry:
+                        try:
+                            h = int(entry['time'].split(':')[0])
+                            hm_data[dow][h] += 1
+                        except (ValueError, IndexError):
+                            pass
             except Exception:
                 continue
         day_names = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
-        self._draw_heatmap(layout, hm_data, [f'{h}h' for h in range(24)], day_names, '一周学习热力图（时段×星期）')
+        self._draw_heatmap(layout, hm_data, [f'{h}h' for h in range(24)], day_names, '一周复盘热力图（时段×星期）')
 
         layout.addStretch()
 
@@ -1788,7 +1804,14 @@ class TrendWindow(QWidget):
                     painter.setPen(QColor('#788C57'))
                     painter.drawText(x + bar_w // 2 - 8, chart_bottom - bar_h - 4, f"{d['study']:.1f}")
 
-        chart.paintEvent = lambda e: paint_chart(QPainter(chart), chart)
+        chart._bar_rects = []
+        def _safe_paint_chart(e):
+            p = QPainter(chart)
+            try:
+                paint_chart(p, chart)
+            finally:
+                p.end()
+        chart.paintEvent = _safe_paint_chart
 
         def on_mouse_move(e):
             pos = e.pos()
@@ -1848,20 +1871,22 @@ class TrendWindow(QWidget):
                         p.setFont(QFont('Consolas', 7))
                         p.drawText(px + 6, py + 17, str(int(v)))
 
-            # Y 轴标签（小时）
+            # Y 轴标签（星期）
             for y, lbl in enumerate(y_labels):
                 p.setPen(QColor('#666'))
                 p.setFont(QFont('Consolas', 7))
                 p.drawText(2, y * cell_size + 17, lbl)
+            p.end()
 
         hm.paintEvent = paint_hm
         cl.addWidget(hm, 0, Qt.AlignLeft)
         layout.addWidget(card)
 
         # 总计
-        total_study = sum(d['study'] for d in data)
-        avg_study = round(total_study / len(data), 1)
-        summary = QLabel(f'总计: 学习 {total_study:.1f}h  |  日均: 学习 {avg_study}h')
+        total_study = sum(v for row in data for v in row)
+        non_zero_days = sum(1 for row in data if any(v > 0 for v in row))
+        avg_study = round(total_study / max(non_zero_days, 1), 1)
+        summary = QLabel(f'总计: {total_study} 条复盘记录  |  活跃 {non_zero_days} 天')
         summary.setStyleSheet('color: #6a8cbb; font-size: 11px; background: transparent;')
         layout.addWidget(summary)
 
@@ -2759,6 +2784,8 @@ class RestReminderWidget(QWidget):
         sc.addWidget(timer_lbl)
         layout.addWidget(status_card)
         layout.addSpacing(8)
+        self._today_refs['state_lbl'] = state_lbl
+        self._today_refs['timer_lbl'] = timer_lbl
 
         # ── 距离22:00倒计时 ──
         countdown_card = QFrame()
@@ -2919,14 +2946,20 @@ class RestReminderWidget(QWidget):
         for t, b in self._report_buttons.items():
             b.setChecked(t == report_type)
         self._report_view.setHtml('<p style="color:#888;">⏳ 正在生成报告...</p>')
-        QApplication.processEvents()
 
         # 禁用按钮防止重复点击
         for b in self._report_buttons.values():
             b.setEnabled(False)
 
+        # 取消旧的 worker（防止竞态）
+        if hasattr(self, '_report_worker') and self._report_worker is not None:
+            self._report_worker.quit()
+            self._report_worker.wait()
+
         worker = _ReportWorker(self, report_type, force_refresh)
+        self._report_worker = worker
         def _on_done(result):
+            self._report_worker = None
             for b in self._report_buttons.values():
                 b.setEnabled(True)
             if result.get("ok"):
@@ -3000,6 +3033,8 @@ class RestReminderWidget(QWidget):
                 if d['study'] > 0:
                     p.setPen(QColor('#788C57'))
                     p.drawText(x + bw // 2 - 8, bottom - bh - 4, f"{d['study']:.1f}")
+            p.end()
+        mini_chart._bar_rects = []
         mini_chart.paintEvent = paint_mini
 
         def on_mini_move(e):
@@ -3852,7 +3887,7 @@ class RestReminderWidget(QWidget):
             self.floating_ball.set_progress(0.0)
 
         elapsed = (now - self.start_time).total_seconds()
-        total_seconds = 60 * 60  # 固定60分钟
+        total_seconds = self._activity_interval * 60  # 使用配置的间隔而非硬编码
         remaining = max(total_seconds - elapsed, 0)
 
         mins = int(remaining // 60)
@@ -4005,7 +4040,10 @@ class RestReminderWidget(QWidget):
             seconds_since_midnight = (now - midnight).total_seconds()
             if seconds_since_midnight < span_start:
                 bar.setValue(0)
-                lbl.setText(f'剩余 {22 - now.hour - 1}小时{60 - now.minute}分钟')
+                remaining_secs = 22 * 3600 - seconds_since_midnight
+                h = int(remaining_secs // 3600)
+                m = int((remaining_secs % 3600) // 60)
+                lbl.setText(f'剩余 {h}小时{m}分钟')
             else:
                 progress = int(((seconds_since_midnight - span_start) / total_span) * 100)
                 bar.setValue(min(progress, 100))
@@ -4117,16 +4155,16 @@ class RestReminderWidget(QWidget):
                 bc._value_label.setText(f'{self.break_minutes_today:.1f} 分钟')
 
             # 状态标签 + 计时器标签
-            state_lbl = self.findChild(QLabel, 'stateLabel')
+            state_lbl = refs.get('state_lbl')
             if state_lbl and not sip.isdeleted(state_lbl):
                 state_names = {'idle': '⏸ 待机', 'running': '▶ 学习中', 'resting': '☕ 休息中', 'paused': '⏸ 已暂停'}
                 state_lbl.setText(f'状态：{state_names.get(self.timer_state, self.timer_state)}')
 
             # 计时器标签（本轮剩余/休息剩余）
-            timer_lbl = self.findChild(QLabel, 'timerLabel')
+            timer_lbl = refs.get('timer_lbl')
             if timer_lbl and not sip.isdeleted(timer_lbl):
                 if self.timer_state == 'running' and self.start_time:
-                    elapsed = (time.time() - self.start_time) / 60
+                    elapsed = (datetime.now() - self.start_time).total_seconds() / 60
                     remaining = max(0, 60 - elapsed)
                     timer_lbl.setText(f'⏱ 本轮剩余：{remaining:.0f} 分钟')
                     timer_lbl.setStyleSheet('color: #6a8cbb; font-size: 12px;')
@@ -4274,7 +4312,6 @@ class RestReminderWidget(QWidget):
             if not self._pending_review:
                 return
             dialog = self._build_review_dialog('📝 快速复盘', '这小时学了什么？')
-            QTimer.singleShot(AUTO_SUBMIT_SECONDS * 1000, dialog.accept)
             if dialog.exec_():
                 subject = dialog._subject_val[0]
                 label = dialog._label_val[0]
@@ -4294,7 +4331,6 @@ class RestReminderWidget(QWidget):
     def _catchup_review(self):
         """补录复盘：托盘菜单入口"""
         dialog = self._build_review_dialog('📝 补录复盘', '刚才（漏掉的）那小时学得怎么样？')
-        QTimer.singleShot(AUTO_SUBMIT_SECONDS * 1000, dialog.accept)
         if dialog.exec_():
             subject = dialog._subject_val[0]
             label = dialog._label_val[0]
@@ -4717,7 +4753,7 @@ class RestReminderWidget(QWidget):
 
     def mouseMoveEvent(self, event):
         try:
-            if event.buttons() == Qt.LeftButton:
+            if event.buttons() == Qt.LeftButton and self.drag_position is not None:
                 self.move(event.globalPos() - self.drag_position)
                 event.accept()
         except Exception as e:
@@ -4745,6 +4781,8 @@ class RestReminderWidget(QWidget):
                 self.floating_ball.hide()
             if hasattr(self, 'countdown_overlay'):
                 self.countdown_overlay.hide_overlay()
+            if hasattr(self, 'eye_rest_overlay'):
+                self.eye_rest_overlay.hide_overlay()
             self.timer.stop()
             QApplication.quit()
         except Exception as e:

@@ -2,6 +2,51 @@
 
 所有重要版本更新记录。
 
+## v5.3.0 (2026-06-29)
+
+### 🐛 关键 Bug 修复（21 项）
+
+**数据存储层**
+- **P0** `JSONStore.load()` 返回共享可变默认值 → 改为 `copy.deepcopy()`，杜绝幽灵数据（`storage.py`）
+- **P0** 日期切换时先 `save_daily_stats()` 再重置，防止学习时长数据丢失
+- **P0** `app_state_store` 添加 `default={}` 防止文件不存在时 `FileNotFoundError`
+
+**线程与并发**
+- **P0** `_ReportWorker` 线程引用未存储 → 改为 `self._report_worker`，防止 GC 回收导致报告生成永久卡死
+- **P0** 添加旧 Worker 取消逻辑，防止快速切换报告类型时并发执行
+- **P0** `_fallback_check` 锁获取包裹 try/except，防止启动崩溃
+
+**UI 崩溃修复**
+- **P0** `mouseMoveEvent` 中 `drag_position` 为 None 时崩溃 → 添加 None 守卫
+- **P0** `FloatingBall.mouseReleaseEvent` 中 `click_time` 为 None → 添加守卫
+- **P0** `_bar_rects` 在首次绘制前被鼠标事件访问 → 预初始化为空列表（2 处）
+- **P0** `quit_app` 遗漏 `eye_rest_overlay` 清理 → 添加 `hide_overlay()`
+- **P0** `_info_popup` 的 `WA_DeleteOnClose` 导致 C++ 对象销毁后 Python 引用崩溃 → 移除
+
+**逻辑错误**
+- **P0** `_handle_running` 硬编码 `60 * 60` 忽略 `_activity_interval` → 改为动态计算
+- **P0** 热力图数据源从 `history_store`（无小时分量，始终 hour=0）切换到 `review_store`（有 HH:MM 时间戳）
+- **P0** 22:00 每日汇报中 `best`/`worst` 为 None 时直接下标访问 → 添加 None 守卫
+- **P0** `_refresh_general_tab` 中 `time.time() - datetime` 类型错误 → 改为 `datetime.now()`
+- **P0** 复盘对话框双重自动提交定时器 → 移除冗余的外部 `QTimer.singleShot`
+- **P0** 复盘时间线评分条始终传 `is_old=False` → 改为 `info['is_old']`
+- **P0** 距离 22:00 倒计时整点显示"60 分钟" → 改为从总秒数推导
+
+**性能优化**
+- `_refresh_general_tab` 缓存 `state_lbl`/`timer_lbl` 引用，避免每秒 `findChild()` 遍历控件树
+- `StatsWindow.paintEvent` 缓存历史数据，避免每次重绘读取 JSON 文件
+- 3 处动态 `paintEvent` 添加 `QPainter.end()` 防止资源泄漏
+- `_sync_buttons` 弹窗隐藏时跳过无意义计算
+- `setWindowOpacity` 闪烁动画添加 `sip.isdeleted` 守卫
+
+**托盘卡片**
+- **P0** `tray_card.py` 4 处 lambda 闭包 late-binding bug → 所有菜单项都触发 `export_data` → 改为默认参数捕获
+
+**安全**
+- `sensenova_vision.py` 移除硬编码 API Key，改为环境变量 `SENSENOVA_API_KEY`
+
+---
+
 ## v5.2.0 (2026-06-28)
 
 ### 🐛 Bug 修复
