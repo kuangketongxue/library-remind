@@ -143,6 +143,48 @@ def _is_old_format(scores):
     return any(s <= 5 for s in scores[:3])
 
 
+def _build_time_buckets():
+    """返回 6 个时段 bucket：(label, start_hour, end_hour)"""
+    return [
+        ('6-8时', 6, 8),
+        ('8-10时', 8, 10),
+        ('10-12时', 10, 12),
+        ('12-14时', 12, 14),
+        ('14-16时', 14, 16),
+        ('16-18时', 16, 18),
+        ('18-20时', 18, 20),
+        ('20-22时', 20, 22),
+    ]
+
+
+def _aggregate_reviews_by_time(reviews_data, days=7):
+    """按 2 小时时段聚合复盘评分，返回 {bucket_label: [scores]}"""
+    from datetime import timedelta
+    today = datetime.now().date()
+    start = today - timedelta(days=days - 1)
+    buckets = {b[0]: [] for b in _build_time_buckets()}
+    for d, items in sorted(reviews_data.items()):
+        try:
+            if datetime.fromisoformat(d).date() < start:
+                continue
+            entries = items if isinstance(items, list) else [items]
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                t = entry.get('time', '')
+                try:
+                    h = int(t.split(':')[0])
+                except (ValueError, IndexError):
+                    continue
+                for label, s, e in _build_time_buckets():
+                    if s <= h < e:
+                        buckets[label].append(entry.get('score', 0))
+                        break
+        except (ValueError, TypeError):
+            pass
+    return buckets
+
+
 def _review_summary(entries):
     """从复盘条目列表提取结构化摘要数据"""
     scores_v = [e.get('score', 0) for e in entries]
@@ -2122,8 +2164,8 @@ def generate_report(report_type, force_refresh=False):
                 cache = {'data': data, 'report': report_text, 'generated_at': datetime.now().isoformat(), 'provider': result.get('provider', '')}
                 with open(cache_file, 'w', encoding='utf-8') as f:
                     json.dump(cache, f, ensure_ascii=False, indent=2)
-            except Exception:
-                pass
+            except Exception as e:
+                log.warning(f'[generate_report] 缓存写入失败: {e}')
             return {'ok': True, 'content': report_text}
 
         # AI 不可用，返回本地降级报告
@@ -2245,6 +2287,9 @@ class RestReminderWidget(QWidget):
 
 
         self.drag_position = None
+
+        # UI 引用字典（init_ui 中填充）
+        self._today_refs = {}
 
         # 状态机字段预初始化
         self._rest_end_time = None
@@ -2718,8 +2763,6 @@ class RestReminderWidget(QWidget):
         # ── 连续打卡 ──
         streak = LocalSync.load_streak()
         streak_card = self._make_stat_card('🔥', '连续打卡', f'{streak["current_streak"]} 天（最佳 {streak["best_streak"]} 天）', '#d4af37')
-        # 今日 tab 显示元素引用（供 update_display 每秒刷新）
-        self._today_refs = {}
 
         layout.addWidget(streak_card)
         layout.addStretch()
@@ -2927,6 +2970,105 @@ class RestReminderWidget(QWidget):
         summary.setStyleSheet('color: #6a8cbb; font-size: 11px; background: transparent;')
         tc_layout.addWidget(summary)
         layout.addWidget(trend_card)
+
+        # ── 时段评分热力图 ──
+        heat_card = QFrame()
+        heat_card.setObjectName('statCard')
+        hc = QVBoxLayout(heat_card)
+        hc.setContentsMargins(16, 14, 16, 14)
+        hc.setSpacing(8)
+
+        hc_title = QLabel('🕐 时段评分分布（近7天复盘）')
+        hc_title.setStyleSheet('color: #e8e6e1; font-size: 13px; font-weight: bold;')
+        hc.addWidget(hc_title)
+
+        heat_widget = QWidget()
+        heat_widget.setFixedHeight(140)
+        buckets_data = _aggregate_reviews_by_time(review_store.load(), days=7)
+        bucket_labels = [b[0] for b in _build_time_buckets()]
+        bucket_info = []  # (label, avg_score, count, is_old)
+
+        # 判定评分格式 + 归一化
+        all_scores = [s for scores in buckets_data.values() for s in scores]
+        is_old = _is_old_format(all_scores) if all_scores else False
+
+        for label in bucket_labels:
+            scores = buckets_data[label]
+            count = len(scores)
+            if count > 0:
+                avg = sum(scores) / count
+                # 归一化到 0-1：旧格式 score/5，新格式 score/100
+                norm = avg / 5 if is_old else avg / 100
+                norm = max(0, min(1, norm))
+            else:
+                avg = 0
+                norm = 0
+            bucket_info.append((label, avg, count, norm))
+
+        def paint_heat(e):
+            p = QPainter(heat_widget)
+            p.setRenderHint(QPainter.Antialiasing)
+            w, h = heat_widget.width(), heat_widget.height()
+            n = len(bucket_info)
+            if n == 0: return
+            col_w = max(40, int((w - 20) / n))
+            total_cols_w = n * col_w
+            start_x = (w - total_cols_w) // 2
+            bar_h = h - 40
+            for i, (label, avg, count, norm) in enumerate(bucket_info):
+                x = start_x + i * col_w + 4
+                bw = col_w - 8
+                if count > 0:
+                    # 绿(高分) → 黄(中) → 红(低)
+                    r = int(255 * (1 - norm))
+                    g = int(200 * norm + 55)
+                    b_col = 30
+                    fill = QColor(r, g, b_col)
+                    alpha = 120 + int(135 * norm)
+                    fill.setAlpha(alpha)
+                    p.setBrush(QBrush(fill))
+                    p.setPen(Qt.NoPen)
+                    bh = int(bar_h * norm) if norm > 0 else 4
+                    p.drawRoundedRect(x, h - 32 - bh, bw, bh, 3, 3)
+                    # 分数文字
+                    display = f'{avg:.1f}' if count > 0 else '-'
+                    p.setPen(QColor('#888' if count == 0 else '#e8e4dc'))
+                    p.setFont(QFont('Microsoft YaHei', 8, QFont.Bold if count > 0 else QFont.Normal))
+                    p.drawText(x + bw // 2 - 8, h - 36 - max(bh, 4), display)
+                else:
+                    # 空 bucket 画暗底
+                    p.setBrush(QBrush(QColor(30, 30, 38)))
+                    p.setPen(Qt.NoPen)
+                    p.drawRoundedRect(x, h - 32 - 4, bw, 4, 2, 2)
+                # 时段标签
+                p.setPen(QColor('#666'))
+                p.setFont(QFont('Microsoft YaHei', 8))
+                p.drawText(x + bw // 2 - 12, h - 12, label)
+                # 次数标签
+                if count > 0:
+                    p.setPen(QColor('#555'))
+                    p.setFont(QFont('Microsoft YaHei', 7))
+                    p.drawText(x + bw // 2 - 6, h - 22, f'{count}次')
+        heat_widget.paintEvent = paint_heat
+        hc.addWidget(heat_widget)
+
+        # 图例
+        leg_row = QHBoxLayout()
+        leg_row.setSpacing(12)
+        for txt, color in [('高分区 🟢', '#51cf66'), ('中等 🟡', '#fcc419'), ('低分区 🔴', '#ff8844'), ('无数据 ⬛', '#1e1e26')]:
+            row = QWidget()
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(4)
+            dot = QLabel()
+            dot.setFixedSize(10, 10)
+            dot.setStyleSheet(f'background: {color}; border-radius: 2px;')
+            row_layout.addWidget(dot)
+            row_layout.addWidget(QLabel(txt))
+            leg_row.addWidget(row)
+        leg_row.addStretch()
+        hc.addLayout(leg_row)
+        layout.addWidget(heat_card)
 
         layout.addStretch()
         scroll.setWidget(container)
@@ -3390,12 +3532,11 @@ class RestReminderWidget(QWidget):
         self.move(x, y)
 
     def _get_autostart_cmd(self):
-        # PyInstaller 打包：_MEI 临时目录不可持久化，需回退到源目录
-        script = os.path.abspath(__file__)
         if getattr(sys, 'frozen', False):
-            # 打包模式下用 _launch.vbs（固定路径），不走 __file__
-            script_dir = os.path.dirname(os.path.abspath(sys.executable))
-            script = os.path.join(script_dir, 'rest_reminder.py')
+            # PyInstaller 打包模式：直接运行 exe，不需要 pythonw.exe/.py
+            return f'"{sys.executable}" --silent'
+        # 开发模式：用 pythonw.exe 运行 .py（无控制台窗口）
+        script = os.path.abspath(__file__)
         pythonw = os.path.join(os.path.dirname(sys.executable), 'pythonw.exe')
         if not os.path.exists(pythonw):
             pythonw = sys.executable
@@ -3718,7 +3859,7 @@ class RestReminderWidget(QWidget):
                 fav_url = f'https://space.bilibili.com/{mid}/favlist?fid={fid}&ftype=create&spm_id_from=333.788.0.0'
                 open_url(fav_url)
 
-            # 弹出本轮目标（非阻塞，3秒自动提交）
+            # 弹出本轮目标（非阻塞，60秒自动提交）
             self._prompt_round_goal()
 
             self.break_start = None
@@ -3783,6 +3924,11 @@ class RestReminderWidget(QWidget):
             msg += '\n记得记录到飞书～'
             self.tray_icon.showMessage('📋 每日记录提醒', msg, QSystemTrayIcon.Information, 8000)
             log.info(f'[DailyReport] 22:00 提醒: 学习{study}h')
+            # 窗口浮现到前台
+            if self.isMinimized() or not self.isVisible():
+                self.show()
+                self.raise_()
+                self.activateWindow()
             # 检查连续打卡
             self._check_streak()
 
@@ -4357,6 +4503,8 @@ class RestReminderWidget(QWidget):
 
         self.played_today = set(state.get('played_today', []))
         self._round_count = state.get('round_count', 0)
+        # 恢复状态后检查连续打卡（跨重启 streak 不丢失）
+        self._check_streak()
         self.update_study_display()
 
     def _save_active_state(self):
