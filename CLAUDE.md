@@ -46,6 +46,7 @@ pyinstaller RestReminder.spec
 - **状态机新状态三连更新**：新增状态时同步改 `_BTN_CONFIG` + `_handle_*` 方法 + 主循环路由分支（2026-06-21）
 - **PyQt 数值 API 类型安全**：`setValue()`/`setMaximum()` 只接受 int，float `//` 地板除返回 float，必须显式 `int()`（2026-06-21）
 - **log 中不要用 [LINE NNN] 标记**：代码移动后行号立刻过时，用描述性消息替代（如 `"[单实例] 解锁失败: {e}"`）（2026-06-21）
+- **Windows 任务栏图标**：直接 `python.exe` 启动会显示 Python 图标；需创建 `.lnk` 快捷方式绑定 `cute_icon.ico`，或用 PyInstaller 打包 EXE（2026-06-28）
 - **centralized utility 迁移必须一次性完成**：创建 `open_url()` 后 grep 所有 `webbrowser.open`/`ShellExecuteW` 调用点，全部替换，不留绕过（2026-06-21）
 - **UI 重构后审计 settings 数据流**：每个 settings key 的写入点必须有对应的读取点，否则设置是摆设（2026-06-21）
 

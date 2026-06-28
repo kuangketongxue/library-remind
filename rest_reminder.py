@@ -7,9 +7,27 @@
 - 数据本地持久化（.daily_log.json）
 """
 import sys
+import os
+# Python 版本守卫：vendor 内 .pyd 按 CPython ABI 编译，跨次版本不兼容
+# 启动用 python 指向 3.10 而 vendor 为 3.14 编译时会出现 ImportError: cannot import name 'sip'
+if not getattr(sys, 'frozen', False) and sys.version_info[:2] != (3, 14):
+    print(f"[rest_reminder] 需要 Python 3.14（当前 {sys.version_info.major}.{sys.version_info.minor}）。"
+          f"\n请用: C:\\Python314\\python.exe rest_reminder.py --silent", file=sys.stderr)
+    sys.exit(2)
+# vendor 目录：开箱即用，无需 pip install -r requirements.txt
+# PyInstaller 打包后 (sys.frozen=True) 由 spec 处理依赖，跳过
+_VENDOR_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vendor')
+if not getattr(sys, 'frozen', False) and os.path.isdir(_VENDOR_DIR) and _VENDOR_DIR not in sys.path:
+    sys.path.insert(0, _VENDOR_DIR)
+    # Qt 插件目录：让 Qt 找到 platforms/qwindows.dll、imageformats、styles 等
+    # 不设会报 "no Qt platform plugin could be initialized"
+    # 同时设 QT_PLUGIN_PATH（标准入口）和 QT_QPA_PLATFORM_PLUGIN_PATH（platforms 直查）
+    _QT_PLUGINS = os.path.join(_VENDOR_DIR, 'PyQt5', 'Qt5', 'plugins')
+    if os.path.isdir(_QT_PLUGINS):
+        os.environ.setdefault('QT_PLUGIN_PATH', _QT_PLUGINS)
+        os.environ.setdefault('QT_QPA_PLATFORM_PLUGIN_PATH', os.path.join(_QT_PLUGINS, 'platforms'))
 import time
 import random
-import os
 import json
 import platform
 import re
@@ -40,7 +58,7 @@ if _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v5.1.0'
+VERSION = 'v5.2.0'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=1_000_000, backupCount=3, encoding='utf-8')
@@ -144,8 +162,15 @@ def _is_old_format(scores):
 
 
 def _build_time_buckets():
-    """返回 6 个时段 bucket：(label, start_hour, end_hour)"""
+    """返回 12 个 2 小时时段 bucket：(label, start_hour, end_hour)
+
+    覆盖全天 0-24 时，包含深夜/凌晨（22-24、0-2、2-4、4-6），
+    适配熬夜学习场景。22-24 与 0-6 分开，让"晚睡"和"早起"区分开。
+    """
     return [
+        ('0-2时', 0, 2),
+        ('2-4时', 2, 4),
+        ('4-6时', 4, 6),
         ('6-8时', 6, 8),
         ('8-10时', 8, 10),
         ('10-12时', 10, 12),
@@ -154,6 +179,7 @@ def _build_time_buckets():
         ('16-18时', 16, 18),
         ('18-20时', 18, 20),
         ('20-22时', 20, 22),
+        ('22-24时', 22, 24),
     ]
 
 
@@ -386,14 +412,24 @@ class FloatingBall(QWidget):
             row.addStretch()
             layout.addLayout(row)
 
-            # 目标 + 轮次
+            # 目标 + 轮次（目标可点击：未设目标时点击进入设置）
             goal_row = QHBoxLayout()
             goal_row.setContentsMargins(0, 0, 0, 0)
             goal_row.setSpacing(4)
-            popup._goal_lbl = QLabel('')
+            popup._goal_lbl = QPushButton('')
             popup._goal_lbl.setFont(QFont('Microsoft YaHei', 8))
-            popup._goal_lbl.setStyleSheet('color: #d4a853;')
-            popup._goal_lbl.setAlignment(Qt.AlignLeft)
+            popup._goal_lbl.setCursor(Qt.PointingHandCursor)
+            popup._goal_lbl.setStyleSheet('''
+                QPushButton {
+                    background: transparent; border: none;
+                    color: #d4a853; text-align: left;
+                    padding: 0;
+                }
+                QPushButton:hover { color: #f0c060; text-decoration: underline; }
+                QPushButton:pressed { color: #b8901f; }
+            ''')
+            popup._goal_lbl.setToolTip('点击设置今日目标')
+            popup._goal_lbl.clicked.connect(self._on_goal_label_clicked)
             goal_row.addWidget(popup._goal_lbl, 1)
             popup._round_lbl = QLabel('')
             popup._round_lbl.setFont(QFont('Microsoft YaHei', 8))
@@ -502,6 +538,15 @@ class FloatingBall(QWidget):
         elif mw.timer_state in ('idle', 'paused'):
             mw.on_start_clicked()
         # 状态已变，更新 popup 文字
+        self._update_popup_text()
+
+    def _on_goal_label_clicked(self):
+        """点击 popup 中的目标标签：弹出目标设置对话框，未设目标时强制弹（不跳过）"""
+        mw = self.main_window
+        was_empty = not mw.goal_text
+        log.info(f'[goal-label] clicked, was_empty={was_empty}')
+        # 临时清空 _prompt_goal 的早退条件，强制弹出
+        mw._show_goal_dialog()
         self._update_popup_text()
 
     def toggle_main_window(self):
@@ -2196,12 +2241,23 @@ class _ReportWorker(QThread):
 
 
 def _create_app_icon():
-    """从 cute_icon.png 加载应用图标（PNG 在任务栏渲染更好）"""
+    """从 cute_icon.png 加载应用图标，并为托盘/任务栏/窗口各尺寸预生成 pixmap。
+
+    Windows 托盘需要 16x16，任务栏需要 32x32，窗口标题 16x16，Alt-Tab 48x48。
+    只提供单一大图时 Qt 自动缩放可能发虚，因此显式加入常用尺寸。
+    """
     from PyQt5.QtGui import QPixmap
     icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cute_icon.png')
     if os.path.exists(icon_path):
-        icon = QIcon(icon_path)
-        if not icon.isNull():
+        source = QPixmap(icon_path)
+        if not source.isNull():
+            icon = QIcon()
+            for size in (16, 24, 32, 48, 64, 128, 256):
+                icon.addPixmap(
+                    source.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation),
+                    QIcon.Normal,
+                    QIcon.Off
+                )
             return icon
     # fallback：动态生成 ⚡ 图标
     pm = QPixmap(64, 64)
@@ -4722,6 +4778,18 @@ def main():
 
     app = QApplication([])
     app.setQuitOnLastWindowClosed(False)
+
+    # 全局图标：QApplication 级别设置，影响任务栏/Alt-Tab
+    app_icon = _create_app_icon()
+    app.setWindowIcon(app_icon)
+
+    # Windows 任务栏分组图标：设置 AppUserModelID，避免被识别为 python.exe
+    # 这样任务栏会显示应用图标而不是 Python 默认图标
+    try:
+        app_id = 'CrazyStudio.RestReminder'
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
+    except Exception:
+        log.warning('[任务栏] 设置 AppUserModelID 失败')
 
     silent = '--silent' in sys.argv
     widget = RestReminderWidget(silent_start=silent)

@@ -71,7 +71,8 @@ test_floatball.py
 params.json
 record.json
 
-# Vendor 依赖（使用 pip 安装）
+# Vendor 依赖体积过大（~150MB），不进入 git 源码仓库。
+# 运行方式：1) 使用 GitHub Release 里的打包 EXE；2) 自行 pip install -r requirements.txt
 vendor/
 
 # 本地配置

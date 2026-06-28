@@ -38,8 +38,8 @@ CHANGELOG.md            — 更新日志
 
 ## 运行和验证
 ```bash
-# 启动主程序
-python rest_reminder.py --silent
+# 启动主程序（必须用 Python 3.14，vendor 内 .pyd 按其 ABI 编译）
+C:\Python314\python.exe rest_reminder.py --silent
 
 # 验证进程
 tasklist | findstr "python.exe"
@@ -50,15 +50,18 @@ taskkill /F /IM python.exe
 
 ## 关键踩坑
 - **Python 3.14 兼容**：`from PyQt5 import sip`（`import sip` 在 3.14 失败），`QToolTip` 从 QtWidgets 导入
+- **vendor 路径**：`rest_reminder.py` 顶部自动把 `vendor/` 加到 `sys.path`，开箱即用无需 `pip install`；仅 Python 3.14 兼容
+- **`python` 命令陷阱**：PATH 里 `python` 可能解析到 TRAE 内置 3.10，启动会报 `ImportError: cannot import name 'sip'`，必须用 `C:\Python314\python.exe`
 - **_md_to_html 是模块级函数**：不在任何类中，`RestReminderWidget` 和 `FloatingBall` 都可直接调用
 - **Edit 工具中文 TSX**：含中文的 TSX 文件 Edit 静默失败 → 改用 Write 工具全量重写
 - **CF Pages 部署**：`npx wrangler pages deploy out --project-name=crazy-rest-reminder`（不是 `wrangler deploy`）
 - **git push 认证**：WARP 环境下用 `git config credential.helper store` + `~/.git-credentials` 文件
+- **Windows 任务栏图标**：直接 `python.exe` 启动会显示 Python 图标；需创建 `.lnk` 快捷方式绑定 `cute_icon.ico`，或用 PyInstaller 打包 EXE
 
 ## 改完代码后必须做的
 1. 杀掉旧进程：`taskkill /F /IM python.exe`
-2. 语法检查：`python -c "import py_compile; py_compile.compile('rest_reminder.py')"`
-3. 启动主程序：`python rest_reminder.py --silent`
+2. 语法检查：`C:\Python314\python.exe -c "import py_compile; py_compile.compile('rest_reminder.py')"`
+3. 启动主程序：`C:\Python314\python.exe rest_reminder.py --silent`
 4. 验证新进程 PID 已出现，无 crash.log
 
 ## 禁止事项
