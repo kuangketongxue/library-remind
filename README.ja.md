@@ -33,7 +33,7 @@
 python rest_reminder.py
 
 # またはダブルクリック
-_launch.vbs
+_launch.bat
 ```
 
 ## 🎨 デザイン

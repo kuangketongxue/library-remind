@@ -39,7 +39,7 @@ A Windows desktop widget that reminds you to take breaks during long study sessi
 | **5-Tab Dashboard** | Today / AI Report / Trends / Settings / About |
 | **Review Logging** | Subject + tags + score (1-100) after each session |
 | **🤖 AI Analysis** | Daily / weekly / monthly / quarterly / yearly reports |
-| **Trend Charts** | Study hours bar chart with hover tooltips |
+| **Trend Charts** | Study hours bar chart + time-of-day score heatmap |
 | **20-20-20 Eye Care** | Gentle overlay every 20 minutes |
 | **Tray + Floating Ball** | Background resident, one-click control |
 | **Auto-start** | Launch on system login |
@@ -57,7 +57,7 @@ _launch.bat
 ## 📁 Project Structure
 
 ```
-├── rest_reminder.py        # Main app (~4413 lines)
+├── rest_reminder.py        # Main app (~4737 lines)
 ├── storage.py              # Unified JSON storage layer
 ├── tray_card.py            # Floating tray card widget
 ├── vendor/                 # Bundled dependencies

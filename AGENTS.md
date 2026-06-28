@@ -1,14 +1,14 @@
 # 休息提醒 — AGENTS.md
 
 ## 项目概述
-PyQt5 桌面挂件：浮球（⚡ 可拖动，点击打开主界面）+ 主面板（380×340，5 tab：今日/AI报告/趋势/设置/关于）。60 分钟学习 → 5 分钟请辨倒计时 → 复盘 1-100 分 → 5 分钟休息 → 固定 B 站收藏夹。AI 学习分析 + 趋势分析（单柱图+tooltip）。
+PyQt5 桌面挂件：浮球（⚡ 60×60 可拖动，点击打开主界面）+ 主面板（960×680，5 tab：今日/AI报告/趋势/设置/关于）。60 分钟学习 → 5 分钟请辨倒计时 → 复盘 1-100 分 → 5 分钟休息 → 固定 B 站收藏夹。AI 学习分析 + 趋势分析（单柱图+tooltip+时段评分热力图）。
 
 ## 技术栈
 Python 3.14+ / PyQt5 / requests / psutil / Win32 API (ctypes)
 
 ## 关键文件
 ```
-rest_reminder.py        — 主程序（~4413行，含所有 UI + 逻辑）
+rest_reminder.py        — 主程序（~4737行，含所有 UI + 逻辑）
 storage.py              — 统一 JSON 存储层（JSONStore 类）
 RestReminder.spec       — PyInstaller 配置（含 hiddenimports=['storage']）
 CHANGELOG.md            — 更新日志
@@ -33,7 +33,7 @@ CHANGELOG.md            — 更新日志
 | 请辨金句 | `_pick_quote()` | quotes_store |
 | 复盘分数 | `.review_log.json` | 1-100分 |
 | 学习时长 | `.daily_log.json` | LocalSync |
-| 窗口尺寸 | `init_ui()` | 380×340 |
+| 窗口尺寸 | `init_ui()` | 960×680 |
 | 浮球尺寸 | `FloatingBall` | 60×60，可拖动 |
 
 ## 运行和验证
