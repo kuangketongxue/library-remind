@@ -48,9 +48,8 @@ import psutil
 import wave
 import struct
 import math
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import subprocess
+import tempfile
 import atexit
 import winreg
 import traceback
@@ -98,7 +97,7 @@ if os.path.isdir(_PRO_DIR) and _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v5.5.0'
+VERSION = 'v5.6.0'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=1_000_000, backupCount=3, encoding='utf-8')
@@ -996,36 +995,26 @@ class LocalSync:
         app_state_store.save(state)
 
 
-# ═══ 每周邮件报告 ═══
+# ═══ 每周邮件报告（agently-cli） ═══
 class _WeeklyReportWorker(QThread):
-    """后台线程：生成并发送每周学习报告邮件"""
+    """后台线程：生成并通过 agently-cli 发送每周学习报告邮件"""
     finished = pyqtSignal(bool, str)  # (success, message)
 
-    def __init__(self, email_config):
+    def __init__(self, recipient):
         super().__init__()
-        self._config = email_config
+        self._recipient = recipient
 
     def run(self):
         try:
             # 生成周报
             result = generate_report('weekly', force_refresh=True)
             if not result.get('ok'):
-                # 降级使用本地报告
                 data = _build_report_data('weekly')
                 report_text = _local_fallback_report('weekly', data)
             else:
                 report_text = result.get('content', '')
 
-            # 构建邮件
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = f'📊 休息提醒 · 本周学习报告'
-            msg['From'] = self._config.get('smtp_user', '')
-            msg['To'] = self._config.get('recipient', '')
-
-            # 纯文本
-            msg.attach(MIMEText(report_text, 'plain', 'utf-8'))
-
-            # HTML 版本
+            # 构建 HTML 邮件体
             html_content = _md_to_html(report_text)
             html_body = (
                 '<div style="max-width:680px;margin:0 auto;font-family:Segoe UI,Microsoft YaHei,sans-serif;color:#333;">'
@@ -1041,25 +1030,50 @@ class _WeeklyReportWorker(QThread):
                 '<a href="https://crazy-rest-reminder.pages.dev" style="color:#d4a853;">了解更多</a></p>'
                 '</div>'
             )
-            msg.attach(MIMEText(html_body, 'html', 'utf-8'))
 
-            # 发送
-            smtp_host = self._config.get('smtp_host', 'smtp.qq.com')
-            smtp_port = int(self._config.get('smtp_port', 465))
-            smtp_user = self._config.get('smtp_user', '')
-            smtp_pass = _decrypt_key(self._config.get('smtp_pass', ''))
+            # 写入临时 HTML 文件
+            html_path = os.path.join(tempfile.gettempdir(), 'rest_reminder_weekly.html')
+            with open(html_path, 'w', encoding='utf-8') as f:
+                f.write(html_body)
 
-            if smtp_port == 465:
-                server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30)
-            else:
-                server = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
-                server.starttls()
-            server.login(smtp_user, smtp_pass)
-            server.send_message(msg)
-            server.quit()
+            # 通过 agently-cli 发送（两阶段：先获取确认令牌，再确认）
+            cmd_base = ['agently-cli', 'message', '+send',
+                         '--to', self._recipient,
+                         '--subject', '休息提醒 · 本周学习报告',
+                         '--body-file', html_path]
+
+            # 第一阶段：获取 confirmation token
+            result1 = subprocess.run(cmd_base, capture_output=True, text=True, timeout=60)
+            if result1.returncode != 0:
+                self.finished.emit(False, f'agently-cli 错误: {result1.stdout[:100]}')
+                return
+
+            # 解析确认令牌
+            import json
+            try:
+                output = json.loads(result1.stdout.strip())
+                ctk = output.get('data', {}).get('confirmation_token', '')
+            except (json.JSONDecodeError, AttributeError):
+                self.finished.emit(False, '无法解析 agently-cli 响应')
+                return
+
+            if not ctk:
+                self.finished.emit(False, '未获取到确认令牌')
+                return
+
+            # 第二阶段：确认发送
+            cmd_confirm = cmd_base + ['--confirmation-token', ctk]
+            result2 = subprocess.run(cmd_confirm, capture_output=True, text=True, timeout=60)
+            if result2.returncode != 0:
+                self.finished.emit(False, f'发送失败: {result2.stdout[:100]}')
+                return
 
             self.finished.emit(True, '邮件发送成功')
-            log.info('[周报] 邮件发送成功')
+            log.info('[周报] 邮件通过 agently-cli 发送成功')
+        except subprocess.TimeoutExpired:
+            self.finished.emit(False, 'agently-cli 超时（60秒）')
+        except FileNotFoundError:
+            self.finished.emit(False, 'agently-cli 未安装（npm install -g @tencent-qqmail/agently-cli）')
         except Exception as e:
             self.finished.emit(False, str(e))
             log.warning(f'[周报] 发送失败: {e}')
@@ -1074,11 +1088,14 @@ _AMBIENT_SOUNDS = {
     'brown': ('\u68d5\u566a\u97f3', 44100, 3),
 }
 
-def _generate_ambient_wav(sound_type, duration=10, sample_rate=44100):
+def _generate_ambient_wav(sound_type, duration=30, sample_rate=44100):
     """生成环境音 WAV 文件（内存生成，无需外部音频文件）"""
     import random as _rng
+    import array as _array
     n_samples = sample_rate * duration
-    samples = []
+    samples = _array.array('h')  # signed short
+
+    fade_samples = int(sample_rate * 0.5)  # 0.5s fade in/out
 
     if sound_type == 'white':
         # 白噪音：均匀随机
@@ -1093,13 +1110,12 @@ def _generate_ambient_wav(sound_type, duration=10, sample_rate=44100):
             val = int(val * 0.98)
             samples.append(val)
     elif sound_type == 'rain':
-        # 雨声： filtered noise + 随机水滴
+        # 雨声：filtered noise + 随机水滴
         val = 0
         for i in range(n_samples):
             val += _rng.randint(-200, 200)
             val = int(val * 0.95)
-            # 随机水滴声
-            if _rng.random() < 0.001:
+            if _rng.random() < 0.002:
                 drop = _rng.randint(3000, 8000)
                 decay = min(500, n_samples - i)
                 for j in range(decay):
@@ -1113,8 +1129,7 @@ def _generate_ambient_wav(sound_type, duration=10, sample_rate=44100):
         for i in range(n_samples):
             val += _rng.randint(-100, 100)
             val = int(val * 0.97)
-            # 模拟鸟鸣（高频短脉冲）
-            if _rng.random() < 0.0002:
+            if _rng.random() < 0.0005:
                 freq = _rng.uniform(2000, 5000)
                 for j in range(min(800, n_samples - i)):
                     bird = int(4000 * math.sin(2 * math.pi * freq * j / sample_rate) * (1 - j / 800))
@@ -1126,10 +1141,8 @@ def _generate_ambient_wav(sound_type, duration=10, sample_rate=44100):
         for i in range(n_samples):
             val += _rng.randint(-150, 150)
             val = int(val * 0.96)
-            # 低频嗡鸣（空调/人声）
             val += int(1500 * math.sin(2 * math.pi * 120 * i / sample_rate))
-            # 随机杯碟声
-            if _rng.random() < 0.0003:
+            if _rng.random() < 0.0008:
                 clink = _rng.randint(2000, 5000)
                 for j in range(min(200, n_samples - i)):
                     val += int(clink * (1 - j / 200))
@@ -1138,19 +1151,30 @@ def _generate_ambient_wav(sound_type, duration=10, sample_rate=44100):
         for _ in range(n_samples):
             samples.append(0)
 
+    # crossfade：首尾 0.5s 淡入淡出，消除循环断裂
+    for i in range(min(fade_samples, n_samples)):
+        factor = i / fade_samples
+        samples[i] = int(samples[i] * factor)
+        samples[n_samples - 1 - i] = int(samples[n_samples - 1 - i] * factor)
+
     # 写入 WAV
     cache_dir = os.path.join(tempfile.gettempdir(), 'rest_reminder_ambient')
     os.makedirs(cache_dir, exist_ok=True)
     wav_path = os.path.join(cache_dir, f'{sound_type}.wav')
-    if os.path.exists(wav_path) and os.path.getsize(wav_path) > 100:
+    expected_size = 44 + n_samples * 2  # WAV header + PCM data
+    if os.path.exists(wav_path) and os.path.getsize(wav_path) >= expected_size * 0.9:
         return wav_path  # 已缓存
 
     with wave.open(wav_path, 'w') as wf:
         wf.setnchannels(1)
         wf.setsampwidth(2)
         wf.setframerate(sample_rate)
-        for s in samples:
-            wf.writeframes(struct.pack('<h', max(-32768, min(32767, s))))
+        # clamping + 批量写入（CHUNK_SIZE 避免栈溢出）
+        CHUNK = 32768
+        for start in range(0, len(samples), CHUNK):
+            chunk = samples[start:start + CHUNK]
+            raw = struct.pack(f'<{len(chunk)}h', *[max(-32768, min(32767, s)) for s in chunk])
+            wf.writeframes(raw)
     return wav_path
 
 
@@ -4400,7 +4424,7 @@ class RestReminderWidget(QWidget):
         mail_layout.setContentsMargins(14, 12, 14, 12)
         mail_layout.setSpacing(6)
 
-        mail_desc = QLabel('每周一早上自动发送 AI 学习分析报告到指定邮箱')
+        mail_desc = QLabel('每周一早上通过 Agent QQ 邮箱自动发送 AI 学习分析报告')
         mail_desc.setStyleSheet('color: #555; font-size: 11px; font-family: "Microsoft YaHei"; background: transparent;')
         mail_layout.addWidget(mail_desc)
 
@@ -4415,36 +4439,6 @@ class RestReminderWidget(QWidget):
         rcp_row.addWidget(rcp_input, 1)
         mail_layout.addLayout(rcp_row)
 
-        # SMTP 服务器
-        smtp_row = QHBoxLayout()
-        smtp_row.setSpacing(6)
-        smtp_row.addWidget(QLabel('SMTP'))
-        smtp_combo = QComboBox()
-        smtp_combo.addItems(['smtp.qq.com:465', 'smtp.163.com:465', 'smtp.gmail.com:587', 'smtp.feishu.cn:465'])
-        current_smtp = self.app_settings.get('smtp_host', 'smtp.qq.com')
-        current_port = str(self.app_settings.get('smtp_port', 465))
-        smtp_combo.setCurrentText(f'{current_smtp}:{current_port}')
-        smtp_combo.setStyleSheet('QComboBox { background: #16161c; color: #e8e4dc; border: 1px solid #252530; border-radius: 8px; padding: 6px 10px; font-size: 12px; }')
-        smtp_row.addWidget(smtp_combo, 1)
-        mail_layout.addLayout(smtp_row)
-
-        # SMTP 账号密码
-        auth_row = QHBoxLayout()
-        auth_row.setSpacing(6)
-        smtp_user_input = QLineEdit()
-        smtp_user_input.setPlaceholderText('邮箱账号')
-        smtp_user_input.setText(self.app_settings.get('smtp_user', ''))
-        smtp_user_input.setStyleSheet('QLineEdit { background: #16161c; color: #e8e4dc; border: 1px solid #252530; border-radius: 8px; padding: 6px 10px; font-size: 12px; }')
-        auth_row.addWidget(smtp_user_input, 1)
-        smtp_pass_input = QLineEdit()
-        smtp_pass_input.setPlaceholderText('授权码/密码')
-        smtp_pass_input.setEchoMode(QLineEdit.Password)
-        stored_pass = self.app_settings.get('smtp_pass', '')
-        smtp_pass_input.setText('********' if stored_pass else '')
-        smtp_pass_input.setStyleSheet('QLineEdit { background: #16161c; color: #e8e4dc; border: 1px solid #252530; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-family: Consolas; }')
-        auth_row.addWidget(smtp_pass_input, 1)
-        mail_layout.addLayout(auth_row)
-
         # 保存 + 测试发送按钮
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
@@ -4456,13 +4450,13 @@ class RestReminderWidget(QWidget):
         test_btn.setFixedHeight(30)
         test_btn.setCursor(Qt.PointingHandCursor)
         test_btn.setStyleSheet('QPushButton { background: rgba(106,140,187,0.1); color: #6a8cbb; border: 1px solid rgba(106,140,187,0.2); border-radius: 8px; font-size: 12px; } QPushButton:hover { background: rgba(106,140,187,0.2); }')
-        test_btn.clicked.connect(lambda: self._send_test_email(rcp_input, smtp_combo, smtp_user_input, smtp_pass_input))
+        test_btn.clicked.connect(lambda: self._send_test_email(rcp_input))
         btn_row.addWidget(test_btn)
         save_mail_btn = QPushButton('保存配置')
         save_mail_btn.setFixedHeight(30)
         save_mail_btn.setCursor(Qt.PointingHandCursor)
         save_mail_btn.setStyleSheet('QPushButton { background: #d4a853; color: #0d0d12; border: none; border-radius: 8px; font-weight: bold; font-size: 12px; } QPushButton:hover { background: #e8bc6a; }')
-        save_mail_btn.clicked.connect(lambda: self._save_mail_config(rcp_input, smtp_combo, smtp_user_input, smtp_pass_input))
+        save_mail_btn.clicked.connect(lambda: self._save_mail_config(rcp_input))
         btn_row.addWidget(save_mail_btn)
         mail_layout.addLayout(btn_row)
 
@@ -4578,40 +4572,31 @@ class RestReminderWidget(QWidget):
         scroll.setWidget(container)
         self._tab_content.addWidget(scroll)
 
-    def _save_mail_config(self, rcp_input, smtp_combo, smtp_user_input, smtp_pass_input):
+    def _save_mail_config(self, rcp_input):
         """保存邮件配置"""
         self.app_settings['mail_recipient'] = rcp_input.text().strip()
-        smtp_parts = smtp_combo.currentText().split(':')
-        self.app_settings['smtp_host'] = smtp_parts[0]
-        self.app_settings['smtp_port'] = int(smtp_parts[1]) if len(smtp_parts) > 1 else 465
-        self.app_settings['smtp_user'] = smtp_user_input.text().strip()
-        raw_pass = smtp_pass_input.text().strip()
-        if raw_pass and raw_pass != '********':
-            self.app_settings['smtp_pass'] = _encrypt_key(raw_pass)
         LocalSync.save_settings(self.app_settings)
         self._mail_status_lbl.setText('✓ 已保存')
         self._mail_status_lbl.setStyleSheet('color: #78B450; font-size: 11px; background: transparent;')
         self._toast('📧 邮件配置', '周报邮件配置已保存')
 
-    def _send_test_email(self, rcp_input, smtp_combo, smtp_user_input, smtp_pass_input):
+    def _send_test_email(self, rcp_input):
         """测试发送周报邮件"""
-        self._save_mail_config(rcp_input, smtp_combo, smtp_user_input, smtp_pass_input)
+        self._save_mail_config(rcp_input)
+        recipient = self.app_settings.get('mail_recipient', '')
+        if not recipient:
+            self._mail_status_lbl.setText('✗ 请填写收件人')
+            self._mail_status_lbl.setStyleSheet('color: #c95454; font-size: 11px; background: transparent;')
+            return
         self._mail_status_lbl.setText('⏳ 发送中...')
         self._mail_status_lbl.setStyleSheet('color: #6a8cbb; font-size: 11px; background: transparent;')
-        config = {
-            'recipient': self.app_settings.get('mail_recipient', ''),
-            'smtp_host': self.app_settings.get('smtp_host', 'smtp.qq.com'),
-            'smtp_port': self.app_settings.get('smtp_port', 465),
-            'smtp_user': self.app_settings.get('smtp_user', ''),
-            'smtp_pass': self.app_settings.get('smtp_pass', ''),
-        }
-        self._mail_worker = _WeeklyReportWorker(config)
+        self._mail_worker = _WeeklyReportWorker(recipient)
         def on_done(ok, msg):
             if ok:
                 self._mail_status_lbl.setText('✓ 发送成功')
                 self._mail_status_lbl.setStyleSheet('color: #78B450; font-size: 11px; background: transparent;')
             else:
-                self._mail_status_lbl.setText(f'✗ {msg[:30]}')
+                self._mail_status_lbl.setText(f'✗ {msg[:40]}')
                 self._mail_status_lbl.setStyleSheet('color: #c95454; font-size: 11px; background: transparent;')
         self._mail_worker.finished.connect(on_done)
         self._mail_worker.start()
@@ -4639,18 +4624,12 @@ class RestReminderWidget(QWidget):
         if last_sent == now.date().isoformat():
             return
         # 发送
+        recipient = self.app_settings.get('mail_recipient', '')
+        if not recipient:
+            return
         self.app_settings['mail_last_sent'] = now.date().isoformat()
         LocalSync.save_settings(self.app_settings)
-        config = {
-            'recipient': self.app_settings.get('mail_recipient', ''),
-            'smtp_host': self.app_settings.get('smtp_host', 'smtp.qq.com'),
-            'smtp_port': self.app_settings.get('smtp_port', 465),
-            'smtp_user': self.app_settings.get('smtp_user', ''),
-            'smtp_pass': self.app_settings.get('smtp_pass', ''),
-        }
-        if not config['recipient'] or not config['smtp_user']:
-            return
-        self._mail_worker = _WeeklyReportWorker(config)
+        self._mail_worker = _WeeklyReportWorker(recipient)
         self._mail_worker.finished.connect(lambda ok, msg: log.info(f'[周报] {msg}'))
         self._mail_worker.start()
 
@@ -4932,6 +4911,25 @@ class RestReminderWidget(QWidget):
         total_all = len(_ACHIEVEMENTS)
         ach_count.setText(f'{total_earned}/{total_all}')
 
+        # 总进度条
+        progress_bar = QFrame()
+        progress_bar.setFixedHeight(6)
+        progress_bar.setStyleSheet(
+            'QFrame { background: rgba(255,255,255,8); border-radius: 3px; }')
+        progress_layout = QVBoxLayout(progress_bar)
+        progress_layout.setContentsMargins(0, 0, 0, 0)
+        progress_layout.setSpacing(0)
+        fill = QFrame()
+        fill_pct = int(total_earned / max(total_all, 1) * 100)
+        fill.setFixedWidth(int(fill_pct * 5.0))  # approximate
+        fill.setStyleSheet(
+            'QFrame { background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #d4a853, stop:1 #e8bc6a); border-radius: 3px; }')
+        progress_layout.addWidget(fill)
+        ach_layout.addWidget(progress_bar)
+
+        # 获取当前成就数据用于进度显示
+        ach_stats = self._get_achievement_stats()
+
         categories = {}
         for ach in _ACHIEVEMENTS:
             cat = ach['category']
@@ -4951,29 +4949,55 @@ class RestReminderWidget(QWidget):
             cat_lbl.setStyleSheet('color: #888; font-size: 13px; font-weight: bold; background: transparent; padding-top: 4px;')
             ach_layout.addWidget(cat_lbl)
 
-            row = QHBoxLayout()
-            row.setSpacing(8)
+            # 网格布局：每个成就一个卡片
+            grid = QGridLayout()
+            grid.setSpacing(6)
+            col = 0
             for ach in achs:
                 is_earned = ach['id'] in earned_data
-                badge = QPushButton(ach['icon'])
-                badge.setFixedSize(40, 40)
-                badge.setCursor(Qt.PointingHandCursor)
+                card = QFrame()
+                card.setFixedHeight(52)
+                card.setCursor(Qt.PointingHandCursor)
                 if is_earned:
-                    badge.setStyleSheet(
-                        'QPushButton { background: rgba(212,168,83,40); border: 1px solid rgba(212,168,83,80);'
-                        ' border-radius: 10px; font-size: 18px; }'
-                        ' QPushButton:hover { background: rgba(212,168,83,65); }')
+                    card.setStyleSheet(
+                        'QFrame { background: rgba(212,168,83,15); border: 1px solid rgba(212,168,83,30); border-radius: 8px; }')
                     earned_date = earned_data[ach['id']][:10]
-                    badge.setToolTip(ach['name'] + chr(10) + ach['desc'] + chr(10) + '解锁: ' + earned_date)
+                    card.setToolTip(f'{ach["name"]}\n{ach["desc"]}\n解锁: {earned_date}')
                 else:
-                    badge.setStyleSheet(
-                        'QPushButton { background: rgba(255,255,255,8); border: 1px solid rgba(255,255,255,15);'
-                        ' border-radius: 10px; font-size: 18px; }'
-                        ' QPushButton:hover { background: rgba(255,255,255,15); }')
-                    badge.setToolTip(ach['name'] + chr(10) + ach['desc'] + chr(10) + '(未解锁)')
-                row.addWidget(badge)
-            row.addStretch()
-            ach_layout.addLayout(row)
+                    card.setStyleSheet(
+                        'QFrame { background: rgba(255,255,255,4); border: 1px solid rgba(255,255,255,8); border-radius: 8px; }')
+                    card.setToolTip(f'{ach["name"]}\n{ach["desc"]}\n(未解锁)')
+
+                cl = QVBoxLayout(card)
+                cl.setContentsMargins(8, 4, 8, 4)
+                cl.setSpacing(2)
+                top_row = QHBoxLayout()
+                icon_lbl = QLabel(ach['icon'])
+                icon_lbl.setStyleSheet('background: transparent; font-size: 14px;')
+                top_row.addWidget(icon_lbl)
+                name_lbl = QLabel(ach['name'])
+                name_lbl.setStyleSheet(f'color: {"#d4a853" if is_earned else "#666"}; font-size: 11px; font-weight: bold; background: transparent;')
+                top_row.addWidget(name_lbl)
+                top_row.addStretch()
+                cl.addLayout(top_row)
+
+                # 进度信息
+                prog = ach_stats.get(ach['id'], {})
+                if is_earned:
+                    info_lbl = QLabel(f'✓ {earned_date}')
+                    info_lbl.setStyleSheet('color: #78B450; font-size: 10px; font-family: Consolas; background: transparent;')
+                elif prog.get('progress_text'):
+                    info_lbl = QLabel(prog['progress_text'])
+                    info_lbl.setStyleSheet('color: #555; font-size: 10px; font-family: Consolas; background: transparent;')
+                else:
+                    info_lbl = QLabel(ach['desc'])
+                    info_lbl.setStyleSheet('color: #555; font-size: 10px; background: transparent;')
+                cl.addWidget(info_lbl)
+
+                grid.addWidget(card, 0, col)
+                col += 1
+
+            ach_layout.addLayout(grid)
 
         layout.addWidget(ach_card)
 
@@ -6191,6 +6215,55 @@ class RestReminderWidget(QWidget):
             'round_count': self._round_count,
         }
         LocalSync.save_app_state(state)
+
+    def _get_achievement_stats(self):
+        """获取每个成就的当前进度信息"""
+        stats = {}
+        try:
+            history = history_store.load()
+            total_study = sum(v.get('study', 0) for v in history.values())
+            total_rounds = sum(v.get('rounds', 0) for v in history.values())
+            reviews = review_store.load()
+            total_reviews = sum(len(v) for v in reviews.values())
+            max_score = 0
+            for day_reviews in reviews.values():
+                for r in day_reviews:
+                    s = r.get('score', 0)
+                    if s > max_score:
+                        max_score = s
+            streak = LocalSync.load_streak()
+            today_study = self.study_hours_today
+
+            # 每个成就的进度文本
+            thresholds = {
+                'first_hour': (total_study, 1, 'h'),
+                'ten_hours': (total_study, 10, 'h'),
+                'fifty_hours': (total_study, 50, 'h'),
+                'hundred_hours': (total_study, 100, 'h'),
+                'streak_3': (streak.get('current_streak', 0), 3, '天'),
+                'streak_7': (streak.get('current_streak', 0), 7, '天'),
+                'streak_14': (streak.get('current_streak', 0), 14, '天'),
+                'streak_30': (streak.get('current_streak', 0), 30, '天'),
+                'daily_4h': (today_study, 4, 'h'),
+                'daily_8h': (today_study, 8, 'h'),
+                'review_10': (total_reviews, 10, '次'),
+                'review_50': (total_reviews, 50, '次'),
+                'perfect_score': (max_score, 100, '分'),
+                'rounds_10': (total_rounds, 10, '轮'),
+                'rounds_50': (total_rounds, 50, '轮'),
+                'rounds_100': (total_rounds, 100, '轮'),
+            }
+            for ach_id, (current, target, unit) in thresholds.items():
+                pct = min(current / max(target, 1), 1.0)
+                stats[ach_id] = {
+                    'current': current,
+                    'target': target,
+                    'pct': pct,
+                    'progress_text': f'{current}/{target}{unit} ({int(pct*100)}%)'
+                }
+        except Exception as e:
+            log.warning(f'[成就] 获取进度失败: {e}')
+        return stats
 
     def _check_achievements(self):
         """检查并解锁成就"""

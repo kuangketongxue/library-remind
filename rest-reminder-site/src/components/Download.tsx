@@ -94,7 +94,7 @@ export default function Download() {
               </a>
             </div>
             <p className="text-white/70 text-sm">
-              支持 Windows 10/11 · v5.5.0 · MIT 开源
+              支持 Windows 10/11 · v5.6.0 · MIT 开源
             </p>
           </motion.div>
         </div>

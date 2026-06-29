@@ -337,9 +337,22 @@ python rest_reminder.py`}
               <div className="space-y-6">
                 <div className="border-l-2 border-[var(--accent)] pl-4">
                   <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm font-bold">v5.6.0</span>
+                    <span className="text-xs text-[var(--fg-dim)]">2026-06-30</span>
+                    <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">最新</span>
+                  </div>
+                  <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
+                    <li>成就显示优化：卡片式展示 + 进度条 + 当前进度文本</li>
+                    <li>环境白噪音：30 秒循环、首尾 crossfade 消除循环断裂</li>
+                    <li>邮件周报改用 Agent QQ 邮箱（agently-cli），移除 SMTP</li>
+                    <li>关于界面字体放大，环境/数据/AI 服务信息清晰可见</li>
+                  </ul>
+                </div>
+
+                <div className="border-l-2 border-[var(--border)] pl-4">
+                  <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-bold">v5.5.0</span>
                     <span className="text-xs text-[var(--fg-dim)]">2026-06-29</span>
-                    <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">最新</span>
                   </div>
                   <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
                     <li>成就/徽章系统：16 个成就，解锁 Toast 通知</li>
