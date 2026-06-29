@@ -45,9 +45,48 @@ from PyQt5.QtWidgets import QGraphicsDropShadowEffect
 from tray_card import TrayCardWidget
 from feishu_calendar import FeishuCalendarManager
 import psutil
+import wave
+import struct
+import math
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 import atexit
 import winreg
 import traceback
+import base64
+import hashlib
+
+
+# ═══ API Key 加密工具 ═══
+_KEY_PREFIX = 'enc:'  # 区分加密 key 和明文 key
+
+def _get_machine_salt():
+    """基于机器信息生成固定盐值（不依赖额外库）"""
+    import socket
+    raw = f'{socket.gethostname()}|{os.getlogin()}|RestReminder'
+    return hashlib.sha256(raw.encode()).digest()[:16]
+
+def _encrypt_key(plaintext):
+    """XOR + base64 加密 API Key"""
+    if not plaintext or plaintext.startswith(_KEY_PREFIX):
+        return plaintext
+    salt = _get_machine_salt()
+    xored = bytes(b ^ salt[i % len(salt)] for i, b in enumerate(plaintext.encode('utf-8')))
+    return _KEY_PREFIX + base64.b64encode(xored).decode('ascii')
+
+def _decrypt_key(stored):
+    """解密 API Key，兼容旧版明文"""
+    if not stored:
+        return stored
+    if not stored.startswith(_KEY_PREFIX):
+        return stored  # 旧版明文，直接返回
+    try:
+        salt = _get_machine_salt()
+        xored = base64.b64decode(stored[len(_KEY_PREFIX):])
+        return bytes(b ^ salt[i % len(salt)] for i, b in enumerate(xored)).decode('utf-8')
+    except Exception:
+        return stored  # 解密失败，返回原值
 import winsound
 import logging
 from logging.handlers import RotatingFileHandler
@@ -77,6 +116,48 @@ streak_store    = JSONStore('.streak.json',         default={'current_streak': 0
 history_store   = JSONStore('.stats_history.json',  default={})
 app_state_store = JSONStore('.app_state.json')
 review_store    = JSONStore('.review_log.json',     default={},          ensure_ascii=False, indent=2)
+achievements_store = JSONStore('.achievements.json',   default={'earned': {}}, ensure_ascii=False)
+
+# ═══ 成就定义 ═══
+_ACHIEVEMENTS = [
+    # 学习时长里程碑
+    {'id': 'first_hour',    'name': '初出茅庐',   'desc': '累计学习 1 小时',        'icon': '📖', 'category': 'study',
+     'check': lambda d: d.get('total_study', 0) >= 1},
+    {'id': 'ten_hours',     'name': '学海无涯',   'desc': '累计学习 10 小时',       'icon': '📚', 'category': 'study',
+     'check': lambda d: d.get('total_study', 0) >= 10},
+    {'id': 'fifty_hours',   'name': '废寝忘食',   'desc': '累计学习 50 小时',       'icon': '🔥', 'category': 'study',
+     'check': lambda d: d.get('total_study', 0) >= 50},
+    {'id': 'hundred_hours', 'name': '博学多才',   'desc': '累计学习 100 小时',      'icon': '🎓', 'category': 'study',
+     'check': lambda d: d.get('total_study', 0) >= 100},
+    # 连续打卡
+    {'id': 'streak_3',      'name': '三天打鱼',   'desc': '连续打卡 3 天',          'icon': '🌱', 'category': 'streak',
+     'check': lambda d: d.get('current_streak', 0) >= 3},
+    {'id': 'streak_7',      'name': '一周坚持',   'desc': '连续打卡 7 天',          'icon': '🌿', 'category': 'streak',
+     'check': lambda d: d.get('current_streak', 0) >= 7},
+    {'id': 'streak_14',     'name': '两周达人',   'desc': '连续打卡 14 天',         'icon': '🌳', 'category': 'streak',
+     'check': lambda d: d.get('current_streak', 0) >= 14},
+    {'id': 'streak_30',     'name': '月度之星',   'desc': '连续打卡 30 天',         'icon': '⭐', 'category': 'streak',
+     'check': lambda d: d.get('current_streak', 0) >= 30},
+    # 单日成就
+    {'id': 'daily_4h',      'name': '半日充实',   'desc': '单日学习 4 小时',        'icon': '💪', 'category': 'daily',
+     'check': lambda d: d.get('today_study', 0) >= 4},
+    {'id': 'daily_8h',      'name': '全天奋战',   'desc': '单日学习 8 小时',        'icon': '🏆', 'category': 'daily',
+     'check': lambda d: d.get('today_study', 0) >= 8},
+    # 复盘质量
+    {'id': 'review_10',     'name': '反思达人',   'desc': '累计完成 10 次复盘',     'icon': '📝', 'category': 'review',
+     'check': lambda d: d.get('total_reviews', 0) >= 10},
+    {'id': 'review_50',     'name': '深度思考',   'desc': '累计完成 50 次复盘',     'icon': '🧠', 'category': 'review',
+     'check': lambda d: d.get('total_reviews', 0) >= 50},
+    {'id': 'perfect_score', 'name': '完美一轮',   'desc': '复盘评分达到 100 分',    'icon': '💯', 'category': 'review',
+     'check': lambda d: d.get('max_score', 0) >= 100},
+    # 轮次
+    {'id': 'rounds_10',     'name': '初露锋芒',   'desc': '累计完成 10 轮学习',     'icon': '🎯', 'category': 'rounds',
+     'check': lambda d: d.get('total_rounds', 0) >= 10},
+    {'id': 'rounds_50',     'name': '持之以恒',   'desc': '累计完成 50 轮学习',     'icon': '🏅', 'category': 'rounds',
+     'check': lambda d: d.get('total_rounds', 0) >= 50},
+    {'id': 'rounds_100',    'name': '百日修炼',   'desc': '累计完成 100 轮学习',    'icon': '👑', 'category': 'rounds',
+     'check': lambda d: d.get('total_rounds', 0) >= 100},
+]
 
 
 def open_url(url):
@@ -249,6 +330,142 @@ def _get_streak_milestone(streak):
         if streak >= k:
             return STREAK_MILESTONE[k]
     return None
+
+
+# ═══ 主题系统 ═══
+THEMES = {
+    'dark': {
+        'name': '深色',
+        'bg_base': '#0d0d12',
+        'bg_raised': '#18181f',
+        'bg_sidebar': '#111116',
+        'bg_input': '#16161c',
+        'bg_card': '#18181f',
+        'text_primary': '#e8e4dc',
+        'text_secondary': '#888',
+        'text_muted': '#555',
+        'accent': '#d4a853',
+        'accent_hover': '#e8bc6a',
+        'accent_bg': 'rgba(212,168,83,0.12)',
+        'border': '#252530',
+        'border_light': 'rgba(255,255,255,0.05)',
+        'scrollbar': '#2a2a35',
+        'btn_bg': 'rgba(255,255,255,0.05)',
+        'btn_hover': 'rgba(255,255,255,0.10)',
+        'btn_text': '#b8b4ac',
+        'success': '#78B450',
+        'danger': '#c95454',
+        'warning': '#fcc419',
+        'info': '#6a8cbb',
+    },
+    'light': {
+        'name': '浅色',
+        'bg_base': '#f8f7f4',
+        'bg_raised': '#ffffff',
+        'bg_sidebar': '#f0efe8',
+        'bg_input': '#ffffff',
+        'bg_card': '#ffffff',
+        'text_primary': '#1a1a1a',
+        'text_secondary': '#666',
+        'text_muted': '#999',
+        'accent': '#b8860b',
+        'accent_hover': '#d4a017',
+        'accent_bg': 'rgba(184,134,11,0.08)',
+        'border': '#e0ddd5',
+        'border_light': 'rgba(0,0,0,0.06)',
+        'scrollbar': '#ccc',
+        'btn_bg': 'rgba(0,0,0,0.04)',
+        'btn_hover': 'rgba(0,0,0,0.08)',
+        'btn_text': '#444',
+        'success': '#2e7d32',
+        'danger': '#c62828',
+        'warning': '#f57f17',
+        'info': '#1565c0',
+    },
+}
+
+def _get_system_theme():
+    """检测系统主题偏好（Windows 10/11）"""
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+            r'Software\Microsoft\Windows\CurrentVersion\Themes\Personalize')
+        value, _ = winreg.QueryValueEx(key, 'AppsUseLightTheme')
+        winreg.CloseKey(key)
+        return 'light' if value == 1 else 'dark'
+    except Exception:
+        return 'dark'
+
+def _resolve_theme(theme_pref):
+    """解析主题偏好（dark/light/system）"""
+    if theme_pref == 'system':
+        return _get_system_theme()
+    return theme_pref if theme_pref in THEMES else 'dark'
+
+def _apply_theme_stylesheet(theme_name):
+    """生成全局主题 stylesheet"""
+    t = THEMES.get(theme_name, THEMES['dark'])
+    return f"""
+        QWidget {{ background-color: {t['bg_base']}; color: {t['text_primary']}; }}
+        QWidget#mainWindow {{
+            background-color: {t['bg_base']};
+            border: 1px solid {t['border_light']};
+            border-radius: 14px;
+        }}
+        QLabel {{ color: {t['text_primary']}; font-size: 13px; background: transparent;
+                  font-family: 'Segoe UI Emoji', 'Microsoft YaHei', sans-serif; }}
+        QFrame#sidebar {{
+            background: {t['bg_sidebar']};
+            border-right: 1px solid {t['border']};
+        }}
+        QPushButton#navBtn {{
+            background: transparent; color: {t['text_secondary']};
+            border: none; border-radius: 8px;
+            padding: 10px 14px; font-size: 13px;
+            font-family: 'Microsoft YaHei', sans-serif;
+            text-align: left; min-height: 44px;
+        }}
+        QPushButton#navBtn:hover {{ background: {t['accent_bg']}; color: {t['accent']}; }}
+        QPushButton#navBtn:checked {{
+            background: {t['accent_bg']}; color: {t['accent']};
+        }}
+        QPushButton {{
+            background: {t['btn_bg']}; color: {t['btn_text']};
+            border: 1px solid {t['border']};
+            border-radius: 8px; padding: 8px 16px; font-size: 12px;
+            font-family: 'Microsoft YaHei', sans-serif;
+        }}
+        QPushButton:hover {{ background: {t['btn_hover']}; color: {t['text_primary']}; }}
+        QPushButton#accentBtn {{
+            background: {t['accent']}; color: {t['bg_base']}; border: none;
+            font-weight: bold;
+        }}
+        QPushButton#accentBtn:hover {{ background: {t['accent_hover']}; }}
+        QPushButton#dangerBtn {{ color: {t['danger']}; border-color: rgba(201,84,84,0.20); }}
+        QPushButton#dangerBtn:hover {{ background: rgba(201,84,84,0.10); }}
+        QLineEdit {{ background: {t['bg_input']}; color: {t['text_primary']}; border: 1px solid {t['border']};
+            border-radius: 8px; padding: 8px 12px; font-size: 12px; }}
+        QComboBox {{ background: {t['bg_input']}; color: {t['text_primary']}; border: 1px solid {t['border']};
+            border-radius: 8px; padding: 7px 12px; font-size: 12px; min-width: 100px; }}
+        QComboBox::drop-down {{ border: none; }}
+        QFrame#statCard {{
+            background: {t['bg_card']}; border: 1px solid {t['border']};
+            border-radius: 12px;
+        }}
+        QFrame#sectionCard {{
+            background: {t['bg_card']}; border: 1px solid {t['border']};
+            border-radius: 12px;
+        }}
+        QScrollBar:vertical {{ background: transparent; width: 6px; }}
+        QScrollBar::handle:vertical {{ background: {t['scrollbar']}; border-radius: 3px; }}
+        QScrollBar::handle:vertical:hover {{ background: {t['text_muted']}; }}
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+        QFrame#divider {{
+            background: {t['border']}; max-height: 1px; min-height: 1px;
+        }}
+        QTextBrowser {{ background: {t['bg_card']}; color: {t['text_primary']};
+            border: 1px solid {t['border']}; border-radius: 8px; padding: 12px; }}
+    """
 
 
 class FloatingBall(QWidget):
@@ -777,6 +994,223 @@ class LocalSync:
         """保存应用状态"""
         state['date'] = datetime.now().date().isoformat()
         app_state_store.save(state)
+
+
+# ═══ 每周邮件报告 ═══
+class _WeeklyReportWorker(QThread):
+    """后台线程：生成并发送每周学习报告邮件"""
+    finished = pyqtSignal(bool, str)  # (success, message)
+
+    def __init__(self, email_config):
+        super().__init__()
+        self._config = email_config
+
+    def run(self):
+        try:
+            # 生成周报
+            result = generate_report('weekly', force_refresh=True)
+            if not result.get('ok'):
+                # 降级使用本地报告
+                data = _build_report_data('weekly')
+                report_text = _local_fallback_report('weekly', data)
+            else:
+                report_text = result.get('content', '')
+
+            # 构建邮件
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = f'📊 休息提醒 · 本周学习报告'
+            msg['From'] = self._config.get('smtp_user', '')
+            msg['To'] = self._config.get('recipient', '')
+
+            # 纯文本
+            msg.attach(MIMEText(report_text, 'plain', 'utf-8'))
+
+            # HTML 版本
+            html_content = _md_to_html(report_text)
+            html_body = (
+                '<div style="max-width:680px;margin:0 auto;font-family:Segoe UI,Microsoft YaHei,sans-serif;color:#333;">'
+                '<div style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:24px;border-radius:12px;color:#e8e4dc;">'
+                '<h2 style="margin:0;color:#d4a853;">⚡ 休息提醒 · 本周学习报告</h2>'
+                '<p style="color:#888;margin:4px 0 0;">AI 智能分析 · 每周自动推送</p>'
+                '</div>'
+                '<div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;border:1px solid #eee;">'
+                + html_content +
+                '</div>'
+                '<p style="color:#999;font-size:12px;text-align:center;margin-top:16px;">'
+                '由休息提醒自动生成 · '
+                '<a href="https://crazy-rest-reminder.pages.dev" style="color:#d4a853;">了解更多</a></p>'
+                '</div>'
+            )
+            msg.attach(MIMEText(html_body, 'html', 'utf-8'))
+
+            # 发送
+            smtp_host = self._config.get('smtp_host', 'smtp.qq.com')
+            smtp_port = int(self._config.get('smtp_port', 465))
+            smtp_user = self._config.get('smtp_user', '')
+            smtp_pass = _decrypt_key(self._config.get('smtp_pass', ''))
+
+            if smtp_port == 465:
+                server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30)
+            else:
+                server = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
+                server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+            server.quit()
+
+            self.finished.emit(True, '邮件发送成功')
+            log.info('[周报] 邮件发送成功')
+        except Exception as e:
+            self.finished.emit(False, str(e))
+            log.warning(f'[周报] 发送失败: {e}')
+
+
+# ═══ 环境白噪音 ═══
+_AMBIENT_SOUNDS = {
+    'rain': ('\u96e8\u58f0', 44100, 3),
+    'forest': ('\u68ee\u6797', 44100, 3),
+    'cafe': ('\u5496\u5561\u5385', 44100, 3),
+    'white': ('\u767d\u566a\u97f3', 44100, 3),
+    'brown': ('\u68d5\u566a\u97f3', 44100, 3),
+}
+
+def _generate_ambient_wav(sound_type, duration=10, sample_rate=44100):
+    """生成环境音 WAV 文件（内存生成，无需外部音频文件）"""
+    import random as _rng
+    n_samples = sample_rate * duration
+    samples = []
+
+    if sound_type == 'white':
+        # 白噪音：均匀随机
+        for _ in range(n_samples):
+            samples.append(_rng.randint(-8000, 8000))
+    elif sound_type == 'brown':
+        # 棕噪音：随机游走 + 低通
+        val = 0
+        for _ in range(n_samples):
+            val += _rng.randint(-300, 300)
+            val = max(-16000, min(16000, val))
+            val = int(val * 0.98)
+            samples.append(val)
+    elif sound_type == 'rain':
+        # 雨声： filtered noise + 随机水滴
+        val = 0
+        for i in range(n_samples):
+            val += _rng.randint(-200, 200)
+            val = int(val * 0.95)
+            # 随机水滴声
+            if _rng.random() < 0.001:
+                drop = _rng.randint(3000, 8000)
+                decay = min(500, n_samples - i)
+                for j in range(decay):
+                    drop_val = int(drop * (1 - j / decay))
+                    if i + j < n_samples:
+                        val += drop_val
+            samples.append(max(-16000, min(16000, val)))
+    elif sound_type == 'forest':
+        # 森林：低频风声 + 偶尔鸟鸣
+        val = 0
+        for i in range(n_samples):
+            val += _rng.randint(-100, 100)
+            val = int(val * 0.97)
+            # 模拟鸟鸣（高频短脉冲）
+            if _rng.random() < 0.0002:
+                freq = _rng.uniform(2000, 5000)
+                for j in range(min(800, n_samples - i)):
+                    bird = int(4000 * math.sin(2 * math.pi * freq * j / sample_rate) * (1 - j / 800))
+                    val += bird
+            samples.append(max(-16000, min(16000, val)))
+    elif sound_type == 'cafe':
+        # 咖啡厅：中频嗡鸣 + 随机碰撞声
+        val = 0
+        for i in range(n_samples):
+            val += _rng.randint(-150, 150)
+            val = int(val * 0.96)
+            # 低频嗡鸣（空调/人声）
+            val += int(1500 * math.sin(2 * math.pi * 120 * i / sample_rate))
+            # 随机杯碟声
+            if _rng.random() < 0.0003:
+                clink = _rng.randint(2000, 5000)
+                for j in range(min(200, n_samples - i)):
+                    val += int(clink * (1 - j / 200))
+            samples.append(max(-16000, min(16000, val)))
+    else:
+        for _ in range(n_samples):
+            samples.append(0)
+
+    # 写入 WAV
+    cache_dir = os.path.join(tempfile.gettempdir(), 'rest_reminder_ambient')
+    os.makedirs(cache_dir, exist_ok=True)
+    wav_path = os.path.join(cache_dir, f'{sound_type}.wav')
+    if os.path.exists(wav_path) and os.path.getsize(wav_path) > 100:
+        return wav_path  # 已缓存
+
+    with wave.open(wav_path, 'w') as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        for s in samples:
+            wf.writeframes(struct.pack('<h', max(-32768, min(32767, s))))
+    return wav_path
+
+
+class AmbientPlayer:
+    """环境音播放器（基于 QMediaPlayer）"""
+
+    def __init__(self):
+        self._player = None
+        self._current_sound = None
+        self._volume = 50
+        self._enabled = False
+
+    def _ensure_player(self):
+        if self._player is None:
+            from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
+            from PyQt5.QtCore import QUrl
+            self._player = QMediaPlayer()
+            self._player.setVolume(self._volume)
+            # 循环播放
+            self._player.mediaStatusChanged.connect(self._on_media_status)
+            self._QMediaContent = QMediaContent
+            self._QUrl = QUrl
+
+    def _on_media_status(self, status):
+        """媒体结束时重新播放（循环）"""
+        from PyQt5.QtMultimedia import QMediaPlayer
+        if status == QMediaPlayer.EndOfMedia and self._enabled:
+            self._player.setPosition(0)
+            self._player.play()
+
+    def play(self, sound_type):
+        """播放指定环境音"""
+        self._ensure_player()
+        if self._current_sound == sound_type and self._player.state() == 1:
+            return  # 已在播放
+        self._current_sound = sound_type
+        self._enabled = True
+        wav_path = _generate_ambient_wav(sound_type)
+        self._player.setMedia(self._QMediaContent(self._QUrl.fromLocalFile(wav_path)))
+        self._player.play()
+        log.info(f'[白噪音] 播放: {sound_type}')
+
+    def stop(self):
+        """停止播放"""
+        self._enabled = False
+        if self._player:
+            self._player.stop()
+        self._current_sound = None
+
+    def set_volume(self, vol):
+        """设置音量 0-100"""
+        self._volume = max(0, min(100, vol))
+        if self._player:
+            self._player.setVolume(self._volume)
+
+    @property
+    def is_playing(self):
+        if self._player:
+            return self._player.state() == 1
+        return False
 
 
 class SingleInstanceChecker:
@@ -2139,9 +2573,11 @@ def _call_ai(prompt, model='sensenova-6.7-flash-lite'):
             # 尝试从 settings 读取对应 API key
             api_key = None
             if 'sensenova' in url:
-                api_key = settings_store.get('sensenova_api_key') or os.environ.get('SENSENOVA_API_KEY')
+                raw = settings_store.get('sensenova_api_key') or os.environ.get('SENSENOVA_API_KEY')
+                api_key = _decrypt_key(raw) if raw else None
             elif 'agnes' in url:
-                api_key = settings_store.get('agnes_api_key') or os.environ.get('AGNES_API_KEY')
+                raw = settings_store.get('agnes_api_key') or os.environ.get('AGNES_API_KEY')
+                api_key = _decrypt_key(raw) if raw else None
 
             if not api_key:
                 last_err = f'未配置 API key（{url}）'
@@ -2445,6 +2881,12 @@ class RestReminderWidget(QWidget):
         # 状态机字段预初始化
         self._rest_end_time = None
 
+        # ── 环境音播放器 ──
+        self._ambient_player = AmbientPlayer()
+        ambient_setting = self.app_settings.get('ambient_sound', '')
+        ambient_vol = self.app_settings.get('ambient_volume', 50)
+        self._ambient_player.set_volume(ambient_vol)
+
         # ── 飞书日程管理器（必须在 init_ui 之前，_build_general_tab 会读取） ──
         self._calendar_mgr = FeishuCalendarManager(refresh_interval=300)
         self._calendar_enabled = self.app_settings.get('feishu_calendar', False)
@@ -2460,9 +2902,18 @@ class RestReminderWidget(QWidget):
         self.init_tray()
         self.set_autostart(True)
         self.setup_timer()
-        # 快捷键：Ctrl+Alt+P 暂停/继续
-        shortcut = QShortcut(QKeySequence('Ctrl+Alt+P'), self)
-        shortcut.activated.connect(self._toggle_pause_by_shortcut)
+        # ═══ 快捷键体系 ═══
+        for key_seq, slot, tip in [
+            ('Ctrl+Alt+P', self._toggle_pause_by_shortcut, '暂停/继续'),
+            ('Ctrl+Alt+S', self._shortcut_show_window, '显示主窗口'),
+            ('Ctrl+Alt+B', self._shortcut_start_break, '立即进入休息'),
+        ]:
+            sc = QShortcut(QKeySequence(key_seq), self)
+            sc.activated.connect(slot)
+        # Tab 切换快捷键（仅主窗口内生效）
+        for i, name in enumerate(self.TAB_NAMES):
+            sc = QShortcut(QKeySequence(f'Ctrl+{i+1}'), self)
+            sc.activated.connect(lambda n=name: self._switch_tab(n))
         # 创建小浮球
         self.floating_ball = FloatingBall(self)
         # 创建5分钟倒计时浮层
@@ -2479,6 +2930,9 @@ class RestReminderWidget(QWidget):
         # 启动飞书日程（设置开启时才拉取）
         if self._calendar_enabled:
             self._calendar_mgr.start()
+        # 恢复环境音设置
+        if ambient_setting and ambient_setting in _AMBIENT_SOUNDS:
+            QTimer.singleShot(1000, lambda: self._ambient_player.play(ambient_setting))
         # 启动时提示设目标
         self._prompt_goal()
 
@@ -2496,6 +2950,11 @@ class RestReminderWidget(QWidget):
 
         # 强制任务栏显示图标（FramelessWindowHint 在 Windows 上可能导致图标丢失）
         self._taskbar_forced = False
+
+        # ═══ 应用主题 ═══
+        theme_pref = self.app_settings.get('theme', 'dark')
+        self._current_theme = _resolve_theme(theme_pref)
+        self._theme_stylesheet = _apply_theme_stylesheet(self._current_theme)
 
         # ═══ 暖墨色系视觉体系 ═══
         #  深炭底 + 琥珀金 accent + 暖灰层次 — 区别于蓝黑模板风
@@ -2563,6 +3022,11 @@ class RestReminderWidget(QWidget):
                 background: #1c1c24; max-height: 1px; min-height: 1px;
             }
         """)
+
+        # 应用主题覆盖（在基础样式之后）
+        if hasattr(self, '_theme_stylesheet'):
+            base_sheet = self.styleSheet()
+            self.setStyleSheet(base_sheet + self._theme_stylesheet)
 
         # ═══ 根布局：侧边栏 + 主内容 ═══
         root_layout = QHBoxLayout()
@@ -2820,6 +3284,136 @@ class RestReminderWidget(QWidget):
         # 窗口首次显示时强制任务栏图标
         QTimer.singleShot(50, self._force_taskbar_icon)
 
+    def _shortcut_show_window(self):
+        """快捷键：显示主窗口"""
+        if self.isHidden():
+            self.show()
+            self.raise_()
+            self.activateWindow()
+        else:
+            self.hide()
+
+    def _shortcut_start_break(self):
+        """快捷键：立即进入休息（仅 running 状态可用）"""
+        if self.timer_state == 'running':
+            self._enter_rest()
+            self.tray_icon.showMessage('☕ 快捷键', '已进入休息时间', QSystemTrayIcon.Information, 2000)
+
+    def _load_heatmap_data(self):
+        """加载 52 周热力图数据"""
+        history = history_store.load()
+        today = datetime.now().date()
+        # 找到本周日（周日作为一周结束）
+        days_since_sunday = (today.weekday() + 1) % 7
+        end_of_week = today + timedelta(days=(6 - days_since_sunday))
+        # 往前推 52 周 + 当周 = 53 列
+        start_date = end_of_week - timedelta(weeks=52, days=end_of_week.weekday())
+        data = {}
+        total_study = 0
+        total_days = 0
+        d = start_date
+        while d <= today:
+            iso = d.isoformat()
+            study = history.get(iso, {}).get('study', 0)
+            if study > 0:
+                data[iso] = study
+                total_study += study
+                total_days += 1
+            d += timedelta(days=1)
+        self._heatmap_widget._data = data
+        self._heatmap_widget._start_date = start_date
+        self._heatmap_widget._end_date = today
+        if hasattr(self, '_heatmap_total_lbl'):
+            self._heatmap_total_lbl.setText(f'近一年学习 {total_study:.0f}h，{total_days} 天')
+        self._heatmap_widget.update()
+
+    def _paint_heatmap(self, event):
+        """绘制 GitHub 风格热力图"""
+        w = self._heatmap_widget
+        p = QPainter(w)
+        p.setRenderHint(QPainter.Antialiasing)
+        pw, ph = w.width(), w.height()
+        data = w._data
+        start = getattr(w, '_start_date', None)
+        end = getattr(w, '_end_date', None)
+        if not start or not end:
+            p.end()
+            return
+
+        # 计算网格: 53 列 x 7 行
+        cols = 53
+        rows = 7
+        cell_size = min(int((pw - 30) / cols), int((ph - 20) / rows), 12)
+        gap = 2
+        total_w = cols * (cell_size + gap)
+        offset_x = (pw - total_w) // 2
+        offset_y = 4
+
+        # 颜色梯度
+        colors = ['#161b22', '#0e4429', '#006d32', '#26a641', '#39d353']
+        max_study = max(data.values(), default=1)
+        if max_study < 1:
+            max_study = 1
+
+        w._cell_rects = []
+
+        # 绘制月份标签
+        p.setPen(QColor('#555'))
+        p.setFont(QFont('Consolas', 7))
+        last_month = -1
+
+        d = start
+        col = 0
+        while d <= end and col < cols:
+            weekday = d.weekday()  # 0=Mon, 6=Sun
+            row = (weekday + 1) % 7  # 转为 Sun=0, Mon=1, ...
+
+            x = offset_x + col * (cell_size + gap)
+            y = offset_y + row * (cell_size + gap)
+
+            iso = d.isoformat()
+            study = data.get(iso, 0)
+            if study > 0:
+                intensity = min(4, int(study / max_study * 4) + 1)
+            else:
+                intensity = 0
+            color = QColor(colors[intensity])
+
+            p.setBrush(QBrush(color))
+            p.setPen(Qt.NoPen)
+            p.drawRoundedRect(x, y, cell_size, cell_size, 2, 2)
+
+            # 存储 rect 用于 tooltip
+            rect = QRect(x, y, cell_size, cell_size)
+            w._cell_rects.append((rect, iso, study))
+
+            # 月份标签
+            if d.month != last_month and d.day <= 7:
+                month_names = ['', '1月', '2月', '3月', '4月', '5月', '6月',
+                               '7月', '8月', '9月', '10月', '11月', '12月']
+                p.setPen(QColor('#555'))
+                p.setFont(QFont('Microsoft YaHei', 7))
+                p.drawText(x, offset_y + 7 * (cell_size + gap) + 10, month_names[d.month])
+                last_month = d.month
+
+            # 下一天
+            d += timedelta(days=1)
+            if weekday == 6:  # 周日结束，下一列
+                col += 1
+
+        p.end()
+
+    def _heatmap_tooltip(self, event):
+        """热力图 hover 提示"""
+        w = self._heatmap_widget
+        pos = event.pos()
+        for rect, iso, study in getattr(w, '_cell_rects', []):
+            if rect.contains(pos):
+                hours = f'{study:.1f}h' if study > 0 else '无学习'
+                QToolTip.showText(w.mapToGlobal(pos), iso + chr(10) + hours, w, rect, 2000)
+                return
+        QToolTip.hideText()
+
     def _switch_tab(self, name):
         """切换 tab（侧边栏按钮选中 + stacked widget 切换 + 更新窗口标题）"""
         for n, btn in self._tab_buttons.items():
@@ -2995,6 +3589,20 @@ class RestReminderWidget(QWidget):
             return '今天的学习已经结束，好好休息'
         state_names = {'idle': '准备好开始学习了吗？', 'running': '保持专注，你正在进步', 'resting': '放松一下，马上回来', 'paused': '已暂停，随时可以继续'}
         return state_names.get(self.timer_state, '精力管理，从今天开始')
+    def _switch_theme(self, theme_key):
+        """切换主题"""
+        self.app_settings['theme'] = theme_key
+        LocalSync.save_settings(self.app_settings)
+        # 更新按钮状态
+        active_style = 'QPushButton { background: rgba(212,168,83,0.15); color: #d4a853; border: 1px solid rgba(212,168,83,0.3); border-radius: 8px; font-size: 12px; font-weight: bold; } QPushButton:hover { background: rgba(212,168,83,0.25); }'
+        base_style = 'QPushButton { background: rgba(255,255,255,0.04); color: #888; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; font-size: 12px; } QPushButton:hover { background: rgba(255,255,255,0.08); }'
+        for key, btn in self._theme_btns.items():
+            btn.setChecked(key == theme_key)
+            btn.setStyleSheet(active_style if key == theme_key else base_style)
+        resolved = _resolve_theme(theme_key)
+        theme_name = THEMES[resolved]['name']
+        self._toast('🎨 主题', f'已切换为{theme_name}主题，重启应用后生效')
+
     def _toggle_silent_start(self, checked):
         self.app_settings['silent_start'] = checked == 1
         LocalSync.save_settings(self.app_settings)
@@ -3284,6 +3892,35 @@ class RestReminderWidget(QWidget):
         leg_row.addStretch()
         hc.addLayout(leg_row)
         layout.addWidget(self._heat_card)
+        layout.addSpacing(8)
+
+        # ── GitHub 风格学习热力图 ──
+        gh_title = QLabel('🔥 学习热力图（近 52 周）')
+        gh_title.setStyleSheet('color: #e8e6e1; font-size: 13px; font-weight: bold;')
+        layout.addWidget(gh_title)
+
+        self._heatmap_widget = QWidget()
+        self._heatmap_widget.setFixedHeight(120)
+        self._heatmap_widget.setStyleSheet('background: transparent;')
+        self._heatmap_widget._data = {}
+        self._heatmap_widget._cell_rects = []
+        layout.addWidget(self._heatmap_widget)
+
+        # 热力图图例
+        gh_leg = QHBoxLayout()
+        gh_leg.setSpacing(4)
+        gh_leg.addWidget(QLabel('少'))
+        for intensity, color in [(0, '#161b22'), (1, '#0e4429'), (2, '#006d32'), (3, '#26a641'), (4, '#39d353')]:
+            sq = QLabel()
+            sq.setFixedSize(12, 12)
+            sq.setStyleSheet(f'background: {color}; border-radius: 2px;')
+            gh_leg.addWidget(sq)
+        gh_leg.addWidget(QLabel('多'))
+        gh_leg.addStretch()
+        self._heatmap_total_lbl = QLabel('')
+        self._heatmap_total_lbl.setStyleSheet('color: #888; font-size: 11px;')
+        gh_leg.addWidget(self._heatmap_total_lbl)
+        layout.addLayout(gh_leg)
 
         layout.addStretch()
         scroll.setWidget(container)
@@ -3295,8 +3932,14 @@ class RestReminderWidget(QWidget):
         self._trend_chart.setMouseTracking(True)
         self._heat_widget.paintEvent = self._paint_heat_map
 
+        # 热力图绑定
+        self._heatmap_widget.paintEvent = self._paint_heatmap
+        self._heatmap_widget.mouseMoveEvent = self._heatmap_tooltip
+        self._heatmap_widget.setMouseTracking(True)
+
         # 初始绘制
         self._switch_trend_period(7)
+        self._load_heatmap_data()
 
     def _switch_trend_period(self, days):
         """切换趋势图时间范围"""
@@ -3561,6 +4204,57 @@ class RestReminderWidget(QWidget):
         layout.addWidget(sub)
         layout.addSpacing(12)
 
+        # ═══ 外观 ═══
+        layout.addLayout(self._make_section_header('🎨', '外观'))
+
+        theme_card = QFrame()
+        theme_card.setObjectName('sectionCard')
+        theme_layout_inner = QVBoxLayout(theme_card)
+        theme_layout_inner.setContentsMargins(14, 12, 14, 12)
+        theme_layout_inner.setSpacing(8)
+
+        theme_header = QHBoxLayout()
+        theme_icon = QLabel('🎨')
+        theme_icon.setFixedSize(20, 20)
+        theme_icon.setStyleSheet('background: transparent;')
+        theme_header.addWidget(theme_icon)
+        theme_title = QLabel('主题切换')
+        theme_title.setStyleSheet('color: #e8e6e1; font-size: 13px; font-weight: bold; font-family: "Microsoft YaHei"; background: transparent;')
+        theme_header.addWidget(theme_title)
+        theme_header.addStretch()
+        theme_hint = QLabel('切换后需重启应用')
+        theme_hint.setStyleSheet('color: #555; font-size: 11px; background: transparent;')
+        theme_header.addWidget(theme_hint)
+        theme_layout_inner.addLayout(theme_header)
+
+        theme_btn_row = QHBoxLayout()
+        theme_btn_row.setSpacing(8)
+        self._theme_btns = {}
+        current_theme_pref = self.app_settings.get('theme', 'dark')
+        theme_options = [
+            ('dark', '🌙 深色'),
+            ('light', '☀️ 浅色'),
+            ('system', '💻 跟随系统'),
+        ]
+        for key, label in theme_options:
+            btn = QPushButton(label)
+            btn.setFixedHeight(32)
+            btn.setCheckable(True)
+            btn.setCursor(Qt.PointingHandCursor)
+            is_active = current_theme_pref == key
+            btn.setChecked(is_active)
+            if is_active:
+                btn.setStyleSheet('QPushButton { background: rgba(212,168,83,0.15); color: #d4a853; border: 1px solid rgba(212,168,83,0.3); border-radius: 8px; font-size: 12px; font-weight: bold; } QPushButton:hover { background: rgba(212,168,83,0.25); }')
+            else:
+                btn.setStyleSheet('QPushButton { background: rgba(255,255,255,0.04); color: #888; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; font-size: 12px; } QPushButton:hover { background: rgba(255,255,255,0.08); }')
+            btn.clicked.connect(lambda checked, k=key: self._switch_theme(k))
+            theme_btn_row.addWidget(btn)
+            self._theme_btns[key] = btn
+        theme_layout_inner.addLayout(theme_btn_row)
+        layout.addWidget(theme_card)
+
+        layout.addSpacing(8)
+
         # ═══ 窗口行为 ═══
         layout.addLayout(self._make_section_header('🪟', '窗口行为'))
 
@@ -3635,6 +4329,153 @@ class RestReminderWidget(QWidget):
             self._toggle_feishu_calendar
         )
         layout.addWidget(feishu_cal_row)
+
+        # ═══ 环境白噪音 ═══
+        layout.addSpacing(8)
+        layout.addLayout(self._make_section_header('🎵', '环境白噪音'))
+
+        amb_card = QFrame()
+        amb_card.setObjectName('sectionCard')
+        amb_layout = QVBoxLayout(amb_card)
+        amb_layout.setContentsMargins(14, 12, 14, 12)
+        amb_layout.setSpacing(8)
+
+        # 音效选择按钮行
+        amb_btn_row = QHBoxLayout()
+        amb_btn_row.setSpacing(6)
+        self._ambient_btns = {}
+        current_ambient = self.app_settings.get('ambient_sound', '')
+        for key, (label, _, _) in _AMBIENT_SOUNDS.items():
+            btn = QPushButton(label)
+            btn.setFixedHeight(30)
+            btn.setCheckable(True)
+            btn.setCursor(Qt.PointingHandCursor)
+            is_active = current_ambient == key and self._ambient_player.is_playing
+            if is_active:
+                btn.setChecked(True)
+                btn.setStyleSheet('QPushButton { background: rgba(212,168,83,0.15); color: #d4a853; border: 1px solid rgba(212,168,83,0.3); border-radius: 8px; font-size: 12px; font-weight: bold; } QPushButton:hover { background: rgba(212,168,83,0.25); }')
+            else:
+                btn.setStyleSheet('QPushButton { background: rgba(255,255,255,0.04); color: #888; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; font-size: 12px; } QPushButton:hover { background: rgba(255,255,255,0.08); }')
+            btn.clicked.connect(lambda checked, k=key: self._toggle_ambient(k))
+            amb_btn_row.addWidget(btn)
+            self._ambient_btns[key] = btn
+        # 关闭按钮
+        stop_btn = QPushButton('关闭')
+        stop_btn.setFixedHeight(30)
+        stop_btn.setCursor(Qt.PointingHandCursor)
+        stop_btn.setStyleSheet('QPushButton { background: rgba(201,84,84,0.1); color: #c95454; border: 1px solid rgba(201,84,84,0.2); border-radius: 8px; font-size: 12px; } QPushButton:hover { background: rgba(201,84,84,0.2); }')
+        stop_btn.clicked.connect(self._stop_ambient)
+        amb_btn_row.addWidget(stop_btn)
+        amb_layout.addLayout(amb_btn_row)
+
+        # 音量滑块
+        vol_row = QHBoxLayout()
+        vol_row.setSpacing(8)
+        vol_lbl = QLabel('🔉')
+        vol_lbl.setFixedWidth(20)
+        vol_lbl.setStyleSheet('background: transparent;')
+        vol_row.addWidget(vol_lbl)
+        vol_slider = QSlider(Qt.Horizontal)
+        vol_slider.setRange(0, 100)
+        vol_slider.setValue(self.app_settings.get('ambient_volume', 50))
+        vol_slider.setFixedHeight(20)
+        vol_slider.setStyleSheet('QSlider::groove:horizontal { background: #333; border-radius: 4px; height: 8px; } QSlider::handle:horizontal { background: #d4a853; border-radius: 8px; width: 16px; height: 16px; margin: -4px 0; } QSlider::sub-page:horizontal { background: #d4a853; border-radius: 4px; }')
+        vol_slider.valueChanged.connect(self._set_ambient_volume)
+        vol_row.addWidget(vol_slider, 1)
+        self._ambient_vol_lbl = QLabel(f'{vol_slider.value()}%')
+        self._ambient_vol_lbl.setStyleSheet('color: #888; font-size: 11px; font-family: Consolas; background: transparent;')
+        self._ambient_vol_lbl.setFixedWidth(36)
+        vol_row.addWidget(self._ambient_vol_lbl)
+        amb_layout.addLayout(vol_row)
+
+        layout.addWidget(amb_card)
+
+        # ═══ 每周报告邮件 ═══
+        layout.addSpacing(8)
+        layout.addLayout(self._make_section_header('📧', '每周报告邮件'))
+
+        mail_card = QFrame()
+        mail_card.setObjectName('sectionCard')
+        mail_layout = QVBoxLayout(mail_card)
+        mail_layout.setContentsMargins(14, 12, 14, 12)
+        mail_layout.setSpacing(6)
+
+        mail_desc = QLabel('每周一早上自动发送 AI 学习分析报告到指定邮箱')
+        mail_desc.setStyleSheet('color: #555; font-size: 11px; font-family: "Microsoft YaHei"; background: transparent;')
+        mail_layout.addWidget(mail_desc)
+
+        # 收件人
+        rcp_row = QHBoxLayout()
+        rcp_row.setSpacing(6)
+        rcp_row.addWidget(QLabel('收件人'))
+        rcp_input = QLineEdit()
+        rcp_input.setPlaceholderText('your@email.com')
+        rcp_input.setText(self.app_settings.get('mail_recipient', ''))
+        rcp_input.setStyleSheet('QLineEdit { background: #16161c; color: #e8e4dc; border: 1px solid #252530; border-radius: 8px; padding: 6px 10px; font-size: 12px; }')
+        rcp_row.addWidget(rcp_input, 1)
+        mail_layout.addLayout(rcp_row)
+
+        # SMTP 服务器
+        smtp_row = QHBoxLayout()
+        smtp_row.setSpacing(6)
+        smtp_row.addWidget(QLabel('SMTP'))
+        smtp_combo = QComboBox()
+        smtp_combo.addItems(['smtp.qq.com:465', 'smtp.163.com:465', 'smtp.gmail.com:587', 'smtp.feishu.cn:465'])
+        current_smtp = self.app_settings.get('smtp_host', 'smtp.qq.com')
+        current_port = str(self.app_settings.get('smtp_port', 465))
+        smtp_combo.setCurrentText(f'{current_smtp}:{current_port}')
+        smtp_combo.setStyleSheet('QComboBox { background: #16161c; color: #e8e4dc; border: 1px solid #252530; border-radius: 8px; padding: 6px 10px; font-size: 12px; }')
+        smtp_row.addWidget(smtp_combo, 1)
+        mail_layout.addLayout(smtp_row)
+
+        # SMTP 账号密码
+        auth_row = QHBoxLayout()
+        auth_row.setSpacing(6)
+        smtp_user_input = QLineEdit()
+        smtp_user_input.setPlaceholderText('邮箱账号')
+        smtp_user_input.setText(self.app_settings.get('smtp_user', ''))
+        smtp_user_input.setStyleSheet('QLineEdit { background: #16161c; color: #e8e4dc; border: 1px solid #252530; border-radius: 8px; padding: 6px 10px; font-size: 12px; }')
+        auth_row.addWidget(smtp_user_input, 1)
+        smtp_pass_input = QLineEdit()
+        smtp_pass_input.setPlaceholderText('授权码/密码')
+        smtp_pass_input.setEchoMode(QLineEdit.Password)
+        stored_pass = self.app_settings.get('smtp_pass', '')
+        smtp_pass_input.setText('********' if stored_pass else '')
+        smtp_pass_input.setStyleSheet('QLineEdit { background: #16161c; color: #e8e4dc; border: 1px solid #252530; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-family: Consolas; }')
+        auth_row.addWidget(smtp_pass_input, 1)
+        mail_layout.addLayout(auth_row)
+
+        # 保存 + 测试发送按钮
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+        self._mail_status_lbl = QLabel('')
+        self._mail_status_lbl.setStyleSheet('color: #888; font-size: 11px; background: transparent;')
+        btn_row.addWidget(self._mail_status_lbl)
+        btn_row.addStretch()
+        test_btn = QPushButton('测试发送')
+        test_btn.setFixedHeight(30)
+        test_btn.setCursor(Qt.PointingHandCursor)
+        test_btn.setStyleSheet('QPushButton { background: rgba(106,140,187,0.1); color: #6a8cbb; border: 1px solid rgba(106,140,187,0.2); border-radius: 8px; font-size: 12px; } QPushButton:hover { background: rgba(106,140,187,0.2); }')
+        test_btn.clicked.connect(lambda: self._send_test_email(rcp_input, smtp_combo, smtp_user_input, smtp_pass_input))
+        btn_row.addWidget(test_btn)
+        save_mail_btn = QPushButton('保存配置')
+        save_mail_btn.setFixedHeight(30)
+        save_mail_btn.setCursor(Qt.PointingHandCursor)
+        save_mail_btn.setStyleSheet('QPushButton { background: #d4a853; color: #0d0d12; border: none; border-radius: 8px; font-weight: bold; font-size: 12px; } QPushButton:hover { background: #e8bc6a; }')
+        save_mail_btn.clicked.connect(lambda: self._save_mail_config(rcp_input, smtp_combo, smtp_user_input, smtp_pass_input))
+        btn_row.addWidget(save_mail_btn)
+        mail_layout.addLayout(btn_row)
+
+        # 开关
+        mail_toggle_row = self._make_setting_row(
+            '📅', '每周一自动发送',
+            '每周一 08:00 自动生成并发送上周学习报告',
+            self.app_settings.get('mail_weekly_enabled', False),
+            self._toggle_weekly_email
+        )
+        mail_layout.addWidget(mail_toggle_row)
+
+        layout.addWidget(mail_card)
 
         # ═══ AI 服务 ═══
         layout.addSpacing(8)
@@ -3737,9 +4578,119 @@ class RestReminderWidget(QWidget):
         scroll.setWidget(container)
         self._tab_content.addWidget(scroll)
 
+    def _save_mail_config(self, rcp_input, smtp_combo, smtp_user_input, smtp_pass_input):
+        """保存邮件配置"""
+        self.app_settings['mail_recipient'] = rcp_input.text().strip()
+        smtp_parts = smtp_combo.currentText().split(':')
+        self.app_settings['smtp_host'] = smtp_parts[0]
+        self.app_settings['smtp_port'] = int(smtp_parts[1]) if len(smtp_parts) > 1 else 465
+        self.app_settings['smtp_user'] = smtp_user_input.text().strip()
+        raw_pass = smtp_pass_input.text().strip()
+        if raw_pass and raw_pass != '********':
+            self.app_settings['smtp_pass'] = _encrypt_key(raw_pass)
+        LocalSync.save_settings(self.app_settings)
+        self._mail_status_lbl.setText('✓ 已保存')
+        self._mail_status_lbl.setStyleSheet('color: #78B450; font-size: 11px; background: transparent;')
+        self._toast('📧 邮件配置', '周报邮件配置已保存')
+
+    def _send_test_email(self, rcp_input, smtp_combo, smtp_user_input, smtp_pass_input):
+        """测试发送周报邮件"""
+        self._save_mail_config(rcp_input, smtp_combo, smtp_user_input, smtp_pass_input)
+        self._mail_status_lbl.setText('⏳ 发送中...')
+        self._mail_status_lbl.setStyleSheet('color: #6a8cbb; font-size: 11px; background: transparent;')
+        config = {
+            'recipient': self.app_settings.get('mail_recipient', ''),
+            'smtp_host': self.app_settings.get('smtp_host', 'smtp.qq.com'),
+            'smtp_port': self.app_settings.get('smtp_port', 465),
+            'smtp_user': self.app_settings.get('smtp_user', ''),
+            'smtp_pass': self.app_settings.get('smtp_pass', ''),
+        }
+        self._mail_worker = _WeeklyReportWorker(config)
+        def on_done(ok, msg):
+            if ok:
+                self._mail_status_lbl.setText('✓ 发送成功')
+                self._mail_status_lbl.setStyleSheet('color: #78B450; font-size: 11px; background: transparent;')
+            else:
+                self._mail_status_lbl.setText(f'✗ {msg[:30]}')
+                self._mail_status_lbl.setStyleSheet('color: #c95454; font-size: 11px; background: transparent;')
+        self._mail_worker.finished.connect(on_done)
+        self._mail_worker.start()
+
+    def _toggle_weekly_email(self, checked):
+        """切换每周自动发送"""
+        self.app_settings['mail_weekly_enabled'] = (checked == 1)
+        LocalSync.save_settings(self.app_settings)
+        if checked == 1:
+            self._toast('📧 周报', '已开启每周一自动发送')
+        else:
+            self._toast('📧 周报', '已关闭每周自动发送')
+
+    def _check_weekly_report(self):
+        """检查是否需要发送周报（每周一 08:00-09:00）"""
+        if not self.app_settings.get('mail_weekly_enabled', False):
+            return
+        now = datetime.now()
+        if now.weekday() != 0:  # 不是周一
+            return
+        if now.hour != 8:  # 不是 8 点
+            return
+        # 检查今天是否已发送
+        last_sent = self.app_settings.get('mail_last_sent', '')
+        if last_sent == now.date().isoformat():
+            return
+        # 发送
+        self.app_settings['mail_last_sent'] = now.date().isoformat()
+        LocalSync.save_settings(self.app_settings)
+        config = {
+            'recipient': self.app_settings.get('mail_recipient', ''),
+            'smtp_host': self.app_settings.get('smtp_host', 'smtp.qq.com'),
+            'smtp_port': self.app_settings.get('smtp_port', 465),
+            'smtp_user': self.app_settings.get('smtp_user', ''),
+            'smtp_pass': self.app_settings.get('smtp_pass', ''),
+        }
+        if not config['recipient'] or not config['smtp_user']:
+            return
+        self._mail_worker = _WeeklyReportWorker(config)
+        self._mail_worker.finished.connect(lambda ok, msg: log.info(f'[周报] {msg}'))
+        self._mail_worker.start()
+
+    def _toggle_ambient(self, sound_type):
+        """切换环境音"""
+        if self._ambient_player.is_playing and self._ambient_player._current_sound == sound_type:
+            self._stop_ambient()
+            return
+        self._ambient_player.play(sound_type)
+        self.app_settings['ambient_sound'] = sound_type
+        LocalSync.save_settings(self.app_settings)
+        # 更新按钮状态
+        active_style = 'QPushButton { background: rgba(212,168,83,0.15); color: #d4a853; border: 1px solid rgba(212,168,83,0.3); border-radius: 8px; font-size: 12px; font-weight: bold; } QPushButton:hover { background: rgba(212,168,83,0.25); }'
+        base_style = 'QPushButton { background: rgba(255,255,255,0.04); color: #888; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; font-size: 12px; } QPushButton:hover { background: rgba(255,255,255,0.08); }'
+        for key, btn in self._ambient_btns.items():
+            btn.setChecked(key == sound_type)
+            btn.setStyleSheet(active_style if key == sound_type else base_style)
+        self._toast('🎵 环境音', _AMBIENT_SOUNDS[sound_type][0] + ' 已开启')
+
+    def _stop_ambient(self):
+        """停止环境音"""
+        self._ambient_player.stop()
+        self.app_settings['ambient_sound'] = ''
+        LocalSync.save_settings(self.app_settings)
+        base_style = 'QPushButton { background: rgba(255,255,255,0.04); color: #888; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; font-size: 12px; } QPushButton:hover { background: rgba(255,255,255,0.08); }'
+        for btn in self._ambient_btns.values():
+            btn.setChecked(False)
+            btn.setStyleSheet(base_style)
+
+    def _set_ambient_volume(self, value):
+        """设置环境音音量"""
+        self._ambient_player.set_volume(value)
+        self.app_settings['ambient_volume'] = value
+        LocalSync.save_settings(self.app_settings)
+        if hasattr(self, '_ambient_vol_lbl'):
+            self._ambient_vol_lbl.setText(f'{value}%')
+
     def _save_ai_key(self, key_name, key_value, status_label):
-        """保存 AI API Key 到 settings"""
-        self.app_settings[key_name] = key_value
+        """保存 AI API Key 到 settings（加密存储）"""
+        self.app_settings[key_name] = _encrypt_key(key_value) if key_value else ''
         LocalSync.save_settings(self.app_settings)
         if key_value:
             status_label.setText('✓ 已保存')
@@ -3957,6 +4908,74 @@ class RestReminderWidget(QWidget):
         status_row.addLayout(right_col)
 
         layout.addLayout(status_row)
+        layout.addSpacing(8)
+
+        # ── 成就收藏 ──
+        ach_title_row = QHBoxLayout()
+        ach_h = QLabel('🏅 成就')
+        ach_h.setFont(QFont('Georgia, "Noto Serif SC", serif', 14, QFont.Bold))
+        ach_title_row.addWidget(ach_h)
+        ach_title_row.addStretch()
+        ach_count = QLabel('')
+        ach_count.setStyleSheet('color: #888; font-size: 12px; font-family: Consolas;')
+        ach_title_row.addWidget(ach_count)
+        layout.addLayout(ach_title_row)
+
+        ach_card = QFrame()
+        ach_card.setObjectName('sectionCard')
+        ach_layout = QVBoxLayout(ach_card)
+        ach_layout.setContentsMargins(16, 14, 16, 14)
+        ach_layout.setSpacing(6)
+
+        earned_data = achievements_store.load().get('earned', {})
+        total_earned = len(earned_data)
+        total_all = len(_ACHIEVEMENTS)
+        ach_count.setText(f'{total_earned}/{total_all}')
+
+        categories = {}
+        for ach in _ACHIEVEMENTS:
+            cat = ach['category']
+            if cat not in categories:
+                categories[cat] = []
+            categories[cat].append(ach)
+
+        cat_names = {'study': '学习时长', 'streak': '连续打卡',
+                     'daily': '单日成就', 'review': '复盘质量',
+                     'rounds': '学习轮次'}
+
+        for cat_key, cat_label in cat_names.items():
+            achs = categories.get(cat_key, [])
+            if not achs:
+                continue
+            cat_lbl = QLabel(cat_label)
+            cat_lbl.setStyleSheet('color: #888; font-size: 11px; font-weight: bold; background: transparent; padding-top: 4px;')
+            ach_layout.addWidget(cat_lbl)
+
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            for ach in achs:
+                is_earned = ach['id'] in earned_data
+                badge = QPushButton(ach['icon'])
+                badge.setFixedSize(40, 40)
+                badge.setCursor(Qt.PointingHandCursor)
+                if is_earned:
+                    badge.setStyleSheet(
+                        'QPushButton { background: rgba(212,168,83,40); border: 1px solid rgba(212,168,83,80);'
+                        ' border-radius: 10px; font-size: 18px; }'
+                        ' QPushButton:hover { background: rgba(212,168,83,65); }')
+                    earned_date = earned_data[ach['id']][:10]
+                    badge.setToolTip(ach['name'] + chr(10) + ach['desc'] + chr(10) + '解锁: ' + earned_date)
+                else:
+                    badge.setStyleSheet(
+                        'QPushButton { background: rgba(255,255,255,8); border: 1px solid rgba(255,255,255,15);'
+                        ' border-radius: 10px; font-size: 18px; }'
+                        ' QPushButton:hover { background: rgba(255,255,255,15); }')
+                    badge.setToolTip(ach['name'] + chr(10) + ach['desc'] + chr(10) + '(未解锁)')
+                row.addWidget(badge)
+            row.addStretch()
+            ach_layout.addLayout(row)
+
+        layout.addWidget(ach_card)
 
         # 延迟检测（等 UI 渲染完）
         QTimer.singleShot(100, self._refresh_env_check)
@@ -4379,6 +5398,13 @@ class RestReminderWidget(QWidget):
         except Exception as e:
             log.error(f'[on_pause_clicked 异常] {type(e).__name__}: {e}')
 
+    def _toast(self, title, message, icon_type=None, duration=3000):
+        """统一通知入口：系统托盘 Toast（Win10/11 原生通知样式）"""
+        if icon_type is None:
+            icon_type = QSystemTrayIcon.Information
+        if hasattr(self, 'tray_icon') and self.tray_icon:
+            self.tray_icon.showMessage(title, message, icon_type, duration)
+
     def _toggle_pause_by_shortcut(self):
         """快捷键切换暂停/继续"""
         try:
@@ -4463,6 +5489,7 @@ class RestReminderWidget(QWidget):
             self.update_study_display()
             LocalSync.increment_study_hour(self.study_hours_today)
             log.info(f'[计时] 休息结束，第{self._round_count}轮完成')
+            self._check_achievements()
 
             # 浮球：恢复⚡图标，清除进度
             if hasattr(self, 'floating_ball'):
@@ -4638,6 +5665,14 @@ class RestReminderWidget(QWidget):
 
             # --- 刷新今日 tab 动态内容 ---
             self._refresh_general_tab()
+
+            # --- 每 60 秒检查周报 ---
+            if not hasattr(self, '_weekly_check_tick'):
+                self._weekly_check_tick = 0
+            self._weekly_check_tick += 1
+            if self._weekly_check_tick >= 60:
+                self._weekly_check_tick = 0
+                self._check_weekly_report()
 
             # --- 每 15 秒电池检测 ---
             self._battery_tick += 1
@@ -5157,6 +6192,53 @@ class RestReminderWidget(QWidget):
         }
         LocalSync.save_app_state(state)
 
+    def _check_achievements(self):
+        """检查并解锁成就"""
+        try:
+            data = achievements_store.load()
+            earned = data.get('earned', {})
+
+            # 构建检查数据
+            history = history_store.load()
+            total_study = sum(v.get('study', 0) for v in history.values())
+            total_rounds = sum(v.get('rounds', 0) for v in history.values())
+            reviews = review_store.load()
+            total_reviews = sum(len(v) for v in reviews.values())
+            max_score = 0
+            for day_reviews in reviews.values():
+                for r in day_reviews:
+                    s = r.get('score', 0)
+                    if s > max_score:
+                        max_score = s
+            streak = LocalSync.load_streak()
+
+            check_data = {
+                'total_study': total_study,
+                'total_rounds': total_rounds,
+                'total_reviews': total_reviews,
+                'max_score': max_score,
+                'current_streak': streak.get('current_streak', 0),
+                'today_study': self.study_hours_today,
+            }
+
+            new_achievements = []
+            for ach in _ACHIEVEMENTS:
+                if ach['id'] not in earned:
+                    try:
+                        if ach['check'](check_data):
+                            earned[ach['id']] = datetime.now().isoformat()
+                            new_achievements.append(ach)
+                    except Exception:
+                        pass
+
+            if new_achievements:
+                achievements_store.save({'earned': earned})
+                for ach in new_achievements:
+                    self._toast(f'{ach["icon"]} 成就解锁：{ach["name"]}', ach['desc'], duration=5000)
+                    log.info(f'[成就] 解锁: {ach["id"]} - {ach["name"]}')
+        except Exception as e:
+            log.warning(f'[成就] 检查失败: {e}')
+
     def _check_streak(self):
         """检查今日打卡 + 从历史数据自动恢复被清零的连续打卡"""
         today = datetime.now().date().isoformat()
@@ -5301,6 +6383,9 @@ class RestReminderWidget(QWidget):
         super().hideEvent(event)
 
     def closeEvent(self, event):
+        # 停止环境音
+        if hasattr(self, '_ambient_player'):
+            self._ambient_player.stop()
         # 停止飞书日程管理器
         if hasattr(self, "_calendar_mgr"):
             self._calendar_mgr.stop()
