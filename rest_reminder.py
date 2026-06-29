@@ -780,78 +780,121 @@ class LocalSync:
 
 
 class SingleInstanceChecker:
-    """单实例检查器 - 确保程序只运行一个实例"""
+    """单实例检查器 — Windows Named Mutex + 文件锁双保险
+    
+    优先使用 Windows Named Mutex（内核级，进程崩溃自动释放，无竞态）。
+    文件锁作为降级方案（非 Windows 平台或 Mutex 创建失败时）。
+    """
+    _MUTEX_NAME = r'Global\RestReminder_SingleInstance_Mutex'
+
     def __init__(self):
-        self.lock_file = None
-        self.lock_path = os.path.join(tempfile.gettempdir(), 'rest_reminder.lock')
-        self.lock_handle = None
+        self._mutex_handle = None
+        self._lock_handle = None
+        self._lock_path = os.path.join(tempfile.gettempdir(), 'rest_reminder.lock')
 
     def is_already_running(self):
+        # ── 方案 1：Windows Named Mutex（首选） ──
         try:
-            try:
-                self.lock_handle = open(self.lock_path, 'w')
-                msvcrt.locking(self.lock_handle.fileno(), msvcrt.LK_NBLCK, 1)
-                self.lock_handle.write(str(os.getpid()))
-                self.lock_handle.flush()
-                self.lock_file = self.lock_path
-                atexit.register(self.cleanup)
+            kernel32 = ctypes.windll.kernel32
+            # CreateMutexW: 如果 mutex 已存在，GetLastError 返回 ERROR_ALREADY_EXISTS (183)
+            self._mutex_handle = kernel32.CreateMutexW(None, False, self._MUTEX_NAME)
+            last_error = kernel32.GetLastError()
+            if last_error == 183:  # ERROR_ALREADY_EXISTS
+                if self._mutex_handle:
+                    kernel32.CloseHandle(self._mutex_handle)
+                    self._mutex_handle = None
+                log.info('[单实例] Named Mutex 已存在，另一个实例正在运行')
+                return True
+            elif self._mutex_handle:
+                log.info('[单实例] Named Mutex 创建成功，本实例获锁')
+                atexit.register(self._cleanup_mutex)
                 return False
-            except IOError:
-                if self.lock_handle:
-                    self.lock_handle.close()
-                    self.lock_handle = None
-                # 锁获取失败时，验证旧进程是否真的还活着（防止重启后 stale lock）
-                return self._fallback_check()
+            else:
+                log.warning(f'[单实例] CreateMutexW 返回空句柄，last_error={last_error}')
         except Exception as e:
-            log.error(f'单实例检查失败：{e}')
-            return self._fallback_check()
+            log.warning(f'[单实例] Named Mutex 不可用: {e}')
 
-    def _fallback_check(self):
-        """文件锁降级方案：检查旧锁 → 清理 → 获取新锁"""
-        if os.path.exists(self.lock_path):
+        # ── 方案 2：文件锁降级 ──
+        return self._file_lock_check()
+
+    def _file_lock_check(self):
+        """文件锁降级方案"""
+        try:
+            # 尝试直接获取锁
+            self._lock_handle = open(self._lock_path, 'w')
+            msvcrt.locking(self._lock_handle.fileno(), msvcrt.LK_NBLCK, 1)
+            self._lock_handle.write(str(os.getpid()))
+            self._lock_handle.flush()
+            atexit.register(self._cleanup_file)
+            log.info('[单实例] 文件锁获取成功')
+            return False
+        except IOError:
+            if self._lock_handle:
+                self._lock_handle.close()
+                self._lock_handle = None
+
+        # 锁被占用 → 验证旧进程是否存活
+        if os.path.exists(self._lock_path):
             try:
-                with open(self.lock_path, "r") as f:
+                with open(self._lock_path, "r") as f:
                     old_pid = int(f.read().strip())
                 if psutil.pid_exists(old_pid):
                     try:
                         proc = psutil.Process(old_pid)
-                        if "rest_reminder" in " ".join(proc.cmdline()):
+                        cmdline = " ".join(proc.cmdline()).lower()
+                        if "rest_reminder" in cmdline or "python" in cmdline:
+                            log.info(f'[单实例] PID {old_pid} 仍在运行')
                             return True
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        pass  # 进程已退出或不可访问，视为旧锁失效
+                        pass
             except (ValueError, IOError):
                 pass
-            # 旧锁已失效，直接删除
+            # 旧进程已死，清理 stale lock
             try:
-                os.remove(self.lock_path)
-            except Exception as e:
-                log.warning(f"[单实例] 删除旧锁文件失败: {e}")
-        # 获取新锁（原子操作）
+                os.remove(self._lock_path)
+            except Exception:
+                pass
+
+        # 重新尝试获取锁
         try:
-            lh = open(self.lock_path, "w")
-            msvcrt.locking(lh.fileno(), msvcrt.LK_NBLCK, 1)
-            lh.write(str(os.getpid()))
-            lh.flush()
-            self.lock_handle = lh
-            self.lock_file = self.lock_path
-            atexit.register(self.cleanup)
+            self._lock_handle = open(self._lock_path, 'w')
+            msvcrt.locking(self._lock_handle.fileno(), msvcrt.LK_NBLCK, 1)
+            self._lock_handle.write(str(os.getpid()))
+            self._lock_handle.flush()
+            atexit.register(self._cleanup_file)
+            log.info('[单实例] 文件锁重新获取成功')
             return False
         except Exception as e:
-            log.warning(f"[单实例] 获取新锁失败，允许启动: {e}")
-            return False
-    def cleanup(self):
+            # 兜底：获取失败时阻止启动（宁可误拦，不允许多实例）
+            log.warning(f'[单实例] 文件锁获取失败，阻止启动: {e}')
+            return True
+
+    def _cleanup_mutex(self):
+        """清理 Named Mutex"""
         try:
-            if self.lock_handle:
+            if self._mutex_handle:
+                kernel32 = ctypes.windll.kernel32
+                kernel32.ReleaseMutex(self._mutex_handle)
+                kernel32.CloseHandle(self._mutex_handle)
+                self._mutex_handle = None
+                log.info('[单实例] Named Mutex 已释放')
+        except Exception as e:
+            log.warning(f'[单实例] Mutex 清理失败: {e}')
+
+    def _cleanup_file(self):
+        """清理文件锁"""
+        try:
+            if self._lock_handle:
                 try:
-                    msvcrt.locking(self.lock_handle.fileno(), msvcrt.LK_UNLCK, 1)
-                except Exception as e:
-                    log.warning(f'[单实例] 解锁失败: {e}')
-                self.lock_handle.close()
-                self.lock_handle = None
-            if self.lock_file and os.path.exists(self.lock_file):
-                os.remove(self.lock_file)
+                    msvcrt.locking(self._lock_handle.fileno(), msvcrt.LK_UNLCK, 1)
+                except Exception:
+                    pass
+                self._lock_handle.close()
+                self._lock_handle = None
+            if os.path.exists(self._lock_path):
+                os.remove(self._lock_path)
         except Exception as e:
-            log.warning(f'[单实例] 清理失败: {e}')
+            log.warning(f'[单实例] 文件锁清理失败: {e}')
 
 
 class DraggableOverlay(QWidget):
