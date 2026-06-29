@@ -2,6 +2,25 @@
 
 所有重要版本更新记录。
 
+## v5.4.0 (2026-06-29)
+
+### 🆕 新功能
+- **飞书日程集成**：新增 `feishu_calendar.py` 模块，后台拉取飞书日程，「今日」tab 实时显示当前/下一日程
+- **趋势时间选择器**：近7天/14天/30天/自定义日期范围，柱状图和热力图同步刷新
+- **AI API Key 配置界面**：「设置」tab 可直接输入 SenseNova / Agnes AI Key
+
+### 🐛 修复
+- **SenseNova 推理模型兼容**：max_tokens 4096 + reasoning 字段 fallback，解决 content 为空
+- **Windows 任务栏图标丢失**：Win32 API 强制 WS_EX_APPWINDOW
+- **多实例启动竞态**：改用 Named Mutex 内核级互斥锁，消除文件锁竞态条件
+- **初始化顺序 bug**：FeishuCalendarManager 在 init_ui() 前初始化
+- **lark-cli 路径问题**：pythonw 环境用 shutil.which 定位
+
+### 🎨 界面优化
+- 「关于」tab 重新设计：品牌 Hero 区 + 双栏环境/数据卡片
+- 「趋势」tab 全面重构：渐变柱图、网格参考线、hover 详情
+- 「设置」tab 新增飞书集成 + AI 服务配置区
+
 ## v5.3.0 (2026-06-29)
 
 ### 🐛 关键 Bug 修复（21 项）

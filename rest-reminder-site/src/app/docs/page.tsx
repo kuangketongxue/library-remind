@@ -337,9 +337,23 @@ python rest_reminder.py`}
               <div className="space-y-6">
                 <div className="border-l-2 border-[var(--accent)] pl-4">
                   <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm font-bold">v5.4.0</span>
+                    <span className="text-xs text-[var(--fg-dim)]">2026-06-29</span>
+                    <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">最新</span>
+                  </div>
+                  <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
+                    <li>飞书日程集成：实时显示当前/下一个日程</li>
+                    <li>趋势时间选择器：近7/14/30天 + 自定义日期范围</li>
+                    <li>AI API Key 配置界面、SenseNova 推理模型兼容</li>
+                    <li>修复任务栏图标丢失、多实例启动竞态</li>
+                    <li>「关于」「趋势」页面重新设计</li>
+                  </ul>
+                </div>
+
+                <div className="border-l-2 border-[var(--border)] pl-4">
+                  <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-bold">v5.1.0</span>
                     <span className="text-xs text-[var(--fg-dim)]">2026-06-26</span>
-                    <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">最新</span>
                   </div>
                   <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
                     <li>主界面全面实时刷新：学习时长/轮次/休息时长/状态/倒计时每秒更新</li>
