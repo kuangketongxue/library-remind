@@ -337,9 +337,25 @@ python rest_reminder.py`}
               <div className="space-y-6">
                 <div className="border-l-2 border-[var(--accent)] pl-4">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-bold">v5.4.0</span>
+                    <span className="text-sm font-bold">v5.5.0</span>
                     <span className="text-xs text-[var(--fg-dim)]">2026-06-29</span>
                     <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">最新</span>
+                  </div>
+                  <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
+                    <li>成就/徽章系统：16 个成就，解锁 Toast 通知</li>
+                    <li>GitHub 风格学习热力图：52 周 × 7 天，5 级颜色</li>
+                    <li>环境白噪音：雨声/森林/咖啡厅/白噪音/棕噪音</li>
+                    <li>每周邮件周报：SMTP 配置，HTML 格式 AI 学习报告</li>
+                    <li>主题切换：深色/浅色/跟随系统</li>
+                    <li>全局快捷键：Ctrl+Alt+P/S/B，Ctrl+1~5 切换 Tab</li>
+                    <li>API Key 加密存储（XOR + 机器盐值）</li>
+                  </ul>
+                </div>
+
+                <div className="border-l-2 border-[var(--border)] pl-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm font-bold">v5.4.0</span>
+                    <span className="text-xs text-[var(--fg-dim)]">2026-06-29</span>
                   </div>
                   <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
                     <li>飞书日程集成：实时显示当前/下一个日程</li>
