@@ -1037,7 +1037,18 @@ class _WeeklyReportWorker(QThread):
                 f.write(html_body)
 
             # 通过 agently-cli 发送（两阶段：先获取确认令牌，再确认）
-            cmd_base = ['agently-cli', 'message', '+send',
+            # 自动查找 agently-cli 路径（npm 全局安装可能在 PATH 外）
+            import shutil
+            agently_bin = shutil.which('agently-cli')
+            if not agently_bin:
+                npm_global = os.path.join(os.environ.get('APPDATA', ''), 'npm', 'agently-cli.cmd')
+                if os.path.isfile(npm_global):
+                    agently_bin = npm_global
+            if not agently_bin:
+                self.finished.emit(False, 'agently-cli 未安装（npm install -g @tencent-qqmail/agently-cli）')
+                return
+
+            cmd_base = [agently_bin, 'message', '+send',
                          '--to', self._recipient,
                          '--subject', '休息提醒 · 本周学习报告',
                          '--body-file', html_path]
