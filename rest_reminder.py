@@ -98,7 +98,7 @@ if os.path.isdir(_PRO_DIR) and _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v5.3.0'
+VERSION = 'v5.5.0'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=1_000_000, backupCount=3, encoding='utf-8')
@@ -4800,7 +4800,7 @@ class RestReminderWidget(QWidget):
             dot.setFixedWidth(12)
             row.addWidget(dot)
             n = QLabel(name)
-            n.setStyleSheet('color: #666; font-size: 11px; background: transparent;')
+            n.setStyleSheet('color: #aaa; font-size: 11px; background: transparent;')
             n.setFixedWidth(42)
             row.addWidget(n)
             v = QLabel('…')
@@ -4847,7 +4847,7 @@ class RestReminderWidget(QWidget):
             dot.setFixedWidth(12)
             row.addWidget(dot)
             n = QLabel(name)
-            n.setStyleSheet('color: #666; font-size: 11px; background: transparent;')
+            n.setStyleSheet('color: #aaa; font-size: 11px; background: transparent;')
             n.setFixedWidth(52)
             row.addWidget(n)
             fpath = os.path.join(base_dir, filename)
