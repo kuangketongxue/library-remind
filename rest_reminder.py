@@ -97,7 +97,7 @@ if os.path.isdir(_PRO_DIR) and _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v5.6.1'
+VERSION = 'v5.6.2'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=1_000_000, backupCount=3, encoding='utf-8')
@@ -1032,8 +1032,10 @@ class _WeeklyReportWorker(QThread):
                 '</div>'
             )
 
-            # 写入临时 HTML 文件
-            html_path = os.path.join(tempfile.gettempdir(), 'rest_reminder_weekly.html')
+            # 写入临时 HTML 文件（必须在 cwd 下，agently-cli --body-file 只接受相对路径）
+            html_dir = tempfile.gettempdir()
+            html_name = 'rest_reminder_weekly.html'
+            html_path = os.path.join(html_dir, html_name)
             with open(html_path, 'w', encoding='utf-8') as f:
                 f.write(html_body)
 
@@ -1051,13 +1053,14 @@ class _WeeklyReportWorker(QThread):
 
             cmd_base = [agently_bin, 'message', '+send',
                          '--to', self._recipient,
-                         '--subject', '休息提醒 · 本周学习报告',
-                         '--body-file', html_path]
+                         '--subject', 'RestReminder Weekly Report',
+                         '--body-file', html_name]
 
-            # 第一阶段：获取 confirmation token
-            result1 = subprocess.run(cmd_base, capture_output=True, text=True, timeout=60)
+            # 第一阶段：获取 confirmation token（cwd 必须在 html 文件所在目录）
+            result1 = subprocess.run(cmd_base, capture_output=True, text=True, timeout=60, cwd=html_dir)
             if result1.returncode != 0:
-                self.result_ready.emit(False, f'agently-cli 错误: {result1.stdout[:100]}')
+                err = (result1.stderr or result1.stdout)[:200]
+                self.result_ready.emit(False, f'agently-cli 错误: {err}')
                 return
 
             # 解析确认令牌
@@ -1075,9 +1078,10 @@ class _WeeklyReportWorker(QThread):
 
             # 第二阶段：确认发送
             cmd_confirm = cmd_base + ['--confirmation-token', ctk]
-            result2 = subprocess.run(cmd_confirm, capture_output=True, text=True, timeout=60)
+            result2 = subprocess.run(cmd_confirm, capture_output=True, text=True, timeout=60, cwd=html_dir)
             if result2.returncode != 0:
-                self.result_ready.emit(False, f'发送失败: {result2.stdout[:100]}')
+                err = (result2.stderr or result2.stdout)[:200]
+                self.result_ready.emit(False, f'发送失败: {err}')
                 return
 
             self.result_ready.emit(True, '邮件发送成功')
@@ -1101,91 +1105,138 @@ _AMBIENT_SOUNDS = {
 }
 
 def _generate_ambient_wav(sound_type, duration=30, sample_rate=44100):
-    """生成环境音 WAV 文件（内存生成，无需外部音频文件）"""
+    """生成高质量环境音 WAV（Voss-McCartney粉红噪声 + 立体声 + dithering）"""
     import random as _rng
-    import array as _array
     n_samples = sample_rate * duration
-    samples = _array.array('h')  # signed short
+    fade_samples = int(sample_rate * 0.5)
 
-    fade_samples = int(sample_rate * 0.5)  # 0.5s fade in/out
+    def _voss_pink(n, state):
+        dice = state['dice']
+        out = []
+        for _ in range(n):
+            k = 0
+            while k < len(dice) - 1 and _rng.random() < 0.5:
+                k += 1
+            dice[k] = _rng.uniform(-1, 1)
+            out.append(sum(dice))
+        max_val = max(abs(v) for v in out) or 1.0
+        return [v * (8.0 / max_val) for v in out]
 
+    def _brown(n, state):
+        v1, v2 = state['v1'], state['v2']
+        out = []
+        for _ in range(n):
+            white = _rng.uniform(-1, 1)
+            v1 = (v1 + white * 0.02) * 0.996
+            v2 = (v2 + v1 * 0.02) * 0.996
+            out.append(v2)
+        state['v1'], state['v2'] = v1, v2
+        max_val = max(abs(v) for v in out) or 1.0
+        return [v / max_val for v in out]
+
+    def _lowpass(data, alpha=0.1):
+        out, y = [], 0.0
+        for x in data:
+            y += alpha * (x - y)
+            out.append(y)
+        return out
+
+    def _white(n):
+        return [_rng.uniform(-1, 1) for _ in range(n)]
+
+    # 左右声道用不同随机状态（立体声）
     if sound_type == 'white':
-        # 白噪音：均匀随机
-        for _ in range(n_samples):
-            samples.append(_rng.randint(-8000, 8000))
+        left = _lowpass(_white(n_samples), 0.3)
+        right = _lowpass(_white(n_samples), 0.3)
     elif sound_type == 'brown':
-        # 棕噪音：随机游走 + 低通
-        val = 0
-        for _ in range(n_samples):
-            val += _rng.randint(-300, 300)
-            val = max(-16000, min(16000, val))
-            val = int(val * 0.98)
-            samples.append(val)
+        left = _brown(n_samples, {'v1': 0.0, 'v2': 0.0})
+        right = _brown(n_samples, {'v1': 0.0, 'v2': 0.0})
     elif sound_type == 'rain':
-        # 雨声：filtered noise + 随机水滴
-        val = 0
-        for i in range(n_samples):
-            val += _rng.randint(-200, 200)
-            val = int(val * 0.95)
-            if _rng.random() < 0.002:
-                drop = _rng.randint(3000, 8000)
-                decay = min(500, n_samples - i)
-                for j in range(decay):
-                    drop_val = int(drop * (1 - j / decay))
-                    if i + j < n_samples:
-                        val += drop_val
-            samples.append(max(-16000, min(16000, val)))
+        left_base = _voss_pink(n_samples, {'dice': [_rng.uniform(-1, 1) for _ in range(16)]})
+        right_base = _voss_pink(n_samples, {'dice': [_rng.uniform(-1, 1) for _ in range(16)]})
+        rumble_l = _lowpass(_brown(n_samples, {'v1': 0.0, 'v2': 0.0}), 0.02)
+        rumble_r = _lowpass(_brown(n_samples, {'v1': 0.0, 'v2': 0.0}), 0.02)
+        left = [b * 0.7 + r * 0.3 for b, r in zip(left_base, rumble_l)]
+        right = [b * 0.7 + r * 0.3 for b, r in zip(right_base, rumble_r)]
     elif sound_type == 'forest':
-        # 森林：低频风声 + 偶尔鸟鸣
-        val = 0
-        for i in range(n_samples):
-            val += _rng.randint(-100, 100)
-            val = int(val * 0.97)
-            if _rng.random() < 0.0005:
+        left = _lowpass(_voss_pink(n_samples, {'dice': [_rng.uniform(-1, 1) for _ in range(16)]}), 0.05)
+        right = _lowpass(_voss_pink(n_samples, {'dice': [_rng.uniform(-1, 1) for _ in range(16)]}), 0.05)
+        i = 0
+        while i < n_samples:
+            if _rng.random() < 0.0003:
+                chirp_len = _rng.randint(800, 2500)
                 freq = _rng.uniform(2000, 5000)
-                for j in range(min(800, n_samples - i)):
-                    bird = int(4000 * math.sin(2 * math.pi * freq * j / sample_rate) * (1 - j / 800))
-                    val += bird
-            samples.append(max(-16000, min(16000, val)))
+                fmod = _rng.uniform(50, 200)
+                for j in range(min(chirp_len, n_samples - i)):
+                    t = j / sample_rate
+                    env = math.sin(math.pi * j / chirp_len)
+                    bird = math.sin(2 * math.pi * (freq + fmod * math.sin(2 * math.pi * 8 * t)) * t) * env * 0.3
+                    left[i + j] += bird
+                    right[i + j] += bird * _rng.uniform(0.7, 1.0)
+                i += chirp_len
+            else:
+                i += 1
     elif sound_type == 'cafe':
-        # 咖啡厅：中频嗡鸣 + 随机碰撞声
-        val = 0
+        left = _voss_pink(n_samples, {'dice': [_rng.uniform(-1, 1) for _ in range(16)]})
+        right = _voss_pink(n_samples, {'dice': [_rng.uniform(-1, 1) for _ in range(16)]})
+        hum_freq = _rng.uniform(80, 150)
         for i in range(n_samples):
-            val += _rng.randint(-150, 150)
-            val = int(val * 0.96)
-            val += int(1500 * math.sin(2 * math.pi * 120 * i / sample_rate))
-            if _rng.random() < 0.0008:
-                clink = _rng.randint(2000, 5000)
-                for j in range(min(200, n_samples - i)):
-                    val += int(clink * (1 - j / 200))
-            samples.append(max(-16000, min(16000, val)))
+            hum = math.sin(2 * math.pi * hum_freq * i / sample_rate) * 0.15
+            left[i] = left[i] * 0.6 + hum
+            right[i] = right[i] * 0.6 + hum
+        i = 0
+        while i < n_samples:
+            if _rng.random() < 0.001:
+                clink_len = _rng.randint(300, 800)
+                freq = _rng.uniform(3000, 8000)
+                for j in range(min(clink_len, n_samples - i)):
+                    env = math.exp(-j / (clink_len * 0.3))
+                    clink = math.sin(2 * math.pi * freq * j / sample_rate) * env * 0.4
+                    left[i + j] += clink
+                    right[i + j] += clink * _rng.uniform(0.5, 1.0)
+                i += clink_len
+            else:
+                i += 1
     else:
-        for _ in range(n_samples):
-            samples.append(0)
+        left = [0.0] * n_samples
+        right = [0.0] * n_samples
 
-    # crossfade：首尾 0.5s 淡入淡出，消除循环断裂
+    # 归一化
+    max_val = max(max(abs(v) for v in left), max(abs(v) for v in right), 0.001)
+    scale = 0.85 / max_val
+    left = [v * scale for v in left]
+    right = [v * scale for v in right]
+
+    # crossfade
     for i in range(min(fade_samples, n_samples)):
         factor = i / fade_samples
-        samples[i] = int(samples[i] * factor)
-        samples[n_samples - 1 - i] = int(samples[n_samples - 1 - i] * factor)
+        left[i] *= factor
+        right[i] *= factor
+        left[n_samples - 1 - i] *= factor
+        right[n_samples - 1 - i] *= factor
 
-    # 写入 WAV
+    # 写入立体声 WAV + dithering
     cache_dir = os.path.join(tempfile.gettempdir(), 'rest_reminder_ambient')
     os.makedirs(cache_dir, exist_ok=True)
     wav_path = os.path.join(cache_dir, f'{sound_type}.wav')
-    expected_size = 44 + n_samples * 2  # WAV header + PCM data
+    # 立体声文件大小 = header + 2ch × 2bytes × samples
+    expected_size = 44 + n_samples * 4
     if os.path.exists(wav_path) and os.path.getsize(wav_path) >= expected_size * 0.9:
-        return wav_path  # 已缓存
+        return wav_path
 
     with wave.open(wav_path, 'w') as wf:
-        wf.setnchannels(1)
+        wf.setnchannels(2)
         wf.setsampwidth(2)
         wf.setframerate(sample_rate)
-        # clamping + 批量写入（CHUNK_SIZE 避免栈溢出）
         CHUNK = 32768
-        for start in range(0, len(samples), CHUNK):
-            chunk = samples[start:start + CHUNK]
-            raw = struct.pack(f'<{len(chunk)}h', *[max(-32768, min(32767, s)) for s in chunk])
+        for start in range(0, n_samples, CHUNK):
+            end = min(start + CHUNK, n_samples)
+            raw = bytearray()
+            for i in range(start, end):
+                # dithering 减少量化失真
+                l = int((left[i] + _rng.uniform(-0.0005, 0.0005)) * 32767)
+                r = int((right[i] + _rng.uniform(-0.0005, 0.0005)) * 32767)
+                raw += struct.pack('<hh', max(-32768, min(32767, l)), max(-32768, min(32767, r)))
             wf.writeframes(raw)
     return wav_path
 
@@ -3639,31 +3690,38 @@ class RestReminderWidget(QWidget):
         resolved = _resolve_theme(theme_key)
         theme_name = THEMES[resolved]['name']
         self._toast('🎨 主题', f'已切换为{theme_name}主题，重启应用后生效')
+        self._toast('设置', '已保存配置')
 
     def _toggle_silent_start(self, checked):
         self.app_settings['silent_start'] = checked == 1
         LocalSync.save_settings(self.app_settings)
+        self._toast('设置', '已保存配置')
 
     def _toggle_close_to_tray(self, checked):
         self.app_settings['close_to_tray'] = checked == 1
         LocalSync.save_settings(self.app_settings)
+        self._toast('设置', '已保存配置')
 
     def _toggle_study_tracking(self, checked):
         self.app_settings['study_tracking'] = checked == 1
         LocalSync.save_settings(self.app_settings)
+        self._toast('设置', '已保存配置')
 
     def _toggle_review_reminder(self, checked):
         self.app_settings['review_reminder'] = checked == 1
         LocalSync.save_settings(self.app_settings)
+        self._toast('设置', '已保存配置')
 
     def _toggle_sound(self, checked):
         self.app_settings['sound_enabled'] = checked == 1
         LocalSync.save_settings(self.app_settings)
+        self._toast('设置', '已保存配置')
 
     def _toggle_feishu_calendar(self, checked):
         self._calendar_enabled = (checked == 1)
         self.app_settings['feishu_calendar'] = self._calendar_enabled
         LocalSync.save_settings(self.app_settings)
+        self._toast('设置', '已保存配置')
         self._calendar_mgr.enabled = self._calendar_enabled
         if self._calendar_enabled:
             self._calendar_mgr.start()
@@ -4592,6 +4650,7 @@ class RestReminderWidget(QWidget):
         self._mail_status_lbl.setText('✓ 已保存')
         self._mail_status_lbl.setStyleSheet('color: #78B450; font-size: 11px; background: transparent;')
         self._toast('📧 邮件配置', '周报邮件配置已保存')
+        self._toast('设置', '已保存配置')
 
     def _send_test_email(self, rcp_input):
         """测试发送周报邮件"""
@@ -4608,6 +4667,7 @@ class RestReminderWidget(QWidget):
             if ok:
                 self._mail_status_lbl.setText('✓ 发送成功')
                 self._mail_status_lbl.setStyleSheet('color: #78B450; font-size: 11px; background: transparent;')
+                self._toast('设置', '已保存配置')
             else:
                 self._mail_status_lbl.setText(f'✗ {msg[:40]}')
                 self._mail_status_lbl.setStyleSheet('color: #c95454; font-size: 11px; background: transparent;')
@@ -4622,6 +4682,7 @@ class RestReminderWidget(QWidget):
             self._toast('📧 周报', '已开启每周一自动发送')
         else:
             self._toast('📧 周报', '已关闭每周自动发送')
+        self._toast('设置', '已保存配置')
 
     def _check_weekly_report(self):
         """检查是否需要发送周报（每周一 08:00-09:00）"""
@@ -4650,10 +4711,12 @@ class RestReminderWidget(QWidget):
         """切换环境音"""
         if self._ambient_player.is_playing and self._ambient_player._current_sound == sound_type:
             self._stop_ambient()
+            self._toast('设置', '已保存配置')
             return
         self._ambient_player.play(sound_type)
         self.app_settings['ambient_sound'] = sound_type
         LocalSync.save_settings(self.app_settings)
+        self._toast('设置', '已保存配置')
         # 更新按钮状态
         active_style = 'QPushButton { background: rgba(212,168,83,0.15); color: #d4a853; border: 1px solid rgba(212,168,83,0.3); border-radius: 8px; font-size: 12px; font-weight: bold; } QPushButton:hover { background: rgba(212,168,83,0.25); }'
         base_style = 'QPushButton { background: rgba(255,255,255,0.04); color: #888; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; font-size: 12px; } QPushButton:hover { background: rgba(255,255,255,0.08); }'
@@ -4688,9 +4751,11 @@ class RestReminderWidget(QWidget):
             status_label.setText('✓ 已保存')
             status_label.setStyleSheet('color: #78B450; font-size: 11px; background: transparent;')
             self.tray_icon.showMessage('🤖 AI 配置', f'{"SenseNova" if "sensenova" in key_name else "Agnes"} API Key 已保存', QSystemTrayIcon.Information, 3000)
+            self._toast('设置', '已保存配置')
         else:
             status_label.setText('未配置')
             status_label.setStyleSheet('color: #fcc419; font-size: 11px; background: transparent;')
+            self._toast('设置', '已保存配置')
         log.info(f'[AI] {key_name} updated, len={len(key_value)}')
 
     def _build_about_tab(self):
