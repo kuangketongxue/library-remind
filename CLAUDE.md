@@ -22,6 +22,7 @@ RestReminder.spec             — PyInstaller 配置（含 hiddenimports=['stora
 - **功能**：日报/周报/月报/季报/年报
 - **缓存**：`.report_cache/` 目录，每个报告类型一个 JSON
 - **数据源**：`.stats_history.json` + `.review_log.json`
+- **⚠️ SenseNova 推理模型特殊处理**：`sensenova-6.7-flash-lite` 是推理模型，`content` 字段可能为空，实际回复在 `reasoning` 字段。需 `max_tokens >= 4096` 并 fallback 到 `msg['reasoning']`
 
 ## 持久化文件
 `.daily_log.json` · `.app_state.json` · `.goal.json` · `.streak.json` · `.settings.json` · `.stats_history.json` · `.review_log.json`
@@ -33,6 +34,29 @@ pyinstaller RestReminder.spec
 
 ## 搜索规则
 见全局 `~/.claude/CLAUDE.md`（firecrawl×3 + tavily×2 + zhihu + global + opencli 并行）。
+
+## 核心工作原则
+
+### 第一性原理
+遇到问题时，先分解到最基本的事实和约束，从底层重新推理，而非类比既有方案或惯性做法：
+- 动手前先问"这件事的本质目标是什么？有哪些隐含假设？假设是否成立？"
+- 不接受"一直都这样做"作为理由——验证每个前提是否在当前上下文仍然成立
+- 宁可多花时间理解根因，也不要在症状上打补丁
+
+### 对抗性审查
+每次交付代码前，主动切换到"找茬模式"攻击自己的产出：
+- 至少覆盖三个维度：正确性（边界/异常/并发）、完整性（需求是否全覆盖）、健壮性（失败时有没有兜底）
+- 修复前必须先验证：读实际代码、检查函数/变量名是否匹配、分类 CONFIRMED/FALSE POSITIVE 并附证据
+- 发现问题直接修复，不要只列清单等用户确认；修复后再次审查，直到找不到明显缺陷
+
+### 验证实际运行
+- 代码改完必须 kill 旧进程 → 启动 → 读 crash.log → 确认 UI 可见，才能报告完成
+- `crash.log` 是第一调试入口，用户报告"没变化/看不到"时第一步 `type crash.log`，不要猜
+- 用户两次发相同指令 = 上次没生效信号，立即检查 crash.log 和进程状态，不要重新开发
+
+### 穷尽方案再求助
+- 用户给了多个凭证/方案时，应全部尝试再求助
+- 一种方式失败应换 token/换协议/换认证方式，穷尽后再报告阻塞
 
 ## 踩坑记录（必读）
 - **子目录模块需显式加入 sys.path**：嵌套子目录（如 `rest-reminder-site/`）不会被 Python 自动发现，启动时 `sys.path.insert(0, subdir)`（2026-06-20）
@@ -49,6 +73,11 @@ pyinstaller RestReminder.spec
 - **Windows 任务栏图标**：直接 `python.exe` 启动会显示 Python 图标；需创建 `.lnk` 快捷方式绑定 `cute_icon.ico`，或用 PyInstaller 打包 EXE（2026-06-28）
 - **centralized utility 迁移必须一次性完成**：创建 `open_url()` 后 grep 所有 `webbrowser.open`/`ShellExecuteW` 调用点，全部替换，不留绕过（2026-06-21）
 - **UI 重构后审计 settings 数据流**：每个 settings key 的写入点必须有对应的读取点，否则设置是摆设（2026-06-21）
+- **PyQt5 多实例防护**：`msvcrt.locking` 文件锁有竞态（两个实例同时启动都能通过 fallback）。改用 `kernel32.CreateMutexW + GetLastError==183` 检测，原子操作无竞态，崩溃自动释放，名称用 `Global\` 前缀（2026-06-29）
+- **Win11 任务栏图标 WS_EX_APPWINDOW**：`FramelessWindowHint + WindowStaysOnTopHint` 会丢失任务栏图标。修复：`showEvent` 中用 `ctypes.windll.user32` 设 `WS_EX_APPWINDOW`、去 `WS_EX_TOOLWINDOW`（2026-06-29）
+- **飞书日程 CalendarManager 初始化顺序**：`CalendarManager` 必须在 `init_ui()` 前初始化，因为 `_build_general_tab` 会读 `_calendar_enabled`（2026-06-29）
+- **pythonw 下 PATH 不完整**：`lark-cli` 找不到时，需用 `shutil.which` 或绝对路径 `%APPDATA%\npm\lark-cli.cmd`，不能依赖 PATH（2026-06-29）
+- **尊重用户指定的文件/方案**：用户说"图标用 cute_icon.png"就用 png，不要自作主张改为 .ico（具体指令不替换方案）
 
 ## 禁止事项
 - 不创建庆祝/确认类临时文件

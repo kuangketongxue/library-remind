@@ -114,5 +114,8 @@ rest-reminder-site/public/RestReminder.exe
 rest-reminder-site/.firecrawl/
 rest-reminder-site/out/
 
+# WorkBuddy 工作区数据
+.workbuddy/
+
 # 本地临时文件
 cleanup.bat

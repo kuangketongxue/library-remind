@@ -53,12 +53,15 @@ taskkill /F /IM python.exe
 ## 关键踩坑
 - **Python 3.14 兼容**：`from PyQt5 import sip`（`import sip` 在 3.14 失败），`QToolTip` 从 QtWidgets 导入
 - **vendor 路径**：`rest_reminder.py` 顶部自动把 `vendor/` 加到 `sys.path`，开箱即用无需 `pip install`；仅 Python 3.14 兼容
-- **`python` 命令陷阱**：PATH 里 `python` 可能解析到 TRAE 内置 3.10，启动会报 `ImportError: cannot import name 'sip'`，必须用 `C:\Python314\python.exe`
+- **`python` 命令陷阱**：PATH 里 `python` 可能解析到其他版本，启动会报 `ImportError: cannot import name 'sip'`，必须用 `C:\Python314\python.exe`
 - **_md_to_html 是模块级函数**：不在任何类中，`RestReminderWidget` 和 `FloatingBall` 都可直接调用
 - **Edit 工具中文 TSX**：含中文的 TSX 文件 Edit 静默失败 → 改用 Write 工具全量重写
 - **CF Pages 部署**：`npx wrangler pages deploy out --project-name=crazy-rest-reminder`（不是 `wrangler deploy`）
 - **git push 认证**：WARP 环境下用 `git config credential.helper store` + `~/.git-credentials` 文件
 - **Windows 任务栏图标**：直接 `python.exe` 启动会显示 Python 图标；需创建 `.lnk` 快捷方式绑定 `cute_icon.ico`，或用 PyInstaller 打包 EXE
+- **PyQt5 多实例防护**：用 `kernel32.CreateMutexW + GetLastError==183`，原子操作，崩溃自动释放，名称用 `Global\` 前缀（v5.4.0，2026-06-29）
+- **Win11 任务栏图标丢失**：`FramelessWindowHint + WindowStaysOnTopHint` 导致图标消失；`showEvent` 中用 ctypes 设 `WS_EX_APPWINDOW`、去 `WS_EX_TOOLWINDOW`（v5.4.0）
+- **SenseNova 推理模型**：`sensenova-6.7-flash-lite` content 可能为空，回复在 `reasoning` 字段，需 `max_tokens>=4096` 并 fallback（v5.4.0）
 
 ## 改完代码后必须做的
 1. 杀掉旧进程：`taskkill /F /IM python.exe`
