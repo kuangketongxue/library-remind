@@ -11,6 +11,19 @@ const fade = (delay = 0) => ({
 export default function Hero() {
   return (
     <section className="relative min-h-screen flex items-center px-6 pt-20 pb-16 overflow-hidden">
+      {/* Background video */}
+      <video
+        autoPlay
+        muted
+        loop
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none"
+      >
+        <source src="/rest_reminder_promo.mp4" type="video/mp4" />
+      </video>
+      {/* Dark overlay for text readability */}
+      <div className="absolute inset-0 bg-[var(--bg)]/60 pointer-events-none" />
+
       {/* Background glow */}
       <div className="absolute top-[10%] right-[5%] w-[500px] h-[500px] rounded-full bg-[radial-gradient(circle,rgba(245,158,11,0.06)_0%,transparent_70%)] pointer-events-none" />
       <div className="absolute bottom-[5%] left-[10%] w-[400px] h-[400px] rounded-full bg-[radial-gradient(circle,rgba(124,58,237,0.04)_0%,transparent_70%)] pointer-events-none" />
