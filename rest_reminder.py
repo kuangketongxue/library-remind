@@ -38,9 +38,9 @@ import tempfile
 from PyQt5 import sip
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel,
-                             QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox, QShortcut, QFrame, QTabWidget, QStackedWidget, QComboBox, QLineEdit, QScrollArea, QDialog, QSlider, QSpinBox, QGroupBox, QTextBrowser, QToolTip, QGridLayout)
+                             QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox, QFrame, QTabWidget, QStackedWidget, QComboBox, QLineEdit, QScrollArea, QDialog, QSlider, QSpinBox, QGroupBox, QTextBrowser, QToolTip, QGridLayout)
 from PyQt5.QtCore import QTimer, Qt, QPoint, QEvent, QThread, pyqtSignal, QRect
-from PyQt5.QtGui import QIcon, QFont, QPainter, QColor, QBrush, QPen, QKeySequence, QLinearGradient
+from PyQt5.QtGui import QIcon, QFont, QPainter, QColor, QBrush, QPen, QLinearGradient
 from PyQt5.QtWidgets import QGraphicsDropShadowEffect
 from tray_card import TrayCardWidget
 from feishu_calendar import FeishuCalendarManager
@@ -97,7 +97,7 @@ if os.path.isdir(_PRO_DIR) and _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v5.6.4'
+VERSION = 'v5.6.5'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=1_000_000, backupCount=3, encoding='utf-8')
@@ -2992,18 +2992,6 @@ class RestReminderWidget(QWidget):
         self.init_tray()
         self.set_autostart(True)
         self.setup_timer()
-        # ═══ 快捷键体系 ═══
-        for key_seq, slot, tip in [
-            ('Ctrl+Alt+P', self._toggle_pause_by_shortcut, '暂停/继续'),
-            ('Ctrl+Alt+S', self._shortcut_show_window, '显示主窗口'),
-            ('Ctrl+Alt+B', self._shortcut_start_break, '立即进入休息'),
-        ]:
-            sc = QShortcut(QKeySequence(key_seq), self)
-            sc.activated.connect(slot)
-        # Tab 切换快捷键（仅主窗口内生效）
-        for i, name in enumerate(self.TAB_NAMES):
-            sc = QShortcut(QKeySequence(f'Ctrl+{i+1}'), self)
-            sc.activated.connect(lambda n=name: self._switch_tab(n))
         # 创建小浮球
         self.floating_ball = FloatingBall(self)
         # 创建5分钟倒计时浮层
@@ -3024,8 +3012,12 @@ class RestReminderWidget(QWidget):
         # 恢复环境音设置
         if ambient_setting and ambient_setting in _AMBIENT_SOUNDS:
             QTimer.singleShot(1000, lambda: self._ambient_player.play(ambient_setting))
-        # 启动时提示设目标
-        self._prompt_goal()
+        # 首次引导（新用户）
+        if not self.app_settings.get('onboarding_shown', False):
+            QTimer.singleShot(500, self._show_onboarding)
+        else:
+            # 启动时提示设目标
+            self._prompt_goal()
 
     def init_ui(self):
         self.setWindowTitle(f'休息提醒 {VERSION}')
@@ -3375,19 +3367,7 @@ class RestReminderWidget(QWidget):
         # 窗口首次显示时强制任务栏图标
         QTimer.singleShot(50, self._force_taskbar_icon)
 
-    def _shortcut_show_window(self):
-        """快捷键：显示主窗口"""
-        if self.isHidden():
-            self.show()
-            self.raise_()
-            self.activateWindow()
-        else:
-            self.hide()
 
-    def _shortcut_start_break(self):
-        """快捷键：立即进入休息（仅 running 状态可用）"""
-        if self.timer_state == 'running':
-            self._enter_rest()
 
     def _enter_rest(self):
         """手动进入休息状态（快捷键触发）"""
@@ -3698,18 +3678,28 @@ class RestReminderWidget(QWidget):
         state_names = {'idle': '准备好开始学习了吗？', 'running': '保持专注，你正在进步', 'resting': '放松一下，马上回来', 'paused': '已暂停，随时可以继续'}
         return state_names.get(self.timer_state, '精力管理，从今天开始')
     def _switch_theme(self, theme_key):
-        """切换主题"""
+        """切换主题 — 即时生效，无需重启"""
         self.app_settings['theme'] = theme_key
         LocalSync.save_settings(self.app_settings)
-        # 更新按钮状态
-        active_style = 'QPushButton { background: rgba(212,168,83,0.15); color: #d4a853; border: 1px solid rgba(212,168,83,0.3); border-radius: 8px; font-size: 12px; font-weight: bold; } QPushButton:hover { background: rgba(212,168,83,0.25); }'
-        base_style = 'QPushButton { background: rgba(255,255,255,0.04); color: #888; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; font-size: 12px; } QPushButton:hover { background: rgba(255,255,255,0.08); }'
+        resolved = _resolve_theme(theme_key)
+        theme_name = THEMES[resolved]['name']
+        # 重新生成主题 stylesheet
+        self._current_theme = resolved
+        self._theme_stylesheet = _apply_theme_stylesheet(resolved)
+        # 重新应用到主窗口（base_sheet + theme_sheet）
+        base_sheet = self.styleSheet()
+        # 去掉旧的 theme_sheet（如果有）
+        if hasattr(self, '_theme_stylesheet'):
+            base_sheet = base_sheet.replace(self._theme_stylesheet, '')
+        self.setStyleSheet(base_sheet + self._theme_stylesheet)
+        # 更新按钮状态（使用新主题色）
+        t = THEMES[resolved]
+        active_style = f'QPushButton {{ background: {t["accent_bg"]}; color: {t["accent"]}; border: 1px solid {t["accent"]}33; border-radius: 8px; font-size: 12px; font-weight: bold; }} QPushButton:hover {{ background: {t["accent_bg"]}; }}'
+        base_style = f'QPushButton {{ background: {t["btn_bg"]}; color: {t["text_secondary"]}; border: 1px solid {t["border"]}; border-radius: 8px; font-size: 12px; }} QPushButton:hover {{ background: {t["btn_hover"]}; }}'
         for key, btn in self._theme_btns.items():
             btn.setChecked(key == theme_key)
             btn.setStyleSheet(active_style if key == theme_key else base_style)
-        resolved = _resolve_theme(theme_key)
-        theme_name = THEMES[resolved]['name']
-        self._toast('🎨 主题', f'已切换为{theme_name}主题，重启应用后生效')
+        self._toast('🎨 主题', f'已切换为{theme_name}主题')
         self._toast('设置', '已保存配置')
 
     def _toggle_silent_start(self, checked):
@@ -5527,18 +5517,6 @@ class RestReminderWidget(QWidget):
         if hasattr(self, 'tray_icon') and self.tray_icon:
             self.tray_icon.showMessage(title, message, icon_type, duration)
 
-    def _toggle_pause_by_shortcut(self):
-        """快捷键切换暂停/继续"""
-        try:
-            if self.timer_state == 'running':
-                self._pause_timer()
-                self.tray_icon.showMessage('⏸ 已暂停', '计时器已暂停', QSystemTrayIcon.Information, 1500)
-            elif self.timer_state == 'paused':
-                self._resume_timer()
-                self.tray_icon.showMessage('▶ 已继续', '计时器已继续', QSystemTrayIcon.Information, 1500)
-        except Exception as e:
-            log.error(f'[_toggle_pause_by_shortcut 异常] {type(e).__name__}: {e}')
-
     def _reset_timer_to_idle(self):
         try:
             self.timer_state = 'idle'
@@ -6062,6 +6040,106 @@ class RestReminderWidget(QWidget):
             log.info(f'[复盘] 已记录: {score}/100 | {subject} | {label}')
         except Exception as e:
             log.error(f'[复盘] 保存失败: {e}')
+
+    def _show_onboarding(self):
+        """首次引导：3页弹窗介绍核心功能"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle('欢迎使用休息提醒')
+        dialog.setFixedSize(480, 360)
+        dialog.setStyleSheet("""
+            QDialog { background-color: #18181f; border-radius: 16px; }
+            QLabel { color: #e8e4dc; font-size: 14px; background: transparent; }
+            QLabel#title { font-size: 20px; font-weight: bold; color: #d4a853; }
+            QLabel#emoji { font-size: 48px; background: transparent; }
+            QPushButton {
+                background: rgba(212,168,83,0.12); color: #d4a853;
+                border: 1px solid rgba(212,168,83,0.25); border-radius: 10px;
+                padding: 10px 24px; font-size: 14px; font-weight: bold;
+            }
+            QPushButton:hover { background: rgba(212,168,83,0.20); }
+        """)
+
+        pages = [
+            {
+                'emoji': '⏰',
+                'title': '浮球操作',
+                'desc': '屏幕右侧的浮球是你的快捷入口\n• 单击打开主界面\n• 拖动改变位置\n• 右键打开菜单'
+            },
+            {
+                'emoji': '⚡',
+                'title': '60 + 5 分钟循环',
+                'desc': '专注学习的固定节奏\n• 学习 60 分钟 → 倒计时浮层提醒\n• 复盘 1-100 分 → 5 分钟休息\n• 打开 B 站收藏夹放松\n• 自动进入下一轮'
+            },
+            {
+                'emoji': '🤖',
+                'title': 'AI 复盘与报告',
+                'desc': '每轮结束复盘学习质量\n• 学科 + 标签 + 1-100 分评分\n• AI 自动分析学习趋势\n• 每周一早 8 点邮件推送周报'
+            },
+        ]
+
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(30, 30, 30, 20)
+        layout.setSpacing(15)
+
+        emoji_lbl = QLabel()
+        emoji_lbl.setObjectName('emoji')
+        emoji_lbl.setAlignment(Qt.AlignCenter)
+        layout.addWidget(emoji_lbl)
+
+        title_lbl = QLabel()
+        title_lbl.setObjectName('title')
+        title_lbl.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title_lbl)
+
+        desc_lbl = QLabel()
+        desc_lbl.setAlignment(Qt.AlignCenter)
+        desc_lbl.setWordWrap(True)
+        layout.addWidget(desc_lbl)
+
+        layout.addStretch()
+
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(12)
+        skip_btn = QPushButton('跳过')
+        skip_btn.clicked.connect(dialog.reject)
+        next_btn = QPushButton('下一步')
+        next_btn.setObjectName('accentBtn')
+        btn_layout.addStretch()
+        btn_layout.addWidget(skip_btn)
+        btn_layout.addWidget(next_btn)
+        layout.addLayout(btn_layout)
+
+        idx = [0]
+        def show_page():
+            pg = pages[idx[0]]
+            emoji_lbl.setText(pg['emoji'])
+            title_lbl.setText(pg['title'])
+            desc_lbl.setText(pg['desc'])
+            if idx[0] == len(pages) - 1:
+                next_btn.setText('开始使用')
+            else:
+                next_btn.setText('下一步')
+
+        def on_next():
+            if idx[0] < len(pages) - 1:
+                idx[0] += 1
+                show_page()
+            else:
+                dialog.accept()
+
+        next_btn.clicked.connect(on_next)
+        show_page()
+
+        if dialog.exec_() == QDialog.Accepted:
+            self.app_settings['onboarding_shown'] = True
+            LocalSync.save_settings(self.app_settings)
+            # 引导结束后提示设目标
+            self._prompt_goal()
+        else:
+            # 跳过也标记为已展示
+            self.app_settings['onboarding_shown'] = True
+            LocalSync.save_settings(self.app_settings)
+            self._prompt_goal()
 
     def _prompt_goal(self):
         """启动时弹出目标选择（只弹一次）"""
