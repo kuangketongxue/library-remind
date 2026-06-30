@@ -160,25 +160,92 @@ class _FetchWorker(QThread):
                 '--format', 'json',
             ]
 
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30,
-                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0,
-            )
+            # 最多重试 2 次（应对 token 刷新窗口/网络瞬断）
+            last_err = ''
+            for attempt in range(2):
+                if self._cancelled:
+                    return
+                try:
+                    result = subprocess.run(
+                        cmd,
+                        capture_output=True,
+                        text=True,
+                        encoding='utf-8',
+                        timeout=30,
+                        creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0,
+                    )
+                except subprocess.TimeoutExpired:
+                    last_err = 'lark-cli 超时（30秒）'
+                    if attempt == 0:
+                        import time as _time
+                        _time.sleep(2)
+                        continue
+                    self.error.emit(last_err)
+                    return
 
-            if self._cancelled:
-                return
+                if self._cancelled:
+                    return
 
-            if result.returncode != 0:
-                self.error.emit(f'lark-cli 返回 {result.returncode}: {result.stderr[:200]}')
-                return
+                # returncode != 0 时，仍尝试解析 stdout（lark-cli 有时 returncode=1 但 stdout 有 JSON）
+                stdout = result.stdout or ''
+                stderr = result.stderr or ''
 
-            data = json.loads(result.stdout)
-            if not data.get('ok'):
-                err_msg = data.get('error', {}).get('message', '未知错误')
-                self.error.emit(f'飞书 API 错误: {err_msg}')
+                if result.returncode != 0:
+                    # 先试 stdout 是否有有效 JSON
+                    parsed = None
+                    if stdout.strip():
+                        try:
+                            parsed = json.loads(stdout)
+                        except (json.JSONDecodeError, ValueError):
+                            pass
+                    if parsed is not None and parsed.get('ok'):
+                        data = parsed
+                    else:
+                        # 真正失败，记录 stdout + stderr（消除诊断盲区）
+                        last_err = f'lark-cli 返回 {result.returncode}: stdout={stdout[:200]} stderr={stderr[:200]}'
+                        if attempt == 0:
+                            import time as _time
+                            _time.sleep(2)
+                            continue
+                        self.error.emit(last_err)
+                        return
+                else:
+                    # returncode=0，解析 stdout
+                    if not stdout.strip():
+                        # stdout 为空（lark-cli 异常退出但 returncode=0）
+                        last_err = 'lark-cli 返回 0 但 stdout 为空'
+                        if attempt == 0:
+                            import time as _time
+                            _time.sleep(2)
+                            continue
+                        self.error.emit(last_err)
+                        return
+                    try:
+                        data = json.loads(stdout)
+                    except (json.JSONDecodeError, ValueError) as e:
+                        last_err = f'JSON 解析失败: {e} (stdout={stdout[:100]})'
+                        if attempt == 0:
+                            import time as _time
+                            _time.sleep(2)
+                            continue
+                        self.error.emit(last_err)
+                        return
+
+                if not data.get('ok'):
+                    err_msg = data.get('error', {}).get('message', '未知错误')
+                    last_err = f'飞书 API 错误: {err_msg}'
+                    if attempt == 0:
+                        import time as _time
+                        _time.sleep(2)
+                        continue
+                    self.error.emit(last_err)
+                    return
+
+                # 成功，跳出重试循环
+                break
+            else:
+                # 两次都失败
+                self.error.emit(last_err or '获取失败（重试 2 次均失败）')
                 return
 
             events = []
@@ -213,10 +280,6 @@ class _FetchWorker(QThread):
             if not self._cancelled:
                 self.fetched.emit(events)
 
-        except subprocess.TimeoutExpired:
-            self.error.emit('lark-cli 超时（30秒）')
-        except json.JSONDecodeError as e:
-            self.error.emit(f'JSON 解析失败: {e}')
         except FileNotFoundError:
             self.error.emit('未找到 lark-cli，请确认已安装')
         except Exception as e:
@@ -372,9 +435,10 @@ class FeishuCalendarManager:
         """
         return self.get_current(), self.get_upcoming()
 
-    def get_display_text(self):
+    def get_display_text(self, short=False):
         """
         生成适合 UI 展示的日程摘要文本。
+        short=True: 仅返回 "summary time_range" 格式（用于 popup 等窄空间）
         返回格式如：
           - "▶ 正在开会（14:00-15:00）"
           - "⏳ 下一个：产品评审（16:00-17:00，还有45分钟）"
@@ -383,6 +447,8 @@ class FeishuCalendarManager:
         current, upcoming = self.get_current_and_next()
 
         if current:
+            if short:
+                return f'{current.summary} {current.time_range}'
             remaining = current.minutes_until_end(datetime.now(_TZ_CST))
             remaining_text = ''
             if remaining > 0:
@@ -393,6 +459,8 @@ class FeishuCalendarManager:
             return f'▶ {current.summary}（{current.time_range}{remaining_text}）'
 
         if upcoming:
+            if short:
+                return f'{upcoming.summary} {upcoming.time_range}'
             now = datetime.now(_TZ_CST)
             mins = upcoming.minutes_until_start(now)
             soon_text = ''

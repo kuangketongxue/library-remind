@@ -2,6 +2,15 @@
 
 所有重要版本更新记录。
 
+## v6.0.1 (2026-07-01)
+
+### 🐛 Bug 修复
+- **修复飞书日程获取失败**：`subprocess.run(text=True)` 在 Windows 上默认 GBK 解码，lark-cli 输出 UTF-8 中文日程名时解码失败 → stdout 变 None → JSONDecodeError。加 `encoding='utf-8'` 修复
+- **增强错误诊断**：returncode=0 但 stdout 为空时也重试，不再直接 JSONDecodeError 崩溃
+- **popup 日程简写**：浮球 popup 中的飞书日程改为简写格式（`起床 04:30-04:35`），不再显示冗长的"还有X分钟结束"
+
+---
+
 ## v6.0.0 (2026-06-30)
 
 ### 🪟 主界面行为修复

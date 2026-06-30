@@ -99,7 +99,7 @@ if os.path.isdir(_PRO_DIR) and _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v6.0.0'
+VERSION = 'v6.0.1'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=1_000_000, backupCount=3, encoding='utf-8')
@@ -836,7 +836,7 @@ class FloatingBall(QWidget):
             cal_mgr = getattr(mw, '_calendar_mgr', None)
             cal_enabled = getattr(mw, '_calendar_enabled', False)
             if cal_mgr and cal_enabled:
-                cal_text = cal_mgr.get_display_text()
+                cal_text = cal_mgr.get_display_text(short=True)
                 if prev.get('cal') != cal_text:
                     popup._cal_lbl.setText(cal_text)
                     popup._cal_lbl.setVisible(True)
