@@ -299,10 +299,10 @@ class FeishuCalendarManager:
         all_events = mgr.get_today_events()  # 今日全部日程
     """
 
-    def __init__(self, refresh_interval=300):
+    def __init__(self, refresh_interval=86400):
         """
         Args:
-            refresh_interval: 自动刷新间隔（秒），默认 5 分钟
+            refresh_interval: 自动刷新间隔（秒），默认 24 小时（每天获取一次）
         """
         self._events = []
         self._last_fetch = None
@@ -311,10 +311,16 @@ class FeishuCalendarManager:
         self._refresh_interval = refresh_interval
         self._enabled = True
         self._fetch_count = 0
+        self._retry_count = 0  # 失败重试计数
+        self._max_retries = 3  # 最多重试 3 次
 
         # 定时刷新器
         self._refresh_timer = QTimer()
         self._refresh_timer.timeout.connect(self._auto_refresh)
+        # 失败重试定时器
+        self._retry_timer = QTimer()
+        self._retry_timer.setSingleShot(True)
+        self._retry_timer.timeout.connect(self._do_retry)
 
     @property
     def enabled(self):
@@ -352,6 +358,7 @@ class FeishuCalendarManager:
     def stop(self):
         """停止管理器：取消后台任务 + 停止定时器"""
         self._refresh_timer.stop()
+        self._retry_timer.stop()
         if self._worker and self._worker.isRunning():
             self._worker.cancel()
             self._worker.wait(3000)
@@ -377,12 +384,27 @@ class FeishuCalendarManager:
         self._last_fetch = datetime.now()
         self._error_msg = ''
         self._fetch_count += 1
+        self._retry_count = 0  # 成功则重置重试计数
+        self._retry_timer.stop()  # 停止重试定时器
         log.info(f'[FeishuCalendar] 获取成功，{len(events)} 个日程')
 
     def _on_error(self, msg):
         """后台线程失败回调（主线程执行）"""
         self._error_msg = msg
         log.warning(f'[FeishuCalendar] 获取失败: {msg}')
+        # 失败重试：最多 3 次，每次间隔 10 分钟
+        if self._retry_count < self._max_retries:
+            self._retry_count += 1
+            wait_min = 10
+            log.info(f'[FeishuCalendar] 将在 {wait_min} 分钟后重试（第 {self._retry_count}/{self._max_retries} 次）')
+            self._retry_timer.start(wait_min * 60 * 1000)
+        else:
+            log.warning(f'[FeishuCalendar] 已达最大重试次数 {self._max_retries}，停止重试')
+
+    def _do_retry(self):
+        """失败后重试"""
+        log.info(f'[FeishuCalendar] 重试第 {self._retry_count}/{self._max_retries} 次')
+        self.refresh()
 
     # ─── 查询接口 ───
 

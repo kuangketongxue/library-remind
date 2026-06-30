@@ -99,7 +99,7 @@ if os.path.isdir(_PRO_DIR) and _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v6.0.1'
+VERSION = 'v6.0.2'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=1_000_000, backupCount=3, encoding='utf-8')
@@ -3177,6 +3177,9 @@ class RestReminderWidget(QWidget):
         else:
             # 启动时提示设目标
             self._prompt_goal()
+
+        # 启动时静默检查成就（解锁历史已达标但未触发的）
+        QTimer.singleShot(2000, lambda: self._check_achievements(silent=True))
 
     def init_ui(self):
         self.setWindowTitle(f'休息提醒 {VERSION}')
@@ -6911,8 +6914,8 @@ class RestReminderWidget(QWidget):
             log.warning(f'[成就] 获取进度失败: {e}')
         return stats
 
-    def _check_achievements(self):
-        """检查并解锁成就"""
+    def _check_achievements(self, silent=False):
+        """检查并解锁成就。silent=True 时不弹 Toast（启动时用）。"""
         try:
             data = achievements_store.load()
             earned = data.get('earned', {})
@@ -6962,8 +6965,9 @@ class RestReminderWidget(QWidget):
             if new_achievements:
                 achievements_store.save({'earned': earned})
                 for ach in new_achievements:
-                    self._toast(f'{ach["icon"]} 成就解锁：{ach["name"]}', ach['desc'], duration=8000)
-                    log.info(f'[成就] 解锁: {ach["id"]} - {ach["name"]}')
+                    if not silent:
+                        self._toast(f'{ach["icon"]} 成就解锁：{ach["name"]}', ach['desc'], duration=8000)
+                    log.info(f'[成就] 解锁: {ach["id"]} - {ach["name"]}{" (静默)" if silent else ""}')
         except Exception as e:
             log.warning(f'[成就] 检查失败: {e}')
 
