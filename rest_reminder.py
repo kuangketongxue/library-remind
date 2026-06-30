@@ -3361,7 +3361,8 @@ class RestReminderWidget(QWidget):
 
         # 构建各 tab — 首屏只加载"今日"，其余延迟加载
         self._tabs_built = {0: False, 1: False, 2: False, 3: False, 4: False}
-        self._build_general_tab()      # index 0: 今日概览（首屏必须）
+        widget = self._build_general_tab()      # index 0: 今日概览（首屏必须）
+        self._tab_content.addWidget(widget)
         self._tabs_built[0] = True
         # 其余 tab 用占位 widget，切到时才真正构建
         for i in range(1, 5):
@@ -3647,15 +3648,16 @@ class RestReminderWidget(QWidget):
         if old_widget:
             self._tab_content.removeWidget(old_widget)
             old_widget.deleteLater()
-        # 构建真正的 tab
+        # 构建真正的 tab，并插入到正确索引位置
         if idx == 1:
-            self._build_ai_tab()
+            widget = self._build_ai_tab()
         elif idx == 2:
-            self._build_trend_tab()
+            widget = self._build_trend_tab()
         elif idx == 3:
-            self._build_settings_tab()
+            widget = self._build_settings_tab()
         elif idx == 4:
-            self._build_about_tab()
+            widget = self._build_about_tab()
+        self._tab_content.insertWidget(idx, widget)
 
     def _build_general_tab(self):
         """今日 tab：学习概览 + 今日数据"""
@@ -3824,7 +3826,7 @@ class RestReminderWidget(QWidget):
         layout.addWidget(streak_card)
         layout.addStretch()
         scroll.setWidget(container)
-        self._tab_content.addWidget(scroll)
+        return scroll
 
     def _today_subtitle(self):
         """今日 tab 副标题"""
@@ -4008,9 +4010,9 @@ class RestReminderWidget(QWidget):
         layout.addWidget(self._report_view, 1)
 
         scroll.setWidget(container)
-        self._tab_content.addWidget(scroll)
         # 默认选中日报
         QTimer.singleShot(100, lambda: self._load_report('daily'))
+        return scroll
 
     def _load_report(self, report_type, force_refresh=False):
         """加载并显示 AI 报告（后台线程，不阻塞 UI）"""
@@ -4221,7 +4223,7 @@ class RestReminderWidget(QWidget):
 
         layout.addStretch()
         scroll.setWidget(container)
-        self._tab_content.addWidget(scroll)
+        return scroll
 
         # 绑定 paint事件
         self._trend_chart.paintEvent = self._paint_trend_chart
@@ -4907,7 +4909,7 @@ class RestReminderWidget(QWidget):
 
         layout.addStretch()
         scroll.setWidget(container)
-        self._tab_content.addWidget(scroll)
+        return scroll
 
     def _save_mail_config(self, rcp_input):
         """保存邮件配置"""
@@ -5658,7 +5660,7 @@ class RestReminderWidget(QWidget):
 
         layout.addStretch()
         scroll.setWidget(container)
-        self._tab_content.addWidget(scroll)
+        return scroll
 
     # ── About 页辅助方法 ──
     def _open_website(self):

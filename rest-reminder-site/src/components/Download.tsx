@@ -7,7 +7,7 @@ const steps = [
     num: "1",
     title: "下载安装",
     desc: "从 GitHub Releases 下载 RestReminder.exe，46MB 秒装",
-    img: "/screenshot-menu.png",
+    img: "/screenshot-download.png",
   },
   {
     num: "2",
