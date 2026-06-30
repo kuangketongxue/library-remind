@@ -2,6 +2,23 @@
 
 所有重要版本更新记录。
 
+## v6.1.2 (2026-07-01)
+
+### 🐛 Bug 修复
+- **修复趋势图完全空白**：v6.1.1 延迟加载重构后，`_switch_trend_period(7)` 和 `_load_heatmap_data()` 在 `return scroll` 之后，从未执行，导致趋势 tab 的柱状图、热力图、时段评分分布全部空白
+- 初始数据加载移到 `return scroll` 之前
+
+## v6.1.1 (2026-07-01)
+
+### 🐛 Bug 修复
+- **修复设置 Tab 显示趋势内容**：v6.1.1 延迟加载用 `removeWidget` + `addWidget` 导致 QStackedWidget 索引错乱，后续所有 Tab 内容错位
+- 所有 `_build_xxx_tab` 改为 `return scroll` + `insertWidget(idx, widget)` 保持索引正确
+
+### 🌐 官网
+- 下载安装步骤配图从右键菜单换成 GitHub Releases 页面截图
+
+---
+
 ## v6.1.0 (2026-07-01)
 
 ### ⚡ 性能优化

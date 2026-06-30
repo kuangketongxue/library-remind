@@ -2,9 +2,26 @@
 
 const releases = [
   {
-    version: "v6.1.0",
+    version: "v6.1.2",
     date: "2026.07.01",
     tag: "最新",
+    changes: [
+      "修复趋势图完全空白（延迟加载后初始数据未加载）",
+      "官网下载截图替换为 GitHub Releases 页面",
+    ],
+  },
+  {
+    version: "v6.1.1",
+    date: "2026.07.01",
+    tag: "",
+    changes: [
+      "修复设置 Tab 错误显示趋势内容（延迟加载索引错位）",
+    ],
+  },
+  {
+    version: "v6.1.0",
+    date: "2026.07.01",
+    tag: "",
     changes: [
       "启动速度优化：非首屏 Tab 延迟加载，启动只构建今日",
       "趋势图 QPixmap 缓存：数据不变时直接复用，避免重绘",
