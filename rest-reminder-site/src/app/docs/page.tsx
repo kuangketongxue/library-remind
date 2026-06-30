@@ -346,9 +346,35 @@ python rest_reminder.py`}
               <div className="space-y-6">
                 <div className="border-l-2 border-[var(--accent)] pl-4">
                   <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm font-bold">v6.1.0</span>
+                    <span className="text-xs text-[var(--fg-dim)]">2026-07-01</span>
+                    <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">最新</span>
+                  </div>
+                  <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
+                    <li>启动速度优化：非首屏 Tab 延迟加载</li>
+                    <li>趋势图 QPixmap 缓存，避免重绘</li>
+                    <li>飞书日程手动刷新、AI 报告强制刷新按钮</li>
+                    <li>复盘记忆上次学科标签、护眼提醒跳过按钮</li>
+                  </ul>
+                </div>
+
+                <div className="border-l-2 border-[var(--border)] pl-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm font-bold">v6.0.0</span>
+                    <span className="text-xs text-[var(--fg-dim)]">2026-06-30</span>
+                  </div>
+                  <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
+                    <li>主界面去置顶 + AI 服务自定义提供商</li>
+                    <li>内置免费 AI（Cloudflare 代理，key 隐藏）</li>
+                    <li>成就扩充 16→19 个，进度条优化</li>
+                    <li>GitHub 自动备份 + 官网优化</li>
+                  </ul>
+                </div>
+
+                <div className="border-l-2 border-[var(--border)] pl-4">
+                  <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-bold">v5.6.0</span>
                     <span className="text-xs text-[var(--fg-dim)]">2026-06-30</span>
-                    <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">最新</span>
                   </div>
                   <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
                     <li>成就显示优化：卡片式展示 + 进度条 + 当前进度文本</li>

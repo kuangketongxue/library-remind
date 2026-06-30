@@ -99,7 +99,7 @@ if os.path.isdir(_PRO_DIR) and _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v6.0.2'
+VERSION = 'v6.1.0'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=1_000_000, backupCount=3, encoding='utf-8')
@@ -1764,7 +1764,18 @@ class EyeRestOverlay(DraggableOverlay):
         layout.addWidget(self.hint_label)
         layout.addWidget(self.countdown_label)
 
-        self._install_drag_on_children(self.icon_label, self.hint_label, self.countdown_label)
+        # 跳过按钮
+        skip_btn = QPushButton('跳过')
+        skip_btn.setFixedSize(60, 24)
+        skip_btn.setCursor(Qt.PointingHandCursor)
+        skip_btn.setStyleSheet('QPushButton { background: rgba(255,255,255,0.1); color: #aaa; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; font-size: 11px; } QPushButton:hover { background: rgba(255,255,255,0.2); color: #fff; }')
+        skip_btn.clicked.connect(self.hide_overlay)
+        skip_layout = QHBoxLayout()
+        skip_layout.addStretch()
+        skip_layout.addWidget(skip_btn)
+        layout.addLayout(skip_layout)
+
+        self._install_drag_on_children(self.icon_label, self.hint_label, self.countdown_label, skip_btn)
 
         self._auto_hide_timer = QTimer(self)
         self._auto_hide_timer.setSingleShot(True)
@@ -3348,12 +3359,16 @@ class RestReminderWidget(QWidget):
         self._tab_content.setStyleSheet('background: #0d0d12; border: none;')
         main_layout.addWidget(self._tab_content)
 
-        # 构建各 tab
-        self._build_general_tab()      # index 0: 今日概览
-        self._build_ai_tab()            # index 1: AI报告
-        self._build_trend_tab()         # index 2: 趋势
-        self._build_settings_tab()      # index 3: 设置
-        self._build_about_tab()         # index 4: 关于
+        # 构建各 tab — 首屏只加载"今日"，其余延迟加载
+        self._tabs_built = {0: False, 1: False, 2: False, 3: False, 4: False}
+        self._build_general_tab()      # index 0: 今日概览（首屏必须）
+        self._tabs_built[0] = True
+        # 其余 tab 用占位 widget，切到时才真正构建
+        for i in range(1, 5):
+            placeholder = QLabel('加载中...')
+            placeholder.setAlignment(Qt.AlignCenter)
+            placeholder.setStyleSheet('color: #666; font-size: 14px; background: #0d0d12;')
+            self._tab_content.addWidget(placeholder)
 
         root_layout.addWidget(content_widget, 1)
         self.setLayout(root_layout)
@@ -3612,14 +3627,35 @@ class RestReminderWidget(QWidget):
         QToolTip.hideText()
 
     def _switch_tab(self, name):
-        """切换 tab（侧边栏按钮选中 + stacked widget 切换 + 更新窗口标题）"""
+        """切换 tab（侧边栏按钮选中 + 延迟加载 + stacked widget 切换）"""
         for n, btn in self._tab_buttons.items():
             btn.setChecked(n == name)
         idx = self.TAB_NAMES.index(name)
+        # 延迟加载：首次切换到该 tab 时才构建
+        if not self._tabs_built.get(idx, False):
+            self._build_tab_on_demand(idx)
+            self._tabs_built[idx] = True
         self._tab_content.setCurrentIndex(idx)
         # 更新窗口标题以反映当前 tab
         title_map = {'今日': '📊 今日', 'AI 报告': '🤖 AI 学习报告', '趋势': '📈 学习趋势', '设置': '⚙️ 设置', '关于': 'ℹ️ 关于'}
         self.setWindowTitle(f'休息提醒 {VERSION} — {title_map.get(name, name)}')
+
+    def _build_tab_on_demand(self, idx):
+        """延迟构建指定 tab，替换占位 widget"""
+        # 先移除占位
+        old_widget = self._tab_content.widget(idx)
+        if old_widget:
+            self._tab_content.removeWidget(old_widget)
+            old_widget.deleteLater()
+        # 构建真正的 tab
+        if idx == 1:
+            self._build_ai_tab()
+        elif idx == 2:
+            self._build_trend_tab()
+        elif idx == 3:
+            self._build_settings_tab()
+        elif idx == 4:
+            self._build_about_tab()
 
     def _build_general_tab(self):
         """今日 tab：学习概览 + 今日数据"""
@@ -3692,9 +3728,20 @@ class RestReminderWidget(QWidget):
         cal_layout = QVBoxLayout(cal_card)
         cal_layout.setContentsMargins(16, 14, 16, 14)
         cal_layout.setSpacing(6)
+        # 标题行 + 刷新按钮
+        cal_title_row = QHBoxLayout()
         cal_title = QLabel('📅 飞书日程')
         cal_title.setStyleSheet('color: #e8e6e1; font-size: 13px; font-weight: bold;')
-        cal_layout.addWidget(cal_title)
+        cal_title_row.addWidget(cal_title)
+        cal_title_row.addStretch()
+        cal_refresh_btn = QPushButton('🔄')
+        cal_refresh_btn.setFixedSize(28, 28)
+        cal_refresh_btn.setCursor(Qt.PointingHandCursor)
+        cal_refresh_btn.setToolTip('手动刷新日程')
+        cal_refresh_btn.setStyleSheet('QPushButton { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; font-size: 13px; } QPushButton:hover { background: rgba(212,168,83,0.15); }')
+        cal_refresh_btn.clicked.connect(self._manual_refresh_calendar)
+        cal_title_row.addWidget(cal_refresh_btn)
+        cal_layout.addLayout(cal_title_row)
         cal_status = QLabel(self._calendar_mgr.get_display_text() if self._calendar_enabled else '未启用')
         cal_status.setObjectName('calStatusLabel')
         cal_status.setWordWrap(True)
@@ -3846,6 +3893,14 @@ class RestReminderWidget(QWidget):
             self.tray_icon.showMessage('📅 飞书日程', '已关闭日程同步', QSystemTrayIcon.Information, 3000)
         self._refresh_calendar_display()
 
+    def _manual_refresh_calendar(self):
+        """手动刷新飞书日程"""
+        if not self._calendar_enabled:
+            self._toast('📅 飞书日程', '日程同步未启用')
+            return
+        self._toast('📅 飞书日程', '正在刷新...')
+        self._calendar_mgr.refresh()
+
     def _update_calendar_list(self):
         """更新今日 tab 中的日程列表文本"""
         try:
@@ -3924,6 +3979,19 @@ class RestReminderWidget(QWidget):
             b.clicked.connect(lambda checked, t=rtype: self._load_report(t))
             btn_row.addWidget(b)
             self._report_buttons[rtype] = b
+        # 强制刷新按钮
+        refresh_btn = QPushButton('🔄 强制刷新')
+        refresh_btn.setCursor(Qt.PointingHandCursor)
+        refresh_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(106,140,187,0.1); color: #6a8cbb;
+                border: 1px solid rgba(106,140,187,0.2); border-radius: 100px;
+                padding: 8px 16px; font-size: 12px;
+            }
+            QPushButton:hover { background: rgba(106,140,187,0.2); }
+        """)
+        refresh_btn.clicked.connect(self._force_refresh_report)
+        btn_row.addWidget(refresh_btn)
         layout.addLayout(btn_row)
         layout.addSpacing(6)
 
@@ -3948,6 +4016,7 @@ class RestReminderWidget(QWidget):
         """加载并显示 AI 报告（后台线程，不阻塞 UI）"""
         for t, b in self._report_buttons.items():
             b.setChecked(t == report_type)
+        self._current_report_type = report_type  # 记住当前类型，供强制刷新用
         # 空状态：无学习数据时显示引导，不调 AI
         history = history_store.load() or {}
         if not history:
@@ -3984,6 +4053,11 @@ class RestReminderWidget(QWidget):
                 self._report_view.setHtml(f'<p style="color:#c95454;">⚠️ AI 请求失败: {result["error"]}</p><p style="color:#888;">点击「刷新」重试。</p>')
         worker.result_ready.connect(_on_done)
         worker.start()
+
+    def _force_refresh_report(self):
+        """强制刷新当前 AI 报告（忽略缓存）"""
+        rtype = getattr(self, '_current_report_type', 'daily')
+        self._load_report(rtype, force_refresh=True)
 
     def _build_trend_tab(self):
         """趋势 tab：带时间选择器的学习趋势图 + 时段热力图"""
@@ -4285,13 +4359,29 @@ class RestReminderWidget(QWidget):
             bucket_info.append((label, avg, count, norm))
         self._heat_widget._bucket_info = bucket_info
 
+        # 失效 QPixmap 缓存（数据变了需要重绘）
+        self._trend_chart._cache_pixmap = None
+        self._heat_widget._cache_pixmap = None
+
         self._trend_chart.update()
         self._heat_widget.update()
 
     def _paint_trend_chart(self, event):
-        """绘制趋势柱状图"""
+        """绘制趋势柱状图（带 QPixmap 缓存，数据不变时直接复用）"""
         chart = self._trend_chart
-        p = QPainter(chart)
+        # 缓存检查：尺寸相同且已有缓存则直接绘制缓存
+        cache = getattr(chart, '_cache_pixmap', None)
+        cache_size = getattr(chart, '_cache_size', None)
+        cur_size = (chart.width(), chart.height())
+        if cache is not None and cache_size == cur_size:
+            p = QPainter(chart)
+            p.drawPixmap(0, 0, cache)
+            p.end()
+            return
+        # 重新绘制到 QPixmap
+        pixmap = QPixmap(chart.width(), chart.height())
+        pixmap.fill(Qt.transparent)
+        p = QPainter(pixmap)
         p.setRenderHint(QPainter.Antialiasing)
         w, h = chart.width(), chart.height()
         days = chart._days_data
@@ -4367,6 +4457,12 @@ class RestReminderWidget(QWidget):
                 tw = p.fontMetrics().width(vt)
                 p.drawText(x + bw // 2 - tw // 2, bottom - bh - 4, vt)
         p.end()
+        # 缓存 pixmap 并绘制到 widget
+        chart._cache_pixmap = pixmap
+        chart._cache_size = (chart.width(), chart.height())
+        painter = QPainter(chart)
+        painter.drawPixmap(0, 0, pixmap)
+        painter.end()
 
     def _trend_chart_tooltip(self, event):
         """趋势图 hover 提示"""
@@ -4380,9 +4476,21 @@ class RestReminderWidget(QWidget):
         QToolTip.hideText()
 
     def _paint_heat_map(self, event):
-        """绘制时段评分热力图"""
+        """绘制时段评分热力图（带 QPixmap 缓存）"""
         widget = self._heat_widget
-        p = QPainter(widget)
+        # 缓存检查
+        cache = getattr(widget, '_cache_pixmap', None)
+        cache_size = getattr(widget, '_cache_size', None)
+        cur_size = (widget.width(), widget.height())
+        if cache is not None and cache_size == cur_size:
+            p = QPainter(widget)
+            p.drawPixmap(0, 0, cache)
+            p.end()
+            return
+        # 重新绘制到 QPixmap
+        pixmap = QPixmap(widget.width(), widget.height())
+        pixmap.fill(Qt.transparent)
+        p = QPainter(pixmap)
         p.setRenderHint(QPainter.Antialiasing)
         w, h = widget.width(), widget.height()
         bucket_info = widget._bucket_info
@@ -4423,6 +4531,12 @@ class RestReminderWidget(QWidget):
                 tw2 = p.fontMetrics().width(ct)
                 p.drawText(x + bw // 2 - tw2 // 2, h - 22, ct)
         p.end()
+        # 缓存 pixmap 并绘制到 widget
+        widget._cache_pixmap = pixmap
+        widget._cache_size = (widget.width(), widget.height())
+        painter = QPainter(widget)
+        painter.drawPixmap(0, 0, pixmap)
+        painter.end()
 
     def _build_settings_tab(self):
         """设置 tab：所有 toggle 开关"""
@@ -6334,11 +6448,14 @@ class RestReminderWidget(QWidget):
         subject_layout = QHBoxLayout()
         subject_layout.setSpacing(6)
         subject_btns = []
-        subject_val = ['未记录']
+        subject_val = [self.app_settings.get('last_review_subject', '未记录')]
         for subj in _SUBJECTS:
             btn = QPushButton(subj)
             btn.setCheckable(True)
             btn.setFixedSize(56, 36)
+            # 记忆上次选择
+            if subj == subject_val[0]:
+                btn.setChecked(True)
             btn.setStyleSheet("""
                 QPushButton { background: #1e1e26; color: #b8b4ac; border: 1px solid #252530; border-radius: 8px; font-size: 12px; }
                 QPushButton:checked { background: #d4a853; color: #0d0d12; border: none; font-weight: bold; }
@@ -6367,11 +6484,14 @@ class RestReminderWidget(QWidget):
         label_layout = QHBoxLayout()
         label_layout.setSpacing(6)
         label_btns = []
-        label_val = ['未记录']
+        label_val = [self.app_settings.get('last_review_label', '未记录')]
         for lbl in _LABELS:
             btn = QPushButton(lbl)
             btn.setCheckable(True)
             btn.setFixedSize(56, 36)
+            # 记忆上次选择
+            if lbl == label_val[0]:
+                btn.setChecked(True)
             btn.setStyleSheet("""
                 QPushButton { background: #1e1e26; color: #b8b4ac; border: 1px solid #252530; border-radius: 8px; font-size: 12px; }
                 QPushButton:checked { background: #d4a853; color: #0d0d12; border: none; font-weight: bold; }
@@ -6476,6 +6596,13 @@ class RestReminderWidget(QWidget):
     def _write_review(self, score, subject='未记录', label='未记录'):
         """写入复盘记录到文件（供正常复盘和补录共用）"""
         try:
+            # 记忆学科和标签，下次复盘自动选中
+            if subject != '未记录':
+                self.app_settings['last_review_subject'] = subject
+            if label != '未记录':
+                self.app_settings['last_review_label'] = label
+            LocalSync.save_settings(self.app_settings)
+
             data = review_store.load()
             today = datetime.now().date().isoformat()
             if today not in data:
