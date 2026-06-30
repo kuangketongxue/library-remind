@@ -2,9 +2,61 @@
 
 const releases = [
   {
-    version: "v5.6.0",
+    version: "v5.6.5",
     date: "2026.06.30",
     tag: "最新",
+    changes: [
+      "首次引导 Onboarding：新用户启动显示 3 页引导弹窗，存标志避免重复",
+      "主题即时切换：无需重启应用",
+      "移除所有全局快捷键（Ctrl+Alt+P/S/B、Ctrl+1~5）",
+      "v5.6.4 崩溃修复确认：倒计时浮层/快捷键/20-20-20 护眼",
+    ],
+  },
+  {
+    version: "v5.6.4",
+    date: "2026.06.30",
+    tag: "",
+    changes: [
+      "修复倒计时浮层崩溃：CountdownOverlay 访问不存在的 app_settings",
+      "修复快捷键崩溃：Ctrl+Alt+B 调用未定义的 _enter_rest()，已补全",
+      "修复 20-20-20 护眼从未生效：EyeRestOverlay.show_reminder() 无调用，已接入",
+    ],
+  },
+  {
+    version: "v5.6.3",
+    date: "2026.06.30",
+    tag: "",
+    changes: [
+      "飞书日程集成：lark-cli v1.0.60 安装授权，设置页开启后显示今日日程",
+    ],
+  },
+  {
+    version: "v5.6.2",
+    date: "2026.06.30",
+    tag: "",
+    changes: [
+      "白噪音重写：Voss-McCartney 粉红噪声算法（1/f 频谱），立体声 + dithering",
+      "agently-cli --body-file 路径修复：必须相对路径 + cwd 参数",
+      "设置界面 Toast：所有按钮/开关点击后弹出已保存提示",
+    ],
+  },
+  {
+    version: "v5.6.1",
+    date: "2026.06.30",
+    tag: "",
+    changes: [
+      "修复 3 个设置开关无效：声音提醒/复盘弹窗/学习时长统计 toggle 实际不生效",
+      "修复成就永远无法解锁：save_daily_stats 缺 rounds 字段",
+      "修复学习时长丢失风险：改为进入休息时立即记录",
+      "修复 QThread 信号名冲突：finished 覆盖内置信号，改 result_ready",
+      "修复成就 Tab 崩溃：QGridLayout 未导入",
+      "修复 PyInstaller 打包：spec 补充 tray_card/feishu_calendar hiddenimports",
+    ],
+  },
+  {
+    version: "v5.6.0",
+    date: "2026.06.30",
+    tag: "",
     changes: [
       "成就显示优化：卡片式展示+进度条+每个成就当前进度文本",
       "环境白噪音优化：30秒循环(原10秒)、首尾crossfade消除断裂、批量写入性能提升",
