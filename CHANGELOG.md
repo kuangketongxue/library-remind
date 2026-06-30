@@ -2,6 +2,15 @@
 
 所有重要版本更新记录。
 
+## v5.6.4 (2026-06-30)
+
+### 🐛 Bug 修复（对抗性审查验证）
+- **修复倒计时浮层崩溃**：`CountdownOverlay` 访问不存在的 `self.app_settings`，改为从 `main_window` 获取
+- **修复快捷键崩溃**：`Ctrl+Alt+B` 调用未定义的 `_enter_rest()`，已补全方法
+- **修复 20-20-20 护眼从未生效**：`EyeRestOverlay.show_reminder()` 没有任何调用代码，已在 `update_display` 中添加每 20 分钟触发逻辑
+
+---
+
 ## v5.6.3 (2026-06-30)
 
 ### ✨ 功能

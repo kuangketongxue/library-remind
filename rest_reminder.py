@@ -97,7 +97,7 @@ if os.path.isdir(_PRO_DIR) and _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v5.6.3'
+VERSION = 'v5.6.4'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=1_000_000, backupCount=3, encoding='utf-8')
@@ -1555,7 +1555,9 @@ class CountdownOverlay(DraggableOverlay):
 
         if not self._chimed:
             self._chimed = True
-            if self.app_settings.get('sound_enabled', True):
+            mw = getattr(self, 'main_window', None)
+            sound_enabled = mw.app_settings.get('sound_enabled', True) if mw else True
+            if sound_enabled:
                 import threading
                 threading.Thread(target=self._play_chime, daemon=True).start()
 
@@ -3008,6 +3010,7 @@ class RestReminderWidget(QWidget):
         self.countdown_overlay = CountdownOverlay()
         # 20-20-20 护眼提醒
         self.eye_rest_overlay = EyeRestOverlay()
+        self._last_eye_rest_time = None
 
         # 启动时先定位到屏幕右侧，主窗口默认隐藏（只显示小浮球）
         self.position_to_right()
@@ -3385,7 +3388,24 @@ class RestReminderWidget(QWidget):
         """快捷键：立即进入休息（仅 running 状态可用）"""
         if self.timer_state == 'running':
             self._enter_rest()
-            self.tray_icon.showMessage('☕ 快捷键', '已进入休息时间', QSystemTrayIcon.Information, 2000)
+
+    def _enter_rest(self):
+        """手动进入休息状态（快捷键触发）"""
+        self._study_countdown_active = False
+        self.countdown_overlay.hide_overlay()
+        now = datetime.now()
+        # 立即记录学习时长（防止崩溃丢失）
+        if self.app_settings.get('study_tracking', True):
+            self.study_hours_today = round(self.study_hours_today + 1.0, 2)
+            self.update_study_display()
+        self.timer_state = 'resting'
+        self._rest_end_time = now + timedelta(minutes=5)
+        self._pending_review = True
+        if self.app_settings.get('review_reminder', True):
+            self._prompt_review()
+        self._sync_buttons()
+        log.info('[计时] 快捷键触发：手动进入休息')
+        self.tray_icon.showMessage('☕ 快捷键', '已进入休息时间', QSystemTrayIcon.Information, 2000)
 
     def _load_heatmap_data(self):
         """加载 52 周热力图数据"""
@@ -5761,6 +5781,17 @@ class RestReminderWidget(QWidget):
                 self._handle_resting(now)
             elif self.timer_state == 'paused':
                 self._handle_paused(now)
+
+            # --- 20-20-20 护眼提醒（每20分钟一次，学习状态时触发） ---
+            if self.timer_state == 'running':
+                if self._last_eye_rest_time is None:
+                    self._last_eye_rest_time = now
+                elif (now - self._last_eye_rest_time).total_seconds() >= 1200:
+                    self.eye_rest_overlay.show_reminder()
+                    self._last_eye_rest_time = now
+            else:
+                # 非学习状态时重置计时器，避免休息时也算时间
+                self._last_eye_rest_time = None
 
             # --- 22:00 倒计时（统一更新，避免重复请求） ---
             self._update_countdown(now)
