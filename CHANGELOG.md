@@ -2,6 +2,23 @@
 
 所有重要版本更新记录。
 
+## 📝 文档更新 (2026-06-30)
+
+### 📄 开发知识沉淀
+- **CLAUDE.md 新增「核心工作原则」**：第一性原理（动手前验证假设、根因优先）、对抗性审查（交付前三维度自查）、验证实际运行（crash.log 优先、重复指令=未生效信号）、穷尽方案再求助
+- **补充踩坑记录**：
+  - PyQt5 多实例防护：`kernel32.CreateMutexW + GetLastError==183`（取代有竞态的 `msvcrt.locking` 文件锁，原子操作 + 崩溃自动释放）
+  - Win11 任务栏图标丢失：`FramelessWindowHint + WindowStaysOnTopHint` 导致图标消失，`showEvent` 中用 ctypes 设 `WS_EX_APPWINDOW`
+  - SenseNova 推理模型：`sensenova-6.7-flash-lite` 的 `content` 可能为空，回复在 `reasoning` 字段，需 `max_tokens >= 4096` 并 fallback
+  - 飞书日程 `CalendarManager` 初始化顺序：必须在 `init_ui()` 前初始化
+  - pythonw 下 PATH 不完整：用 `shutil.which` 或绝对路径找 `lark-cli.cmd`
+- **AGENTS.md 同步**：关键踩坑列表补充 v5.4.0 经验
+- **.gitignore**：新增 `.workbuddy/` 忽略规则
+
+> 本次为纯文档更新，不影响应用功能。
+
+---
+
 ## v5.6.5 (2026-06-30)
 
 ### ✨ 新增
