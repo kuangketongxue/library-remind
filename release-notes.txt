@@ -1,27 +1,38 @@
-﻿## v5.2.0 (2026-06-28)
+## v5.7.0 — Visual Polish, Screenshot-Ready
 
-### 🐛 Bug 修复
-- **P0** 修复 `This application failed to start because no Qt platform plugin could be initialized`：导入 PyQt5 前自动设置 `QT_PLUGIN_PATH` / `QT_QPA_PLATFORM_PLUGIN_PATH` 指向 `vendor/PyQt5/Qt5/plugins`，让 Qt 能找到 `platforms/qwindows.dll`
-- **P0** 修复 `ModuleNotFoundError: No module named 'PyQt5'`：`rest_reminder.py` 顶部自动将 `vendor/` 加入 `sys.path`，开箱即用无需 `pip install`
-- **P0** 新增 Python 版本守卫：非 3.14 启动时给出明确提示并退出（避免 vendor `.pyd` ABI 不兼容导致 `ImportError: cannot import name 'sip'`）
-- **修复** 重启后连续打卡清零：`_restore_active_state` 末尾调用 `_check_streak`，跨重启 streak 不丢失
-- **修复** 22:00 日报通知后窗口找不到：通知时自动 `show()` + `raise_()` + `activateWindow()`
-- **修复** `_build_general_tab` 中 `streak_card` 重复创建（同一张卡片被实例化两次）
-- **修复** `generate_report` 缓存写入失败时静默吞掉异常，改为 `log.warning` 输出错误
+Your break reminder just got a visual upgrade. The floating ball, sidebar logo, and empty states are now crisp vector graphics — they'll look identical on every Windows machine, with zero emoji font dependency.
 
-### 🎉 新增功能
-- **趋势分析时段评分热力图**：12 个时段覆盖全天 0-24 时（0-2、2-4、4-6、…、22-24），按复盘数据的平均评分着色（绿=高分，黄=中等，红=低分），显示各时段复盘次数
-- **浮球 popup 目标可点击**：浮球弹窗中 `🎯 未设目标` / 已设目标文本改为可点击按钮，hover 变色+下划线，点击直接弹出目标设置对话框
+### What's new
 
-### 🗑️ 代码清理
-- `_prompt_round_goal` 注释修正：自动提交时间从"3秒"改为实际值"60秒"
+- **Redesigned floating ball**: vector lightning icon (study mode) / pause icon (rest mode) with a radial-gradient "energy orb" background and a gradient progress ring. No more emoji rendering inconsistencies across machines.
+- **Light theme actually works**: the light theme was silently broken — a hardcoded dark base layer was blocking it. Now it truly switches: the main window and the floating-ball popup both adapt to your theme.
+- **Empty states that guide**: new users see a faded lightning icon and "start your first session" prompts instead of a bare "no data". The AI report tab no longer calls the AI when there's nothing to analyze — it shows a friendly guide instead.
+- **Vector sidebar logo**: matches the floating ball icon. The entire product now has zero emoji UI dependency, so screenshots look the same everywhere.
+- **Popup theme-aware**: the floating-ball info popup follows your theme (light/dark), including the action button color.
 
-### 🎨 UI/UX
-- **托盘/任务栏图标优化**：
-  - `_create_app_icon()` 从 `cute_icon.png` 预生成 16/24/32/48/64/128/256 多尺寸 pixmap
-  - `main()` 中设置 `QApplication.setWindowIcon()` + Windows `SetCurrentProcessExplicitAppUserModelID()`，让进程不再被任务栏识别为 python.exe
-  - 新增 `休息提醒.lnk` 快捷方式，指向 `pythonw.exe` 并绑定 `cute_icon.ico`，双击启动即可在任务栏显示应用图标
-  - `RestReminder.spec` 打包配置添加 `icon=['cute_icon.ico']`，生成的 EXE 任务栏图标正确
+### Download
+
+Grab `RestReminder.exe` below, double-click to run. Requires Windows 10/11, no installation needed.
 
 ---
 
+## v5.7.0 — 视觉升级，截图就绪
+
+休息提醒视觉焕新。浮球、侧边栏 logo、空状态全部改为矢量图形——在任何 Windows 机器上渲染一致，不再依赖 emoji 字体。
+
+### 更新内容
+
+- **浮球重绘**：矢量闪电图标（学习态）/ 暂停符号（休息态）+ 径向渐变"能量球"底 + 渐变进度环，告别 emoji 跨机器渲染不一致
+- **浅色主题真正生效**：此前浅色主题被硬编码深色底层挡住无法生效，现已修复——主界面和浮球弹窗都会跟随主题切换
+- **空状态引导**：新用户看到淡化闪电图标 + "开始第一次学习，趋势图会在这里生长"引导，而非干瘪的"暂无数据"。AI 报告无数据时不再调用 AI，直接显示友好引导
+- **侧边栏 logo 矢量化**：与浮球图标完全一致，产品内零 emoji UI 依赖，截图跨机器统一
+- **浮球弹窗主题感知**：点击浮球弹出的信息卡片跟随主题变色，浅色主题下不再显示深色
+
+### 下载
+
+下方下载 `RestReminder.exe`，双击运行。需 Windows 10/11，免安装。
+
+---
+
+> Full changelog: see [CHANGELOG.md](https://github.com/kuangketongxue/library-remind/blob/main/CHANGELOG.md)
+> Website: https://crazy-rest-reminder.pages.dev

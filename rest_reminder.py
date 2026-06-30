@@ -39,8 +39,9 @@ from PyQt5 import sip
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel,
                              QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox, QFrame, QTabWidget, QStackedWidget, QComboBox, QLineEdit, QScrollArea, QDialog, QSlider, QSpinBox, QGroupBox, QTextBrowser, QToolTip, QGridLayout)
-from PyQt5.QtCore import QTimer, Qt, QPoint, QEvent, QThread, pyqtSignal, QRect
-from PyQt5.QtGui import QIcon, QFont, QPainter, QColor, QBrush, QPen, QLinearGradient
+from PyQt5.QtCore import QTimer, Qt, QPoint, QPointF, QEvent, QThread, pyqtSignal, QRect
+from PyQt5.QtGui import (QIcon, QFont, QPainter, QColor, QBrush, QPen,
+                         QLinearGradient, QRadialGradient, QPainterPath, QPixmap)
 from PyQt5.QtWidgets import QGraphicsDropShadowEffect
 from tray_card import TrayCardWidget
 from feishu_calendar import FeishuCalendarManager
@@ -97,7 +98,7 @@ if os.path.isdir(_PRO_DIR) and _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v5.6.5'
+VERSION = 'v5.7.0'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=1_000_000, backupCount=3, encoding='utf-8')
@@ -504,9 +505,9 @@ class FloatingBall(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
 
         cx, cy = 30, 30  # 中心
-        radius = 26      # 内圈半径
+        radius = 26      # 环形进度半径
 
-        # ── 休息时：环形进度条 ──
+        # ── 休息时：环形进度条（线性渐变 琥珀→亮金） ──
         if self._progress > 0.001:
             # 背景环（暗色底）
             bg_pen = QPen(QColor(40, 40, 48), 4)
@@ -514,24 +515,51 @@ class FloatingBall(QWidget):
             painter.setPen(bg_pen)
             painter.drawArc(cx - radius, cy - radius, radius * 2, radius * 2, 0, 5760)
 
-            # 进度环（琥珀色渐变用纯色近似）
-            progress_pen = QPen(QColor(212, 175, 55), 4)
+            # 进度环（渐变）
+            ring_grad = QLinearGradient(cx - radius, cy - radius, cx + radius, cy + radius)
+            ring_grad.setColorAt(0.0, QColor(212, 168, 83))
+            ring_grad.setColorAt(1.0, QColor(240, 200, 112))
+            progress_pen = QPen(QBrush(ring_grad), 4)
             progress_pen.setCapStyle(Qt.RoundCap)
             painter.setPen(progress_pen)
             span_angle = int(5760 * self._progress)
             painter.drawArc(cx - radius, cy - radius, radius * 2, radius * 2, 0, span_angle)
 
-        # ── 内层圆 ──
-        painter.setBrush(QBrush(QColor(20, 20, 24)))
-        painter.setPen(Qt.NoPen)
+        # ── 内层圆（径向渐变，光源偏上模拟能量球） ──
+        ball_grad = QRadialGradient(QPointF(cx, cy - 8), 34)
+        ball_grad.setColorAt(0.0, QColor(42, 37, 32))
+        ball_grad.setColorAt(1.0, QColor(15, 14, 18))
+        painter.setBrush(QBrush(ball_grad))
+        # 半透描边（柔光感）
+        edge_pen = QPen(QColor(212, 168, 83, 90))
+        edge_pen.setWidthF(0.8)
+        painter.setPen(edge_pen)
         painter.drawEllipse(4, 4, 52, 52)
 
-        # ⚡ / ☕ 图标
+        # ── 矢量图标（取代 emoji，保证跨机器一致） ──
         mw = self.main_window
-        icon = '☕' if mw.timer_state == 'resting' else '⚡'
-        painter.setPen(QColor(212, 175, 55))
-        painter.setFont(QFont('Arial', 22, QFont.Bold))
-        painter.drawText(self.rect(), Qt.AlignCenter, icon)
+        painter.setPen(Qt.NoPen)
+        if mw.timer_state == 'resting':
+            # 休息态：暂停符号（两条圆角竖线，与闪电形成播放/暂停语义）
+            painter.setBrush(QBrush(QColor(240, 200, 112)))
+            painter.drawRoundedRect(24, 22, 5, 16, 2.5, 2.5)
+            painter.drawRoundedRect(33, 22, 5, 16, 2.5, 2.5)
+        else:
+            # 学习态：矢量闪电（亮金渐变填充）
+            bolt_path = QPainterPath()
+            bolt_path.moveTo(33, 18)
+            bolt_path.lineTo(22, 34)
+            bolt_path.lineTo(29, 34)
+            bolt_path.lineTo(27, 46)
+            bolt_path.lineTo(38, 30)
+            bolt_path.lineTo(31, 30)
+            bolt_path.closeSubpath()
+            bolt_grad = QLinearGradient(22, 18, 38, 46)
+            bolt_grad.setColorAt(0.0, QColor(240, 200, 112))
+            bolt_grad.setColorAt(1.0, QColor(212, 168, 83))
+            painter.setBrush(QBrush(bolt_grad))
+            painter.setPen(QPen(QColor(212, 168, 83), 0.5))
+            painter.drawPath(bolt_path)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -594,6 +622,7 @@ class FloatingBall(QWidget):
             title_lbl = QLabel('精力管理')
             title_lbl.setFont(QFont('Microsoft YaHei', 9))
             title_lbl.setStyleSheet('color: #777;')
+            popup._title_lbl = title_lbl
             top_row.addWidget(title_lbl)
             top_row.addStretch()
 
@@ -674,6 +703,8 @@ class FloatingBall(QWidget):
 
             mw._info_popup = popup
 
+        # ★ 应用/刷新主题样式（应对主题切换）
+        self._apply_popup_theme(popup)
         # ★ 每次只更新文字，不重建 widget
         self._update_popup_text()
 
@@ -691,6 +722,38 @@ class FloatingBall(QWidget):
         popup.move(x, y)
         popup.show()
         popup.raise_()
+
+
+    def _apply_popup_theme(self, popup):
+        """应用当前主题到 info popup（支持主题切换刷新，覆盖首次创建的硬编码默认）"""
+        t = THEMES.get(self.main_window._current_theme, THEMES['dark'])
+        popup.setStyleSheet(f"""
+            QFrame#infoRoot {{
+                background-color: {t['bg_card']};
+                border: 1px solid {t['border']};
+                border-radius: 12px;
+            }}
+            QLabel {{ background: transparent; }}
+        """)
+        if hasattr(popup, '_title_lbl'):
+            popup._title_lbl.setStyleSheet(f'color: {t["text_muted"]};')
+        popup._timer_lbl.setStyleSheet(f'color: {t["accent"]};')
+        popup._study_lbl.setStyleSheet(f'color: {t["success"]};')
+        popup._goal_lbl.setStyleSheet(f'''
+            QPushButton {{
+                background: transparent; border: none;
+                color: {t["accent"]}; text-align: left;
+                padding: 0;
+            }}
+            QPushButton:hover {{ color: {t["accent_hover"]}; text-decoration: underline; }}
+            QPushButton:pressed {{ color: {t["accent"]}; }}
+        ''')
+        popup._round_lbl.setStyleSheet(f'color: {t["text_secondary"]};')
+        popup._cal_lbl.setStyleSheet(f'color: {t["info"]};')
+        popup._action_btn.setStyleSheet(
+            f'QPushButton {{ background: {t["accent"]}; color: {t["bg_base"]}; border: none; border-radius: 6px; font-size: 11px; font-weight: bold; }}'
+            f' QPushButton:hover {{ background: {t["accent_hover"]}; }}'
+        )
 
 
     def _update_popup_text(self):
@@ -2008,7 +2071,7 @@ class TrendWindow(QWidget):
         layout = self._clear_tab(self._review_tab)
 
         if not entries:
-            layout.addWidget(QLabel('📭 今天还没有复盘记录'))
+            layout.addWidget(QLabel('今天还没有复盘记录，学习一轮后会自动弹出'))
             layout.addStretch()
             return
 
@@ -2268,7 +2331,7 @@ class TrendWindow(QWidget):
                     continue
 
         if not hour_scores:
-            layout.addWidget(QLabel('📭 暂无复盘数据，每学习1小时复盘一次就能看到时段分析了'))
+            layout.addWidget(QLabel('暂无复盘数据，每学习 1 小时复盘一次就能看到时段分析了'))
             layout.addStretch()
             return
 
@@ -3039,77 +3102,8 @@ class RestReminderWidget(QWidget):
         self._current_theme = _resolve_theme(theme_pref)
         self._theme_stylesheet = _apply_theme_stylesheet(self._current_theme)
 
-        # ═══ 暖墨色系视觉体系 ═══
-        #  深炭底 + 琥珀金 accent + 暖灰层次 — 区别于蓝黑模板风
-        self.setStyleSheet("""
-            QWidget { background-color: #0d0d12; color: #e8e4dc; }
-            QWidget#mainWindow {
-                background-color: #0d0d12;
-                border: 1px solid rgba(255, 255, 255, 0.05);
-                border-radius: 14px;
-            }
-            QLabel { color: #e8e4dc; font-size: 13px; background: transparent; font-family: 'Segoe UI Emoji', 'Microsoft YaHei', sans-serif; }
-            /* ── 侧边栏 ── */
-            QFrame#sidebar {
-                background: #111116;
-                border-right: 1px solid #1c1c24;
-            }
-            QPushButton#navBtn {
-                background: transparent; color: #7a7680;
-                border: none; border-radius: 8px;
-                padding: 10px 14px; font-size: 13px;
-                font-family: 'Microsoft YaHei', sans-serif;
-                text-align: left; min-height: 44px;
-            }
-            QPushButton#navBtn:hover { background: rgba(212, 168, 83, 0.08); color: #c4b8a0; }
-            QPushButton#navBtn:checked {
-                background: rgba(212, 168, 83, 0.12); color: #d4a853;
-            }
-            /* ── 通用按钮 ── */
-            QPushButton {
-                background: rgba(255,255,255,0.05); color: #b8b4ac;
-                border: 1px solid rgba(255,255,255,0.07);
-                border-radius: 8px; padding: 8px 16px; font-size: 12px;
-                font-family: 'Microsoft YaHei', sans-serif;
-            }
-            QPushButton:hover { background: rgba(255,255,255,0.10); color: #e8e4dc; }
-            QPushButton#accentBtn {
-                background: #d4a853; color: #0d0d12; border: none;
-                font-weight: bold;
-            }
-            QPushButton#accentBtn:hover { background: #e8bc6a; }
-            QPushButton#dangerBtn { color: #c95454; border-color: rgba(201,84,84,0.20); }
-            QPushButton#dangerBtn:hover { background: rgba(201,84,84,0.10); }
-            /* ── 输入框 ── */
-            QLineEdit { background: #16161c; color: #e8e4dc; border: 1px solid #252530;
-                border-radius: 8px; padding: 8px 12px; font-size: 12px; }
-            QComboBox { background: #16161c; color: #e8e4dc; border: 1px solid #252530;
-                border-radius: 8px; padding: 7px 12px; font-size: 12px; min-width: 100px; }
-            QComboBox::drop-down { border: none; }
-            /* ── 卡片 ── */
-            QFrame#statCard {
-                background: #18181f; border: 1px solid #252530;
-                border-radius: 12px;
-            }
-            QFrame#sectionCard {
-                background: #18181f; border: 1px solid #252530;
-                border-radius: 12px;
-            }
-            /* ── 滚动条 ── */
-            QScrollBar:vertical { background: transparent; width: 6px; }
-            QScrollBar::handle:vertical { background: #2a2a35; border-radius: 3px; }
-            QScrollBar::handle:vertical:hover { background: #3a3a48; }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-            /* ── 分隔线 ── */
-            QFrame#divider {
-                background: #1c1c24; max-height: 1px; min-height: 1px;
-            }
-        """)
-
-        # 应用主题覆盖（在基础样式之后）
-        if hasattr(self, '_theme_stylesheet'):
-            base_sheet = self.styleSheet()
-            self.setStyleSheet(base_sheet + self._theme_stylesheet)
+        # ═══ 应用主题样式（THEMES 系统统一生成，dark/light 一致，无硬编码底层） ═══
+        self.setStyleSheet(self._theme_stylesheet)
 
         # ═══ 根布局：侧边栏 + 主内容 ═══
         root_layout = QHBoxLayout()
@@ -3125,11 +3119,27 @@ class RestReminderWidget(QWidget):
         sb_layout.setContentsMargins(8, 12, 8, 12)
         sb_layout.setSpacing(2)
 
-        # Logo / 品牌
-        logo = QLabel('⚡')
-        logo.setFont(QFont('Segoe UI Emoji', 20))
+        # Logo / 品牌（矢量闪电，取代 emoji 保证跨机器一致）
+        logo = QLabel()
+        logo.setFixedSize(40, 40)
         logo.setAlignment(Qt.AlignCenter)
-        logo.setStyleSheet('background: transparent; padding: 4px;')
+        logo.setStyleSheet('background: transparent;')
+        _pm = QPixmap(40, 40)
+        _pm.fill(Qt.transparent)
+        _p = QPainter(_pm)
+        _p.setRenderHint(QPainter.Antialiasing)
+        _bolt = QPainterPath()
+        _bolt.moveTo(33, 18); _bolt.lineTo(22, 34); _bolt.lineTo(29, 34)
+        _bolt.lineTo(27, 46); _bolt.lineTo(38, 30); _bolt.lineTo(31, 30)
+        _bolt.closeSubpath()
+        _grad = QLinearGradient(22, 18, 38, 46)
+        _grad.setColorAt(0.0, QColor(240, 200, 112))
+        _grad.setColorAt(1.0, QColor(212, 168, 83))
+        _p.setBrush(QBrush(_grad))
+        _p.setPen(QPen(QColor(212, 168, 83), 0.5))
+        _p.drawPath(_bolt)
+        _p.end()
+        logo.setPixmap(_pm)
         sb_layout.addWidget(logo)
         sb_layout.addSpacing(8)
 
@@ -3686,12 +3696,8 @@ class RestReminderWidget(QWidget):
         # 重新生成主题 stylesheet
         self._current_theme = resolved
         self._theme_stylesheet = _apply_theme_stylesheet(resolved)
-        # 重新应用到主窗口（base_sheet + theme_sheet）
-        base_sheet = self.styleSheet()
-        # 去掉旧的 theme_sheet（如果有）
-        if hasattr(self, '_theme_stylesheet'):
-            base_sheet = base_sheet.replace(self._theme_stylesheet, '')
-        self.setStyleSheet(base_sheet + self._theme_stylesheet)
+        # 重新应用到主窗口（直接用主题 stylesheet，无硬编码底层）
+        self.setStyleSheet(self._theme_stylesheet)
         # 更新按钮状态（使用新主题色）
         t = THEMES[resolved]
         active_style = f'QPushButton {{ background: {t["accent_bg"]}; color: {t["accent"]}; border: 1px solid {t["accent"]}33; border-radius: 8px; font-size: 12px; font-weight: bold; }} QPushButton:hover {{ background: {t["accent_bg"]}; }}'
@@ -3843,6 +3849,19 @@ class RestReminderWidget(QWidget):
         """加载并显示 AI 报告（后台线程，不阻塞 UI）"""
         for t, b in self._report_buttons.items():
             b.setChecked(t == report_type)
+        # 空状态：无学习数据时显示引导，不调 AI
+        history = history_store.load() or {}
+        if not history:
+            t = THEMES.get(self._current_theme, THEMES['dark'])
+            self._report_view.setHtml(
+                f'<div style="text-align:center; padding:48px 20px;">'
+                f'<p style="color:{t["accent"]}; font-size:13px; margin:0 0 14px;">AI 学习报告</p>'
+                f'<p style="color:{t["text_secondary"]}; font-size:14px; margin:0 0 10px;">还没有学习记录</p>'
+                f'<p style="color:{t["text_muted"]}; font-size:12px; margin:0; line-height:1.7;">'
+                f'完成第一次 60 分钟学习后<br/>AI 会在这里为你生成个性化报告</p>'
+                f'</div>'
+            )
+            return
         self._report_view.setHtml('<p style="color:#888;">⏳ 正在生成报告...</p>')
 
         # 禁用按钮防止重复点击
@@ -4179,9 +4198,24 @@ class RestReminderWidget(QWidget):
         days = chart._days_data
         n = len(days)
         if n == 0:
-            p.setPen(QColor('#444'))
-            p.setFont(QFont('Microsoft YaHei', 11))
-            p.drawText(w // 2 - 40, h // 2, '暂无数据')
+            t = THEMES.get(self._current_theme, THEMES['dark'])
+            # 矢量闪电图标（淡化，暗示"待激活"）
+            p.save()
+            p.setOpacity(0.22)
+            p.translate(w // 2 - 15, h // 2 - 28)
+            p.scale(0.6, 0.6)
+            bolt = QPainterPath()
+            bolt.moveTo(33, 18); bolt.lineTo(22, 34); bolt.lineTo(29, 34)
+            bolt.lineTo(27, 46); bolt.lineTo(38, 30); bolt.lineTo(31, 30)
+            bolt.closeSubpath()
+            p.setBrush(QBrush(QColor(t['accent'])))
+            p.setPen(Qt.NoPen)
+            p.drawPath(bolt)
+            p.restore()
+            # 引导文案
+            p.setPen(QColor(t['text_muted']))
+            p.setFont(QFont('Microsoft YaHei', 10))
+            p.drawText(QRect(0, h // 2 + 12, w, 28), Qt.AlignCenter, '开始第一次学习，趋势图会在这里生长')
             p.end()
             return
 
