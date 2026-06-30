@@ -2,6 +2,29 @@
 
 所有重要版本更新记录。
 
+## v6.0.0 (2026-06-30)
+
+### 🪟 主界面行为修复
+- **去掉主界面置顶**：`WindowStaysOnTopHint` 移除，主界面不再永远挡在最前
+- 对标正常产品（微信/QQ音乐/Stretchly）：大窗口不置顶，小挂件/浮层置顶
+- 浮球/popup/休息浮层/护眼浮层保持置顶不变
+- 副作用：去掉置顶可能缓解之前卡顿（Windows 不再持续维护 Z 序）
+
+### 🤖 AI 服务自定义提供商
+- **支持任何 OpenAI 兼容 API**：不再局限于 SenseNova/Agnes，可添加 DeepSeek/Kimi/通义/智谱等
+- **设置 Tab 全新 UI**：每个提供商独立卡片（名称/URL/模型ID/API Key/启用开关/测试连接/删除）
+- **测试连接按钮**：发一个简单 prompt 验证，15秒超时，显示返回内容或错误
+- **优先级机制**：多个提供商按顺序尝试，前一个失败自动切下一个
+- **内置免费 AI（Cloudflare 代理）**：开箱即用，key 隐藏在 CF Pages secrets 中，用户看不到
+  - 代理 URL：`https://crazy-rest-reminder.pages.dev/api/ai-proxy`
+  - 限流：每 IP 每天 30 次
+  - model 白名单：只允许 auto/sensenova-6.7-flash-lite/agnes-2.0-flash
+  - 多上游 fallback：SenseNova → Agnes
+- 用户可自配 provider 追加，默认 provider 保留作为 fallback
+- API Key 加密存储复用 `_encrypt_key`
+
+---
+
 ## v5.9.0 (2026-06-30)
 
 ### 🤖 AI 报告修复

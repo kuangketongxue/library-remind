@@ -99,7 +99,7 @@ if os.path.isdir(_PRO_DIR) and _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v5.9.0'
+VERSION = 'v6.0.0'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=1_000_000, backupCount=3, encoding='utf-8')
@@ -164,6 +164,22 @@ _ACHIEVEMENTS = [
      'check': lambda d: d.get('total_rounds', 0) >= 50},
     {'id': 'rounds_100',    'name': '百日修炼',   'desc': '累计完成 100 轮学习',    'icon': '👑', 'category': 'rounds',
      'check': lambda d: d.get('total_rounds', 0) >= 100},
+]
+
+# ═══ 默认 AI 提供商（通过 Cloudflare Pages Function 代理，key 不暴露）═══
+# Worker URL: https://crazy-rest-reminder.pages.dev/api/ai-proxy
+# key 存在 CF Pages secrets，用户看不到
+_DEFAULT_AI_PROVIDERS = [
+    {
+        'id': 'default_proxy',
+        'name': '内置免费 AI（Cloudflare 代理）',
+        'url': 'https://crazy-rest-reminder.pages.dev/api/ai-proxy',
+        'model': 'auto',
+        'api_key': 'public',  # Worker 不需要客户端 key，填占位符
+        'enabled': True,
+        'priority': 1,
+        'is_default': True,
+    },
 ]
 
 
@@ -2706,44 +2722,60 @@ def _build_report_data(report_type):
     }
 
 
-def _call_ai(prompt, model='sensenova-6.7-flash-lite'):
-    """调用 AI API（SenseNova 主 → Agnes 备），返回生成文本"""
+def _init_ai_providers():
+    """初始化 AI 提供商：首次启动填入内置默认（开箱即用），已有配置则跳过。
+    幂等：已初始化过则跳过。"""
+    try:
+        providers = settings_store.get('ai_providers', [])
+        if providers:  # 已有配置，跳过
+            return
+        # 首次启动：填入内置默认 providers
+        settings_store.set('ai_providers', _DEFAULT_AI_PROVIDERS)
+        log.info(f'[AI] 初始化 {len(_DEFAULT_AI_PROVIDERS)} 个内置免费 AI 提供商')
+    except Exception as e:
+        log.warning(f'[AI] 初始化默认 providers 失败（不阻塞）: {e}')
 
-    # 候选端点（按优先级）
-    endpoints = [
-        {'name': 'SenseNova', 'url': 'https://token.sensenova.cn/v1/chat/completions', 'key': None},
-        {'name': 'Agnes',     'url': 'https://apihub.agnes-ai.com/v1/chat/completions',  'key': None},
-    ]
+
+def _call_ai(prompt, model=None):
+    """调用 AI API（按 ai_providers 配置遍历，OpenAI 兼容格式）"""
+
+    _init_ai_providers()  # 启动时初始化（幂等）
+
+    try:
+        providers = settings_store.get('ai_providers', [])
+    except Exception:
+        providers = []
+
+    # 按 priority 排序，只取 enabled 且有 api_key 的
+    active = [p for p in providers if p.get('enabled') and p.get('api_key') and p.get('url')]
+    active.sort(key=lambda p: p.get('priority', 999))
+
+    if not active:
+        return {'ok': False, 'error': '未配置任何 AI 提供商。请在「设置 → AI 服务」添加。', 'errors': []}
 
     headers_base = {'Content-Type': 'application/json'}
-    body = {
-        'model': model,
-        'messages': [
-            {'role': 'system', 'content': '你是专业的学习分析顾问。根据用户的学习复盘数据，生成深度、具体、有洞察力的分析报告。用中文回答。'},
-            {'role': 'user', 'content': prompt},
-        ],
-        'max_tokens': 4096,
-        'temperature': 0.7,
-    }
 
-    errors = []  # 每个端点的错误都保留
-    for ep in endpoints:
+    errors = []
+    for p in active:
         try:
-            url = ep['url']
-            name = ep['name']
-            # 尝试从 settings 读取对应 API key
-            api_key = None
-            if 'sensenova' in url:
-                raw = settings_store.get('sensenova_api_key') or os.environ.get('SENSENOVA_API_KEY')
-                api_key = _decrypt_key(raw) if raw else None
-            elif 'agnes' in url:
-                raw = settings_store.get('agnes_api_key') or os.environ.get('AGNES_API_KEY')
-                api_key = _decrypt_key(raw) if raw else None
-
+            name = p.get('name', '未命名')
+            url = p['url']
+            model_id = model or p.get('model') or 'gpt-3.5-turbo'
+            raw_key = p.get('api_key', '')
+            api_key = _decrypt_key(raw_key) if raw_key else ''
             if not api_key:
-                errors.append((name, '未配置 API Key'))
+                errors.append((name, 'API Key 解密失败'))
                 continue
 
+            body = {
+                'model': model_id,
+                'messages': [
+                    {'role': 'system', 'content': '你是专业的学习分析顾问。根据用户的学习复盘数据，生成深度、具体、有洞察力的分析报告。用中文回答。'},
+                    {'role': 'user', 'content': prompt},
+                ],
+                'max_tokens': 4096,
+                'temperature': 0.7,
+            }
             headers = {**headers_base, 'Authorization': f'Bearer {api_key}'}
             resp = requests.post(url, json=body, headers=headers, timeout=30)
 
@@ -2751,15 +2783,13 @@ def _call_ai(prompt, model='sensenova-6.7-flash-lite'):
                 data = resp.json()
                 msg = data.get('choices', [{}])[0].get('message', {})
                 content = msg.get('content', '').strip()
-                # 推理模型（如 sensenova-flash-lite）可能把 token 全用在 reasoning 上
-                # 此时 content 为空但 reasoning 有内容，需要加大 max_tokens 或提取 reasoning
+                # 推理模型可能把 token 全用在 reasoning 上
                 if not content and msg.get('reasoning'):
                     content = msg['reasoning'].strip()
                 if content:
                     return {'ok': True, 'content': content, 'provider': name}
                 errors.append((name, '返回内容为空'))
             else:
-                # 尝试提取业务错误信息
                 try:
                     err_body = resp.json()
                     err_msg = err_body.get('error', {}).get('message', '') or err_body.get('message', '') or resp.text[:200]
@@ -2767,10 +2797,44 @@ def _call_ai(prompt, model='sensenova-6.7-flash-lite'):
                     err_msg = resp.text[:200]
                 errors.append((name, f'HTTP {resp.status_code}: {err_msg}'))
         except (requests.exceptions.RequestException, ValueError, json.JSONDecodeError) as e:
-            errors.append((ep['name'], str(e)))
+            errors.append((name, str(e)))
 
     detail = ' | '.join(f'{n}: {m}' for n, m in errors)
     return {'ok': False, 'error': f'所有 AI 服务不可用。{detail}', 'errors': errors}
+
+
+def _test_ai_provider(url, model, api_key):
+    """测试单个 AI 提供商连接。返回 (success: bool, message: str)。"""
+    if not url or not model or not api_key:
+        return False, '请填写完整：URL、模型 ID、API Key'
+    body = {
+        'model': model,
+        'messages': [{'role': 'user', 'content': '回复"OK"两个字'}],
+        'max_tokens': 10,
+    }
+    try:
+        headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {api_key}'}
+        resp = requests.post(url, json=body, headers=headers, timeout=15)
+        if resp.status_code == 200:
+            data = resp.json()
+            msg = data.get('choices', [{}])[0].get('message', {})
+            content = msg.get('content', '').strip()
+            if not content and msg.get('reasoning'):
+                content = msg['reasoning'].strip()
+            return True, f'连接成功 · 返回: {content[:50]}'
+        else:
+            try:
+                err_body = resp.json()
+                err_msg = err_body.get('error', {}).get('message', '') or err_body.get('message', '') or resp.text[:100]
+            except Exception:
+                err_msg = resp.text[:100]
+            return False, f'HTTP {resp.status_code}: {err_msg}'
+    except requests.exceptions.Timeout:
+        return False, '连接超时（15秒），请检查 URL 或网络'
+    except requests.exceptions.ConnectionError as e:
+        return False, f'连接失败: {e}'
+    except Exception as e:
+        return False, f'错误: {e}'
 
 
 
@@ -3031,7 +3095,8 @@ class RestReminderWidget(QWidget):
         self.app_settings = LocalSync.load_settings()
         sn_key = self.app_settings.get('sensenova_api_key', '')
         ag_key = self.app_settings.get('agnes_api_key', '')
-        log.info(f'[AI] sensenova_key={bool(sn_key)} agnes_key={bool(ag_key)}')
+        ai_providers = self.app_settings.get('ai_providers', [])
+        log.info(f'[AI] legacy sensenova_key={bool(sn_key)} agnes_key={bool(ag_key)} providers={len(ai_providers)}')
 
         # 5分钟倒计时浮层状态
         self._study_countdown_active = False
@@ -3052,6 +3117,9 @@ class RestReminderWidget(QWidget):
         self._backup_timer = QTimer(self)
         self._backup_timer.timeout.connect(self._check_and_backup)
         self._backup_timer.start(3600 * 1000)
+
+        # 迁移旧 AI key 到 ai_providers（幂等）
+        _init_ai_providers()
 
 
         self.drag_position = None
@@ -3116,7 +3184,7 @@ class RestReminderWidget(QWidget):
         self.widget_height = 680
         self.setGeometry(100, 100, self.widget_width, self.widget_height)
 
-        self.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.WindowMinimizeButtonHint)
+        self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint | Qt.WindowMinimizeButtonHint)
 
         self.app_icon = _create_app_icon()
         self.setWindowIcon(self.app_icon)
@@ -4614,102 +4682,40 @@ class RestReminderWidget(QWidget):
 
         layout.addWidget(mail_card)
 
-        # ═══ AI 服务 ═══
+        # ═══ AI 服务（自定义提供商）═══
         layout.addSpacing(8)
-        layout.addLayout(self._make_section_header('🤖', 'AI 服务'))
+        layout.addLayout(self._make_section_header('🤖', 'AI 服务（自定义提供商）'))
 
-        # SenseNova API Key
-        sn_card = QFrame()
-        sn_card.setObjectName('sectionCard')
-        sn_layout = QVBoxLayout(sn_card)
-        sn_layout.setContentsMargins(14, 12, 14, 12)
-        sn_layout.setSpacing(6)
-        sn_header = QHBoxLayout()
-        sn_icon = QLabel('🧠')
-        sn_icon.setFixedSize(20, 20)
-        sn_icon.setStyleSheet('background: transparent;')
-        sn_header.addWidget(sn_icon)
-        sn_title = QLabel('SenseNova API Key')
-        sn_title.setStyleSheet('color: #e8e6e1; font-size: 13px; font-weight: bold; font-family: "Microsoft YaHei"; background: transparent;')
-        sn_header.addWidget(sn_title)
-        sn_header.addStretch()
-        sn_status = QLabel('')
-        sn_status.setStyleSheet('font-size: 11px; background: transparent;')
-        sn_status.setObjectName('snKeyStatus')
-        sn_header.addWidget(sn_status)
-        sn_layout.addLayout(sn_header)
-        sn_desc = QLabel('商汤日日新大模型，用于生成 AI 学习分析报告')
-        sn_desc.setStyleSheet('color: #555; font-size: 11px; font-family: "Microsoft YaHei"; background: transparent;')
-        sn_layout.addWidget(sn_desc)
-        sn_input_row = QHBoxLayout()
-        sn_input_row.setSpacing(6)
-        sn_input = QLineEdit()
-        sn_input.setPlaceholderText('sk-...')
-        sn_input.setEchoMode(QLineEdit.Password)
-        sn_input.setText(self.app_settings.get('sensenova_api_key', ''))
-        sn_input.setStyleSheet('QLineEdit { background: #16161c; color: #e8e4dc; border: 1px solid #252530; border-radius: 8px; padding: 8px 12px; font-size: 12px; font-family: Consolas; }')
-        sn_input_row.addWidget(sn_input, 1)
-        sn_save_btn = QPushButton('保存')
-        sn_save_btn.setFixedSize(56, 32)
-        sn_save_btn.setCursor(Qt.PointingHandCursor)
-        sn_save_btn.setStyleSheet('QPushButton { background: #d4a853; color: #0d0d12; border: none; border-radius: 8px; font-weight: bold; font-size: 12px; } QPushButton:hover { background: #e8bc6a; }')
-        sn_save_btn.clicked.connect(lambda: self._save_ai_key('sensenova_api_key', sn_input.text().strip(), sn_status))
-        sn_input_row.addWidget(sn_save_btn)
-        sn_layout.addLayout(sn_input_row)
-        # Init status
-        if self.app_settings.get('sensenova_api_key'):
-            sn_status.setText('✓ 已配置')
-            sn_status.setStyleSheet('color: #78B450; font-size: 11px; background: transparent;')
-        else:
-            sn_status.setText('未配置')
-            sn_status.setStyleSheet('color: #fcc419; font-size: 11px; background: transparent;')
-        layout.addWidget(sn_card)
+        # 迁移旧 key（幂等）
+        _init_ai_providers()
 
-        # Agnes AI API Key (备选)
-        ag_card = QFrame()
-        ag_card.setObjectName('sectionCard')
-        ag_layout = QVBoxLayout(ag_card)
-        ag_layout.setContentsMargins(14, 12, 14, 12)
-        ag_layout.setSpacing(6)
-        ag_header = QHBoxLayout()
-        ag_icon = QLabel('🔄')
-        ag_icon.setFixedSize(20, 20)
-        ag_icon.setStyleSheet('background: transparent;')
-        ag_header.addWidget(ag_icon)
-        ag_title = QLabel('Agnes AI API Key（备选）')
-        ag_title.setStyleSheet('color: #e8e6e1; font-size: 13px; font-weight: bold; font-family: "Microsoft YaHei"; background: transparent;')
-        ag_header.addWidget(ag_title)
-        ag_header.addStretch()
-        ag_status = QLabel('')
-        ag_status.setStyleSheet('font-size: 11px; background: transparent;')
-        ag_status.setObjectName('agKeyStatus')
-        ag_header.addWidget(ag_status)
-        ag_layout.addLayout(ag_header)
-        ag_desc = QLabel('SenseNova 不可用时自动切换到此备选服务')
-        ag_desc.setStyleSheet('color: #555; font-size: 11px; font-family: "Microsoft YaHei"; background: transparent;')
-        ag_layout.addWidget(ag_desc)
-        ag_input_row = QHBoxLayout()
-        ag_input_row.setSpacing(6)
-        ag_input = QLineEdit()
-        ag_input.setPlaceholderText('sk-...')
-        ag_input.setEchoMode(QLineEdit.Password)
-        ag_input.setText(self.app_settings.get('agnes_api_key', '') or os.environ.get('AGNES_API_KEY', ''))
-        ag_input.setStyleSheet('QLineEdit { background: #16161c; color: #e8e4dc; border: 1px solid #252530; border-radius: 8px; padding: 8px 12px; font-size: 12px; font-family: Consolas; }')
-        ag_input_row.addWidget(ag_input, 1)
-        ag_save_btn = QPushButton('保存')
-        ag_save_btn.setFixedSize(56, 32)
-        ag_save_btn.setCursor(Qt.PointingHandCursor)
-        ag_save_btn.setStyleSheet('QPushButton { background: #d4a853; color: #0d0d12; border: none; border-radius: 8px; font-weight: bold; font-size: 12px; } QPushButton:hover { background: #e8bc6a; }')
-        ag_save_btn.clicked.connect(lambda: self._save_ai_key('agnes_api_key', ag_input.text().strip(), ag_status))
-        ag_input_row.addWidget(ag_save_btn)
-        ag_layout.addLayout(ag_input_row)
-        if self.app_settings.get('agnes_api_key') or os.environ.get('AGNES_API_KEY'):
-            ag_status.setText('✓ 已配置')
-            ag_status.setStyleSheet('color: #78B450; font-size: 11px; background: transparent;')
-        else:
-            ag_status.setText('未配置')
-            ag_status.setStyleSheet('color: #888; font-size: 11px; background: transparent;')
-        layout.addWidget(ag_card)
+        ai_card = QFrame()
+        ai_card.setObjectName('sectionCard')
+        ai_outer = QVBoxLayout(ai_card)
+        ai_outer.setContentsMargins(14, 12, 14, 12)
+        ai_outer.setSpacing(8)
+
+        ai_desc = QLabel('支持任何 OpenAI 兼容的 API。添加多个提供商后，按优先级依次尝试。')
+        ai_desc.setStyleSheet('color: #555; font-size: 11px; font-family: "Microsoft YaHei"; background: transparent;')
+        ai_desc.setWordWrap(True)
+        ai_outer.addWidget(ai_desc)
+
+        # 提供商列表容器（动态填充）
+        self._ai_providers_container = QVBoxLayout()
+        self._ai_providers_container.setSpacing(6)
+        ai_outer.addLayout(self._ai_providers_container)
+        self._ai_provider_widgets = []  # 保存引用便于读取
+        self._refresh_ai_providers_ui()
+
+        # 添加提供商按钮
+        add_provider_btn = QPushButton('+ 添加 AI 提供商')
+        add_provider_btn.setFixedHeight(32)
+        add_provider_btn.setCursor(Qt.PointingHandCursor)
+        add_provider_btn.setStyleSheet('QPushButton { background: rgba(212,168,83,0.1); color: #d4a853; border: 1px dashed rgba(212,168,83,0.3); border-radius: 8px; font-size: 12px; font-weight: bold; } QPushButton:hover { background: rgba(212,168,83,0.2); }')
+        add_provider_btn.clicked.connect(self._add_ai_provider_ui)
+        ai_outer.addWidget(add_provider_btn)
+
+        layout.addWidget(ai_card)
 
         # ═══ 数据备份 ═══
         layout.addSpacing(8)
@@ -4887,19 +4893,214 @@ class RestReminderWidget(QWidget):
             self._ambient_vol_lbl.setText(f'{value}%')
 
     def _save_ai_key(self, key_name, key_value, status_label):
-        """保存 AI API Key 到 settings（加密存储）"""
+        """保存 AI API Key 到 settings（加密存储）—— 旧接口，保留兼容"""
         self.app_settings[key_name] = _encrypt_key(key_value) if key_value else ''
         LocalSync.save_settings(self.app_settings)
         if key_value:
             status_label.setText('✓ 已保存')
             status_label.setStyleSheet('color: #78B450; font-size: 11px; background: transparent;')
-            self.tray_icon.showMessage('🤖 AI 配置', f'{"SenseNova" if "sensenova" in key_name else "Agnes"} API Key 已保存', QSystemTrayIcon.Information, 3000)
             self._toast('设置', '已保存配置')
         else:
             status_label.setText('未配置')
             status_label.setStyleSheet('color: #fcc419; font-size: 11px; background: transparent;')
             self._toast('设置', '已保存配置')
         log.info(f'[AI] {key_name} updated, len={len(key_value)}')
+
+    # ═══ AI 提供商管理 ═══
+    def _refresh_ai_providers_ui(self):
+        """刷新 AI 提供商列表 UI"""
+        # 清空旧的
+        while self._ai_providers_container.count():
+            item = self._ai_providers_container.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self._ai_provider_widgets = []
+
+        providers = self.app_settings.get('ai_providers', [])
+        for idx, p in enumerate(providers):
+            widget = self._build_ai_provider_card(p, idx)
+            self._ai_providers_container.addWidget(widget)
+            self._ai_provider_widgets.append(widget)
+
+    def _build_ai_provider_card(self, provider, idx):
+        """构建单个 AI 提供商卡片"""
+        import uuid
+        card = QFrame()
+        card.setObjectName('sectionCard')
+        cl = QVBoxLayout(card)
+        cl.setContentsMargins(12, 10, 12, 10)
+        cl.setSpacing(6)
+
+        # 第一行：名称 + 启用开关 + 删除按钮
+        top_row = QHBoxLayout()
+        top_row.setSpacing(6)
+        name_input = QLineEdit(provider.get('name', ''))
+        name_input.setPlaceholderText('提供商名称（如 SenseNova）')
+        name_input.setStyleSheet('QLineEdit { background: #16161c; color: #e8e4dc; border: 1px solid #252530; border-radius: 6px; padding: 4px 8px; font-size: 12px; font-weight: bold; }')
+        top_row.addWidget(name_input, 2)
+
+        enable_btn = QPushButton('✓ 启用' if provider.get('enabled', True) else '✗ 禁用')
+        enable_btn.setFixedHeight(28)
+        enable_btn.setCursor(Qt.PointingHandCursor)
+        is_enabled = provider.get('enabled', True)
+        if is_enabled:
+            enable_btn.setStyleSheet('QPushButton { background: rgba(120,180,80,0.15); color: #78B450; border: 1px solid rgba(120,180,80,0.3); border-radius: 6px; font-size: 11px; }')
+        else:
+            enable_btn.setStyleSheet('QPushButton { background: rgba(255,255,255,0.04); color: #666; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; font-size: 11px; }')
+        top_row.addWidget(enable_btn)
+
+        del_btn = QPushButton('删除')
+        del_btn.setFixedHeight(28)
+        del_btn.setCursor(Qt.PointingHandCursor)
+        del_btn.setStyleSheet('QPushButton { background: rgba(201,84,84,0.1); color: #c95454; border: 1px solid rgba(201,84,84,0.2); border-radius: 6px; font-size: 11px; } QPushButton:hover { background: rgba(201,84,84,0.2); }')
+        top_row.addWidget(del_btn)
+        cl.addLayout(top_row)
+
+        # 第二行：URL
+        url_row = QHBoxLayout()
+        url_row.setSpacing(6)
+        url_lbl = QLabel('URL')
+        url_lbl.setFixedWidth(36)
+        url_lbl.setStyleSheet('color: #888; font-size: 11px; background: transparent;')
+        url_row.addWidget(url_lbl)
+        url_input = QLineEdit(provider.get('url', ''))
+        url_input.setPlaceholderText('https://api.example.com/v1/chat/completions')
+        url_input.setStyleSheet('QLineEdit { background: #16161c; color: #e8e4dc; border: 1px solid #252530; border-radius: 6px; padding: 4px 8px; font-size: 11px; font-family: Consolas; }')
+        url_row.addWidget(url_input, 1)
+        cl.addLayout(url_row)
+
+        # 第三行：Model + Key
+        mk_row = QHBoxLayout()
+        mk_row.setSpacing(6)
+        model_lbl = QLabel('模型')
+        model_lbl.setFixedWidth(36)
+        model_lbl.setStyleSheet('color: #888; font-size: 11px; background: transparent;')
+        mk_row.addWidget(model_lbl)
+        model_input = QLineEdit(provider.get('model', ''))
+        model_input.setPlaceholderText('模型 ID（如 deepseek-chat）')
+        model_input.setStyleSheet('QLineEdit { background: #16161c; color: #e8e4dc; border: 1px solid #252530; border-radius: 6px; padding: 4px 8px; font-size: 11px; font-family: Consolas; }')
+        mk_row.addWidget(model_input, 1)
+
+        key_input = QLineEdit()
+        key_input.setEchoMode(QLineEdit.Password)
+        key_input.setPlaceholderText('API Key')
+        raw_key = provider.get('api_key', '')
+        key_input.setText(_decrypt_key(raw_key) if raw_key else '')
+        key_input.setStyleSheet('QLineEdit { background: #16161c; color: #e8e4dc; border: 1px solid #252530; border-radius: 6px; padding: 4px 8px; font-size: 11px; font-family: Consolas; }')
+        mk_row.addWidget(key_input, 1)
+        cl.addLayout(mk_row)
+
+        # 第四行：测试按钮 + 状态
+        test_row = QHBoxLayout()
+        test_row.setSpacing(6)
+        test_btn = QPushButton('测试连接')
+        test_btn.setFixedHeight(28)
+        test_btn.setCursor(Qt.PointingHandCursor)
+        test_btn.setStyleSheet('QPushButton { background: rgba(106,140,187,0.1); color: #6a8cbb; border: 1px solid rgba(106,140,187,0.2); border-radius: 6px; font-size: 11px; } QPushButton:hover { background: rgba(106,140,187,0.2); }')
+        test_row.addWidget(test_btn)
+        status_lbl = QLabel('')
+        status_lbl.setStyleSheet('color: #888; font-size: 11px; background: transparent;')
+        test_row.addWidget(status_lbl, 1)
+        cl.addLayout(test_row)
+
+        # 保存引用
+        card._name_input = name_input
+        card._url_input = url_input
+        card._model_input = model_input
+        card._key_input = key_input
+        card._enable_btn = enable_btn
+        card._status_lbl = status_lbl
+        card._provider_id = provider.get('id', str(uuid.uuid4()))
+        card._enabled = is_enabled
+
+        # 事件
+        def toggle_enable():
+            card._enabled = not card._enabled
+            if card._enabled:
+                enable_btn.setText('✓ 启用')
+                enable_btn.setStyleSheet('QPushButton { background: rgba(120,180,80,0.15); color: #78B450; border: 1px solid rgba(120,180,80,0.3); border-radius: 6px; font-size: 11px; }')
+            else:
+                enable_btn.setText('✗ 禁用')
+                enable_btn.setStyleSheet('QPushButton { background: rgba(255,255,255,0.04); color: #666; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; font-size: 11px; }')
+            self._save_ai_providers()
+
+        def do_test():
+            status_lbl.setText('⏳ 测试中...')
+            status_lbl.setStyleSheet('color: #6a8cbb; font-size: 11px; background: transparent;')
+            url = url_input.text().strip()
+            model = model_input.text().strip()
+            key = key_input.text().strip()
+            ok, msg = _test_ai_provider(url, model, key)
+            if ok:
+                status_lbl.setText(f'✓ {msg}')
+                status_lbl.setStyleSheet('color: #78B450; font-size: 11px; background: transparent;')
+            else:
+                status_lbl.setText(f'✗ {msg[:80]}')
+                status_lbl.setStyleSheet('color: #c95454; font-size: 11px; background: transparent;')
+
+        def do_delete():
+            reply = QMessageBox.question(self, '确认删除', f'确定删除提供商「{name_input.text() or "未命名"}」吗？',
+                                          QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if reply == QMessageBox.Yes:
+                providers = self.app_settings.get('ai_providers', [])
+                providers = [p for p in providers if p.get('id') != card._provider_id]
+                self.app_settings['ai_providers'] = providers
+                LocalSync.save_settings(self.app_settings)
+                self._refresh_ai_providers_ui()
+                self._toast('🤖 AI 服务', '已删除提供商')
+
+        def on_edit():
+            self._save_ai_providers()
+
+        enable_btn.clicked.connect(toggle_enable)
+        test_btn.clicked.connect(do_test)
+        del_btn.clicked.connect(do_delete)
+        name_input.editingFinished.connect(on_edit)
+        url_input.editingFinished.connect(on_edit)
+        model_input.editingFinished.connect(on_edit)
+        key_input.editingFinished.connect(on_edit)
+
+        return card
+
+    def _add_ai_provider_ui(self):
+        """添加一个新的 AI 提供商卡片"""
+        import uuid
+        new_provider = {
+            'id': str(uuid.uuid4()),
+            'name': '',
+            'url': '',
+            'model': '',
+            'api_key': '',
+            'enabled': True,
+            'priority': len(self.app_settings.get('ai_providers', [])) + 1,
+        }
+        providers = self.app_settings.get('ai_providers', [])
+        providers.append(new_provider)
+        self.app_settings['ai_providers'] = providers
+        LocalSync.save_settings(self.app_settings)
+        self._refresh_ai_providers_ui()
+
+    def _save_ai_providers(self):
+        """从 UI 读取所有提供商配置并保存"""
+        providers = []
+        for idx, card in enumerate(self._ai_provider_widgets):
+            try:
+                key_plain = card._key_input.text().strip()
+                provider = {
+                    'id': card._provider_id,
+                    'name': card._name_input.text().strip() or f'提供商{idx+1}',
+                    'url': card._url_input.text().strip(),
+                    'model': card._model_input.text().strip(),
+                    'api_key': _encrypt_key(key_plain) if key_plain else '',
+                    'enabled': card._enabled,
+                    'priority': idx + 1,
+                }
+                providers.append(provider)
+            except Exception as e:
+                log.warning(f'[AI] 保存提供商 {idx} 失败: {e}')
+        self.app_settings['ai_providers'] = providers
+        LocalSync.save_settings(self.app_settings)
+        log.info(f'[AI] 保存 {len(providers)} 个提供商')
 
     # ═══ 数据备份 ═══
     def _check_and_backup(self):
