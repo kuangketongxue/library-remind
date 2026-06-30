@@ -99,7 +99,7 @@ if os.path.isdir(_PRO_DIR) and _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v5.8.0'
+VERSION = 'v5.9.0'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=1_000_000, backupCount=3, encoding='utf-8')
@@ -130,6 +130,10 @@ _ACHIEVEMENTS = [
      'check': lambda d: d.get('total_study', 0) >= 50},
     {'id': 'hundred_hours', 'name': '博学多才',   'desc': '累计学习 100 小时',      'icon': '🎓', 'category': 'study',
      'check': lambda d: d.get('total_study', 0) >= 100},
+    {'id': 'week_30h',      'name': '一周巅峰',   'desc': '单周学习 30 小时',       'icon': '⚡', 'category': 'study',
+     'check': lambda d: d.get('week_study', 0) >= 30},
+    {'id': 'month_100h',    'name': '月度学霸',   'desc': '单月学习 100 小时',      'icon': '🌙', 'category': 'study',
+     'check': lambda d: d.get('month_study', 0) >= 100},
     # 连续打卡
     {'id': 'streak_3',      'name': '三天打鱼',   'desc': '连续打卡 3 天',          'icon': '🌱', 'category': 'streak',
      'check': lambda d: d.get('current_streak', 0) >= 3},
@@ -149,6 +153,8 @@ _ACHIEVEMENTS = [
      'check': lambda d: d.get('total_reviews', 0) >= 10},
     {'id': 'review_50',     'name': '深度思考',   'desc': '累计完成 50 次复盘',     'icon': '🧠', 'category': 'review',
      'check': lambda d: d.get('total_reviews', 0) >= 50},
+    {'id': 'review_100',    'name': '反思大师',   'desc': '累计完成 100 次复盘',    'icon': '🎓', 'category': 'review',
+     'check': lambda d: d.get('total_reviews', 0) >= 100},
     {'id': 'perfect_score', 'name': '完美一轮',   'desc': '复盘评分达到 100 分',    'icon': '💯', 'category': 'review',
      'check': lambda d: d.get('max_score', 0) >= 100},
     # 轮次
@@ -2705,8 +2711,8 @@ def _call_ai(prompt, model='sensenova-6.7-flash-lite'):
 
     # 候选端点（按优先级）
     endpoints = [
-        {'url': 'https://token.sensenova.cn/v1/chat/completions', 'key': None},
-        {'url': 'https://apihub.agnes-ai.com/v1/chat/completions', 'key': None},
+        {'name': 'SenseNova', 'url': 'https://token.sensenova.cn/v1/chat/completions', 'key': None},
+        {'name': 'Agnes',     'url': 'https://apihub.agnes-ai.com/v1/chat/completions',  'key': None},
     ]
 
     headers_base = {'Content-Type': 'application/json'}
@@ -2720,10 +2726,11 @@ def _call_ai(prompt, model='sensenova-6.7-flash-lite'):
         'temperature': 0.7,
     }
 
-    last_err = None
+    errors = []  # 每个端点的错误都保留
     for ep in endpoints:
         try:
             url = ep['url']
+            name = ep['name']
             # 尝试从 settings 读取对应 API key
             api_key = None
             if 'sensenova' in url:
@@ -2734,7 +2741,7 @@ def _call_ai(prompt, model='sensenova-6.7-flash-lite'):
                 api_key = _decrypt_key(raw) if raw else None
 
             if not api_key:
-                last_err = f'未配置 API key（{url}）'
+                errors.append((name, '未配置 API Key'))
                 continue
 
             headers = {**headers_base, 'Authorization': f'Bearer {api_key}'}
@@ -2749,13 +2756,21 @@ def _call_ai(prompt, model='sensenova-6.7-flash-lite'):
                 if not content and msg.get('reasoning'):
                     content = msg['reasoning'].strip()
                 if content:
-                    return {'ok': True, 'content': content, 'provider': url}
+                    return {'ok': True, 'content': content, 'provider': name}
+                errors.append((name, '返回内容为空'))
             else:
-                last_err = f'HTTP {resp.status_code}: {resp.text[:200]}'
+                # 尝试提取业务错误信息
+                try:
+                    err_body = resp.json()
+                    err_msg = err_body.get('error', {}).get('message', '') or err_body.get('message', '') or resp.text[:200]
+                except Exception:
+                    err_msg = resp.text[:200]
+                errors.append((name, f'HTTP {resp.status_code}: {err_msg}'))
         except (requests.exceptions.RequestException, ValueError, json.JSONDecodeError) as e:
-            last_err = str(e)
+            errors.append((ep['name'], str(e)))
 
-    return {'ok': False, 'error': f'所有 AI 服务不可用。最后错误：{last_err}'}
+    detail = ' | '.join(f'{n}: {m}' for n, m in errors)
+    return {'ok': False, 'error': f'所有 AI 服务不可用。{detail}', 'errors': errors}
 
 
 
@@ -2781,6 +2796,10 @@ def _local_fallback_report(report_type, data):
 
     tags_str = ', '.join(f'{t}({c})' for t, c in data.get('top_tags', [])) or '无'
 
+    # 错误详情（帮助用户诊断）
+    ai_error = data.get('ai_error', '')
+    error_line = f'\n> ⚠️ **错误详情**：{ai_error}\n> 请在「设置 → AI 服务」检查 API Key 配置\n' if ai_error else ''
+
     lines = [
         f'## {name}（数据摘要）',
         f'**时间范围**：{data["date_range"]}',
@@ -2797,6 +2816,8 @@ def _local_fallback_report(report_type, data):
         '',
         '> 注：AI 服务不可用，以上为本地数据摘要。配置 API Key 后可生成深度分析报告。',
     ]
+    if error_line:
+        lines.append(error_line)
     return '\n'.join(lines)
 
 
@@ -2900,8 +2921,9 @@ def generate_report(report_type, force_refresh=False):
 
         # AI 不可用，返回本地降级报告
         log.warning(f'[generate_report] AI 不可用，使用本地降级报告：{result.get("error", "")}')
+        data['ai_error'] = result.get('error', '')
         fallback = _local_fallback_report(report_type, data)
-        return {'ok': True, 'content': fallback, 'from_cache': False, 'fallback': True}
+        return {'ok': True, 'content': fallback, 'from_cache': False, 'fallback': True, 'ai_error': result.get('error', '')}
 
     except Exception as e:
         log.error(f'[generate_report] 报告生成失败: {e}')
@@ -5204,22 +5226,26 @@ class RestReminderWidget(QWidget):
         earned_data = achievements_store.load().get('earned', {})
         total_earned = len(earned_data)
         total_all = len(_ACHIEVEMENTS)
-        ach_count.setText(f'{total_earned}/{total_all}')
+        fill_pct_val = int(total_earned / max(total_all, 1) * 100)
+        ach_count.setText(f'{total_earned}/{total_all} · {fill_pct_val}%')
 
-        # 总进度条
-        progress_bar = QFrame()
+        # 全成就达成彩蛋
+        if total_all > 0 and total_earned == total_all:
+            crown_lbl = QLabel('👑 全成就达成！你是真正的学习王者')
+            crown_lbl.setStyleSheet('color: #d4a853; font-size: 14px; font-weight: bold; font-family: "Microsoft YaHei"; background: transparent; padding: 4px 0;')
+            crown_lbl.setAlignment(Qt.AlignCenter)
+            ach_layout.addWidget(crown_lbl)
+
+        # 总进度条（QProgressBar 自适应宽度）
+        progress_bar = QProgressBar()
+        progress_bar.setRange(0, 100)
+        progress_bar.setValue(fill_pct_val)
+        progress_bar.setTextVisible(False)
         progress_bar.setFixedHeight(6)
         progress_bar.setStyleSheet(
-            'QFrame { background: rgba(255,255,255,8); border-radius: 3px; }')
-        progress_layout = QVBoxLayout(progress_bar)
-        progress_layout.setContentsMargins(0, 0, 0, 0)
-        progress_layout.setSpacing(0)
-        fill = QFrame()
-        fill_pct = int(total_earned / max(total_all, 1) * 100)
-        fill.setFixedWidth(int(fill_pct * 5.0))  # approximate
-        fill.setStyleSheet(
-            'QFrame { background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #d4a853, stop:1 #e8bc6a); border-radius: 3px; }')
-        progress_layout.addWidget(fill)
+            'QProgressBar { background: rgba(255,255,255,8); border-radius: 3px; border: none; }'
+            'QProgressBar::chunk { background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #d4a853, stop:1 #e8bc6a); border-radius: 3px; }'
+        )
         ach_layout.addWidget(progress_bar)
 
         # 获取当前成就数据用于进度显示
@@ -5244,19 +5270,27 @@ class RestReminderWidget(QWidget):
             cat_lbl.setStyleSheet('color: #888; font-size: 13px; font-weight: bold; background: transparent; padding-top: 4px;')
             ach_layout.addWidget(cat_lbl)
 
-            # 网格布局：每个成就一个卡片
+            # 网格布局：每行最多 4 个，自动换行
             grid = QGridLayout()
             grid.setSpacing(6)
-            col = 0
-            for ach in achs:
+            for idx, ach in enumerate(achs):
+                row = idx // 4
+                col = idx % 4
                 is_earned = ach['id'] in earned_data
                 card = QFrame()
                 card.setFixedHeight(52)
                 card.setCursor(Qt.PointingHandCursor)
                 if is_earned:
-                    card.setStyleSheet(
-                        'QFrame { background: rgba(212,168,83,15); border: 1px solid rgba(212,168,83,30); border-radius: 8px; }')
-                    earned_date = earned_data[ach['id']][:10]
+                    # 今日解锁的成就加金色脉冲边框
+                    earned_date_full = earned_data[ach['id']]
+                    earned_date = earned_date_full[:10]
+                    today_str = datetime.now().date().isoformat()
+                    if earned_date == today_str:
+                        card.setStyleSheet(
+                            'QFrame { background: rgba(212,168,83,25); border: 2px solid #d4a853; border-radius: 8px; }')
+                    else:
+                        card.setStyleSheet(
+                            'QFrame { background: rgba(212,168,83,15); border: 1px solid rgba(212,168,83,30); border-radius: 8px; }')
                     card.setToolTip(f'{ach["name"]}\n{ach["desc"]}\n解锁: {earned_date}')
                 else:
                     card.setStyleSheet(
@@ -5276,21 +5310,26 @@ class RestReminderWidget(QWidget):
                 top_row.addStretch()
                 cl.addLayout(top_row)
 
-                # 进度信息
+                # 进度信息：已解锁显示日期，未解锁显示差额
                 prog = ach_stats.get(ach['id'], {})
                 if is_earned:
                     info_lbl = QLabel(f'✓ {earned_date}')
                     info_lbl.setStyleSheet('color: #78B450; font-size: 10px; font-family: Consolas; background: transparent;')
                 elif prog.get('progress_text'):
-                    info_lbl = QLabel(prog['progress_text'])
+                    remaining = prog['target'] - prog['current']
+                    unit = prog.get('unit', '')
+                    if remaining > 0:
+                        info_text = f'差 {remaining}{unit} · {int(prog["pct"]*100)}%'
+                    else:
+                        info_text = prog['progress_text']
+                    info_lbl = QLabel(info_text)
                     info_lbl.setStyleSheet('color: #555; font-size: 10px; font-family: Consolas; background: transparent;')
                 else:
                     info_lbl = QLabel(ach['desc'])
                     info_lbl.setStyleSheet('color: #555; font-size: 10px; background: transparent;')
                 cl.addWidget(info_lbl)
 
-                grid.addWidget(card, 0, col)
-                col += 1
+                grid.addWidget(card, row, col)
 
             ach_layout.addLayout(grid)
 
@@ -6618,6 +6657,13 @@ class RestReminderWidget(QWidget):
             history = history_store.load()
             total_study = sum(v.get('study', 0) for v in history.values())
             total_rounds = sum(v.get('rounds', 0) for v in history.values())
+            # 本周学习时长（最近 7 天）
+            now = datetime.now()
+            week_ago = (now - timedelta(days=7)).date().isoformat()
+            week_study = sum(v.get('study', 0) for d, v in history.items() if d >= week_ago)
+            # 本月学习时长（当月）
+            month_prefix = now.strftime('%Y-%m')
+            month_study = sum(v.get('study', 0) for d, v in history.items() if d.startswith(month_prefix))
             reviews = review_store.load()
             total_reviews = sum(len(v) for v in reviews.values())
             max_score = 0
@@ -6635,6 +6681,8 @@ class RestReminderWidget(QWidget):
                 'ten_hours': (total_study, 10, 'h'),
                 'fifty_hours': (total_study, 50, 'h'),
                 'hundred_hours': (total_study, 100, 'h'),
+                'week_30h': (week_study, 30, 'h'),
+                'month_100h': (month_study, 100, 'h'),
                 'streak_3': (streak.get('current_streak', 0), 3, '天'),
                 'streak_7': (streak.get('current_streak', 0), 7, '天'),
                 'streak_14': (streak.get('current_streak', 0), 14, '天'),
@@ -6643,6 +6691,7 @@ class RestReminderWidget(QWidget):
                 'daily_8h': (today_study, 8, 'h'),
                 'review_10': (total_reviews, 10, '次'),
                 'review_50': (total_reviews, 50, '次'),
+                'review_100': (total_reviews, 100, '次'),
                 'perfect_score': (max_score, 100, '分'),
                 'rounds_10': (total_rounds, 10, '轮'),
                 'rounds_50': (total_rounds, 50, '轮'),
@@ -6653,6 +6702,7 @@ class RestReminderWidget(QWidget):
                 stats[ach_id] = {
                     'current': current,
                     'target': target,
+                    'unit': unit,
                     'pct': pct,
                     'progress_text': f'{current}/{target}{unit} ({int(pct*100)}%)'
                 }
@@ -6670,6 +6720,13 @@ class RestReminderWidget(QWidget):
             history = history_store.load()
             total_study = sum(v.get('study', 0) for v in history.values())
             total_rounds = sum(v.get('rounds', 0) for v in history.values())
+            # 本周学习时长（最近 7 天）
+            now = datetime.now()
+            week_ago = (now - timedelta(days=7)).date().isoformat()
+            week_study = sum(v.get('study', 0) for d, v in history.items() if d >= week_ago)
+            # 本月学习时长（当月）
+            month_prefix = now.strftime('%Y-%m')
+            month_study = sum(v.get('study', 0) for d, v in history.items() if d.startswith(month_prefix))
             reviews = review_store.load()
             total_reviews = sum(len(v) for v in reviews.values())
             max_score = 0
@@ -6687,6 +6744,8 @@ class RestReminderWidget(QWidget):
                 'max_score': max_score,
                 'current_streak': streak.get('current_streak', 0),
                 'today_study': self.study_hours_today,
+                'week_study': week_study,
+                'month_study': month_study,
             }
 
             new_achievements = []
@@ -6702,7 +6761,7 @@ class RestReminderWidget(QWidget):
             if new_achievements:
                 achievements_store.save({'earned': earned})
                 for ach in new_achievements:
-                    self._toast(f'{ach["icon"]} 成就解锁：{ach["name"]}', ach['desc'], duration=5000)
+                    self._toast(f'{ach["icon"]} 成就解锁：{ach["name"]}', ach['desc'], duration=8000)
                     log.info(f'[成就] 解锁: {ach["id"]} - {ach["name"]}')
         except Exception as e:
             log.warning(f'[成就] 检查失败: {e}')
