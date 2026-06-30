@@ -4235,11 +4235,11 @@ class RestReminderWidget(QWidget):
         self._heatmap_widget.mouseMoveEvent = self._heatmap_tooltip
         self._heatmap_widget.setMouseTracking(True)
 
-        return scroll
-
-        # 初始绘制
+        # 初始绘制（必须在 return 之前执行）
         self._switch_trend_period(7)
         self._load_heatmap_data()
+
+        return scroll
 
     def _switch_trend_period(self, days):
         """切换趋势图时间范围"""
