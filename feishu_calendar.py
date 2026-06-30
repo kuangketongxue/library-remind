@@ -9,6 +9,7 @@ import logging
 import os
 import shutil
 import subprocess
+import time
 import traceback
 from datetime import datetime, timedelta, timezone
 
@@ -160,19 +161,36 @@ class _FetchWorker(QThread):
                 '--format', 'json',
             ]
 
+            no_window = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
                 timeout=30,
-                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0,
+                creationflags=no_window,
             )
+
+            # 间歇性失败（token 刷新窗口/网络瞬断）重试一次
+            if result.returncode != 0 and not self._cancelled:
+                time.sleep(2)
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    creationflags=no_window,
+                )
 
             if self._cancelled:
                 return
 
             if result.returncode != 0:
-                self.error.emit(f'lark-cli 返回 {result.returncode}: {result.stderr[:200]}')
+                # 完整记录 stdout + stderr，避免诊断盲区
+                self.error.emit(
+                    f'lark-cli 返回 {result.returncode}: '
+                    f'stdout={result.stdout[:200]} stderr={result.stderr[:200]}'
+                )
                 return
 
             data = json.loads(result.stdout)

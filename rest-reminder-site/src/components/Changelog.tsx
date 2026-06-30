@@ -2,9 +2,18 @@
 
 const releases = [
   {
-    version: "v5.6.5",
+    version: "v5.6.6",
     date: "2026.06.30",
     tag: "最新",
+    changes: [
+      "修复飞书日程间歇性获取失败：失败后重试一次（应对 token 刷新/网络瞬断）",
+      "错误信息同时记录 stdout + stderr，消除诊断盲区",
+    ],
+  },
+  {
+    version: "v5.6.5",
+    date: "2026.06.30",
+    tag: "",
     changes: [
       "首次引导 Onboarding：新用户启动显示 3 页引导弹窗，存标志避免重复",
       "主题即时切换：无需重启应用",
