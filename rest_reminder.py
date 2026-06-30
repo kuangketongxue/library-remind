@@ -4223,7 +4223,6 @@ class RestReminderWidget(QWidget):
 
         layout.addStretch()
         scroll.setWidget(container)
-        return scroll
 
         # 绑定 paint事件
         self._trend_chart.paintEvent = self._paint_trend_chart
@@ -4235,6 +4234,8 @@ class RestReminderWidget(QWidget):
         self._heatmap_widget.paintEvent = self._paint_heatmap
         self._heatmap_widget.mouseMoveEvent = self._heatmap_tooltip
         self._heatmap_widget.setMouseTracking(True)
+
+        return scroll
 
         # 初始绘制
         self._switch_trend_period(7)
