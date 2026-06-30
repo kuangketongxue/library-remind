@@ -31,6 +31,15 @@ export default function DocsPage() {
         {/* 中间内容 */}
         <div className="flex-1 min-w-0 px-6 py-12">
           <div className="max-w-3xl">
+            {/* Breadcrumb */}
+            <nav className="flex items-center gap-2 text-xs text-[var(--fg-dim)] mb-6">
+              <a href="/" className="hover:text-[var(--fg)] transition-colors">首页</a>
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+              <span className="text-[var(--fg)]">文档</span>
+            </nav>
+
             <h1 className="text-3xl font-extrabold tracking-tight mb-2 font-display">
               文档
             </h1>
@@ -484,6 +493,27 @@ python rest_reminder.py`}
                 </div>
               </div>
             </section>
+            {/* ── 底部导航 ── */}
+            <nav className="border-t border-[var(--border)] pt-8 mt-16 flex flex-col sm:flex-row justify-between gap-4">
+              <a href="#更新日志" className="group flex items-center gap-3 text-sm">
+                <svg className="w-4 h-4 text-[var(--fg-muted)] group-hover:text-[var(--accent)] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                <div>
+                  <p className="text-[var(--fg-muted)] text-xs">上一页</p>
+                  <p className="text-[var(--fg)] font-medium group-hover:text-[var(--accent)] transition-colors">更新日志</p>
+                </div>
+              </a>
+              <a href="#" className="group flex items-center gap-3 text-sm sm:flex-row-reverse">
+                <svg className="w-4 h-4 text-[var(--fg-muted)] group-hover:text-[var(--accent)] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+                <div className="sm:text-right">
+                  <p className="text-[var(--fg-muted)] text-xs">下一页</p>
+                  <p className="text-[var(--fg)] font-medium group-hover:text-[var(--accent)] transition-colors">回到顶部</p>
+                </div>
+              </a>
+            </nav>
           </div>
         </div>
 

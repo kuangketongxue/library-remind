@@ -19,7 +19,7 @@ export default function Hero() {
         playsInline
         className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none"
       >
-        <source src="/rest_reminder_promo.mp4" type="video/mp4" />
+        <source src="/promo_video.mp4" type="video/mp4" />
       </video>
       {/* Dark overlay for text readability */}
       <div className="absolute inset-0 bg-[var(--bg)]/60 pointer-events-none" />
@@ -35,7 +35,7 @@ export default function Hero() {
             <span className="text-[10px] font-semibold text-[var(--accent)] bg-[var(--accent-soft)] px-2.5 py-1 rounded-full border border-[var(--border-accent)]">
               开源免费 · MIT 协议
             </span>
-            <span className="text-xs text-[var(--fg-dim)]">v5.6.7</span>
+            <span className="text-xs text-[var(--fg-dim)]">v5.8.0</span>
           </motion.div>
 
           <motion.h1

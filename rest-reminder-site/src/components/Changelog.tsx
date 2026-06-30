@@ -2,73 +2,28 @@
 
 const releases = [
   {
-    version: "v5.6.7",
+    version: "v5.8.0",
     date: "2026.06.30",
     tag: "最新",
     changes: [
-      "官网首页 Hero 区添加 AI 生成宣传视频背景（自动播放/静音/循环）",
-      "暖色调电影质感呈现专注→提醒→休憩→重启核心叙事",
+      "GitHub 私有仓库自动备份：每 24 小时备份学习/复盘/设置/打卡/历史数据",
+      "设置页新增备份区块：验证连接 / 立即备份 / 一键恢复（带确认）",
+      "Token 加密存储，与 AI Key 同级安全",
+      "官网 Footer 去重：删除页脚重复赞助商栏",
+      "官网文档页优化：面包屑导航 + 底部翻页",
+      "修复官网视频路径 404 问题",
     ],
   },
   {
-    version: "v5.6.6",
+    version: "v5.7.0",
     date: "2026.06.30",
     tag: "",
     changes: [
-      "修复飞书日程间歇性获取失败：失败后重试一次（应对 token 刷新/网络瞬断）",
-      "错误信息同时记录 stdout + stderr，消除诊断盲区",
-    ],
-  },
-  {
-    version: "v5.6.5",
-    date: "2026.06.30",
-    tag: "",
-    changes: [
-      "首次引导 Onboarding：新用户启动显示 3 页引导弹窗，存标志避免重复",
-      "主题即时切换：无需重启应用",
-      "移除所有全局快捷键（Ctrl+Alt+P/S/B、Ctrl+1~5）",
-      "v5.6.4 崩溃修复确认：倒计时浮层/快捷键/20-20-20 护眼",
-    ],
-  },
-  {
-    version: "v5.6.4",
-    date: "2026.06.30",
-    tag: "",
-    changes: [
-      "修复倒计时浮层崩溃：CountdownOverlay 访问不存在的 app_settings",
-      "修复快捷键崩溃：Ctrl+Alt+B 调用未定义的 _enter_rest()，已补全",
-      "修复 20-20-20 护眼从未生效：EyeRestOverlay.show_reminder() 无调用，已接入",
-    ],
-  },
-  {
-    version: "v5.6.3",
-    date: "2026.06.30",
-    tag: "",
-    changes: [
-      "飞书日程集成：lark-cli v1.0.60 安装授权，设置页开启后显示今日日程",
-    ],
-  },
-  {
-    version: "v5.6.2",
-    date: "2026.06.30",
-    tag: "",
-    changes: [
-      "白噪音重写：Voss-McCartney 粉红噪声算法（1/f 频谱），立体声 + dithering",
-      "agently-cli --body-file 路径修复：必须相对路径 + cwd 参数",
-      "设置界面 Toast：所有按钮/开关点击后弹出已保存提示",
-    ],
-  },
-  {
-    version: "v5.6.1",
-    date: "2026.06.30",
-    tag: "",
-    changes: [
-      "修复 3 个设置开关无效：声音提醒/复盘弹窗/学习时长统计 toggle 实际不生效",
-      "修复成就永远无法解锁：save_daily_stats 缺 rounds 字段",
-      "修复学习时长丢失风险：改为进入休息时立即记录",
-      "修复 QThread 信号名冲突：finished 覆盖内置信号，改 result_ready",
-      "修复成就 Tab 崩溃：QGridLayout 未导入",
-      "修复 PyInstaller 打包：spec 补充 tray_card/feishu_calendar hiddenimports",
+      "浮球重绘：矢量闪电图标 + 径向渐变底 + 琥珀渐变进度环",
+      "侧边栏 logo 矢量化，消除 emoji 依赖",
+      "主题系统修复：light 主题真正生效（主界面 + popup 全链路）",
+      "空状态设计：新用户引导文案（趋势图/AI报告/复盘）",
+      "info popup 跟随主题变色",
     ],
   },
   {

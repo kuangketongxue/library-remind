@@ -56,6 +56,7 @@ import winreg
 import traceback
 import base64
 import hashlib
+import backup
 
 
 # ═══ API Key 加密工具 ═══
@@ -98,7 +99,7 @@ if os.path.isdir(_PRO_DIR) and _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v5.7.0'
+VERSION = 'v5.8.0'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=1_000_000, backupCount=3, encoding='utf-8')
@@ -3025,6 +3026,11 @@ class RestReminderWidget(QWidget):
         # 快速复盘
         self._pending_review = False
 
+        # 自动备份定时器（每小时检查，24h未备份则执行）
+        self._backup_timer = QTimer(self)
+        self._backup_timer.timeout.connect(self._check_and_backup)
+        self._backup_timer.start(3600 * 1000)
+
 
         self.drag_position = None
 
@@ -4683,6 +4689,77 @@ class RestReminderWidget(QWidget):
             ag_status.setStyleSheet('color: #888; font-size: 11px; background: transparent;')
         layout.addWidget(ag_card)
 
+        # ═══ 数据备份 ═══
+        layout.addSpacing(8)
+        layout.addLayout(self._make_section_header('💾', '数据备份（GitHub 私有仓库）'))
+
+        backup_card = QFrame()
+        backup_card.setObjectName('sectionCard')
+        backup_layout = QVBoxLayout(backup_card)
+        backup_layout.setContentsMargins(14, 12, 14, 12)
+        backup_layout.setSpacing(6)
+
+        backup_desc = QLabel('每24小时自动备份学习/复盘/设置等数据到 GitHub 私有仓库，支持一键恢复')
+        backup_desc.setStyleSheet('color: #555; font-size: 11px; font-family: "Microsoft YaHei"; background: transparent;')
+        backup_desc.setWordWrap(True)
+        backup_layout.addWidget(backup_desc)
+
+        # GitHub Token
+        token_row = QHBoxLayout()
+        token_row.setSpacing(6)
+        token_row.addWidget(QLabel('Token'))
+        token_input = QLineEdit()
+        token_input.setEchoMode(QLineEdit.Password)
+        token_input.setPlaceholderText('ghp_...')
+        token_input.setText(_decrypt_key(self.app_settings.get('github_backup_token', '')))
+        token_input.setStyleSheet('QLineEdit { background: #16161c; color: #e8e4dc; border: 1px solid #252530; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-family: Consolas; }')
+        token_row.addWidget(token_input, 1)
+        backup_layout.addLayout(token_row)
+
+        # 仓库名
+        repo_row = QHBoxLayout()
+        repo_row.setSpacing(6)
+        repo_row.addWidget(QLabel('仓库'))
+        repo_input = QLineEdit()
+        repo_input.setPlaceholderText('owner/rest-reminder-backup')
+        repo_input.setText(self.app_settings.get('backup_repo', 'kuangketongxue/rest-reminder-backup'))
+        repo_input.setStyleSheet('QLineEdit { background: #16161c; color: #e8e4dc; border: 1px solid #252530; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-family: Consolas; }')
+        repo_row.addWidget(repo_input, 1)
+        backup_layout.addLayout(repo_row)
+
+        # 上次备份时间
+        last_bkp = self.app_settings.get('last_backup_time', 0)
+        last_str = datetime.fromtimestamp(last_bkp).strftime('%m/%d %H:%M') if last_bkp else '从未'
+        self._backup_status_lbl = QLabel(f'上次备份: {last_str}')
+        self._backup_status_lbl.setStyleSheet('color: #888; font-size: 11px; background: transparent;')
+        backup_layout.addWidget(self._backup_status_lbl)
+
+        # 按钮行
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+        verify_btn = QPushButton('验证连接')
+        verify_btn.setFixedHeight(30)
+        verify_btn.setCursor(Qt.PointingHandCursor)
+        verify_btn.setStyleSheet('QPushButton { background: rgba(106,140,187,0.1); color: #6a8cbb; border: 1px solid rgba(106,140,187,0.2); border-radius: 8px; font-size: 12px; } QPushButton:hover { background: rgba(106,140,187,0.2); }')
+        verify_btn.clicked.connect(lambda: self._verify_backup(token_input, repo_input))
+        btn_row.addWidget(verify_btn)
+        btn_row.addStretch()
+        backup_btn = QPushButton('立即备份')
+        backup_btn.setFixedHeight(30)
+        backup_btn.setCursor(Qt.PointingHandCursor)
+        backup_btn.setStyleSheet('QPushButton { background: rgba(120,180,80,0.15); color: #78B450; border: 1px solid rgba(120,180,80,0.3); border-radius: 8px; font-size: 12px; font-weight: bold; } QPushButton:hover { background: rgba(120,180,80,0.25); }')
+        backup_btn.clicked.connect(lambda: self._do_backup(token_input, repo_input))
+        btn_row.addWidget(backup_btn)
+        restore_btn = QPushButton('恢复数据')
+        restore_btn.setFixedHeight(30)
+        restore_btn.setCursor(Qt.PointingHandCursor)
+        restore_btn.setStyleSheet('QPushButton { background: rgba(201,84,84,0.1); color: #c95454; border: 1px solid rgba(201,84,84,0.2); border-radius: 8px; font-size: 12px; } QPushButton:hover { background: rgba(201,84,84,0.2); }')
+        restore_btn.clicked.connect(lambda: self._do_restore(token_input, repo_input))
+        btn_row.addWidget(restore_btn)
+        backup_layout.addLayout(btn_row)
+
+        layout.addWidget(backup_card)
+
         layout.addStretch()
         scroll.setWidget(container)
         self._tab_content.addWidget(scroll)
@@ -4801,6 +4878,102 @@ class RestReminderWidget(QWidget):
             status_label.setStyleSheet('color: #fcc419; font-size: 11px; background: transparent;')
             self._toast('设置', '已保存配置')
         log.info(f'[AI] {key_name} updated, len={len(key_value)}')
+
+    # ═══ 数据备份 ═══
+    def _check_and_backup(self):
+        """定时检查：距上次备份超过24小时则自动执行"""
+        last = self.app_settings.get('last_backup_time', 0)
+        if time.time() - last < 86400:  # 24h
+            return
+        token = _decrypt_key(self.app_settings.get('github_backup_token', ''))
+        repo = self.app_settings.get('backup_repo', '')
+        if not token or not repo:
+            return
+        log.info('[备份] 自动备份开始...')
+        ok, msg = backup.backup(token, repo)
+        if ok:
+            self.app_settings['last_backup_time'] = time.time()
+            LocalSync.save_settings(self.app_settings)
+            # 更新状态标签
+            try:
+                last_str = datetime.fromtimestamp(time.time()).strftime('%m/%d %H:%M')
+                self._backup_status_lbl.setText(f'上次备份: {last_str}')
+            except Exception:
+                pass
+            log.info(f'[备份] 成功: {msg}')
+        else:
+            log.error(f'[备份] 失败: {msg}')
+
+    def _verify_backup(self, token_input, repo_input):
+        """验证 GitHub 连接配置"""
+        token = token_input.text().strip()
+        repo = repo_input.text().strip()
+        self._backup_status_lbl.setText('⏳ 正在验证...')
+        self._backup_status_lbl.setStyleSheet('color: #6a8cbb; font-size: 11px; background: transparent;')
+        ok, msg = backup.validate_token(token, repo)
+        if ok:
+            # 保存配置
+            self.app_settings['github_backup_token'] = _encrypt_key(token)
+            self.app_settings['backup_repo'] = repo
+            LocalSync.save_settings(self.app_settings)
+            self._backup_status_lbl.setText(msg)
+            self._backup_status_lbl.setStyleSheet('color: #78B450; font-size: 11px; background: transparent;')
+            self._toast('💾 备份', 'GitHub 连接验证成功')
+        else:
+            self._backup_status_lbl.setText(msg)
+            self._backup_status_lbl.setStyleSheet('color: #c95454; font-size: 11px; background: transparent;')
+
+    def _do_backup(self, token_input, repo_input):
+        """手动备份"""
+        token = token_input.text().strip()
+        repo = repo_input.text().strip()
+        if not token or not repo:
+            self._backup_status_lbl.setText('请填写 Token 和仓库名')
+            self._backup_status_lbl.setStyleSheet('color: #fcc419; font-size: 11px; background: transparent;')
+            return
+        # 先保存
+        self.app_settings['github_backup_token'] = _encrypt_key(token)
+        self.app_settings['backup_repo'] = repo
+        LocalSync.save_settings(self.app_settings)
+        self._backup_status_lbl.setText('⏳ 备份中...')
+        self._backup_status_lbl.setStyleSheet('color: #6a8cbb; font-size: 11px; background: transparent;')
+        ok, msg = backup.backup(token, repo)
+        if ok:
+            self.app_settings['last_backup_time'] = time.time()
+            LocalSync.save_settings(self.app_settings)
+            last_str = datetime.fromtimestamp(time.time()).strftime('%m/%d %H:%M')
+            self._backup_status_lbl.setText(f'上次备份: {last_str}')
+            self._backup_status_lbl.setStyleSheet('color: #78B450; font-size: 11px; background: transparent;')
+            self._toast('💾 备份', msg)
+        else:
+            self._backup_status_lbl.setText(f'失败: {msg[:60]}')
+            self._backup_status_lbl.setStyleSheet('color: #c95454; font-size: 11px; background: transparent;')
+
+    def _do_restore(self, token_input, repo_input):
+        """恢复数据（需用户确认）"""
+        token = token_input.text().strip()
+        repo = repo_input.text().strip()
+        if not token or not repo:
+            self._backup_status_lbl.setText('请填写 Token 和仓库名')
+            self._backup_status_lbl.setStyleSheet('color: #fcc419; font-size: 11px; background: transparent;')
+            return
+        # 确认对话框
+        reply = QMessageBox.question(
+            self, '确认恢复', '⚠️ 此操作将用云端备份覆盖当前本地数据\n\n确定要恢复吗？',
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
+        self._backup_status_lbl.setText('⏳ 恢复中...')
+        self._backup_status_lbl.setStyleSheet('color: #6a8cbb; font-size: 11px; background: transparent;')
+        ok, msg = backup.restore(token, repo)
+        if ok:
+            self._backup_status_lbl.setText('恢复成功，请重启应用')
+            self._backup_status_lbl.setStyleSheet('color: #78B450; font-size: 11px; background: transparent;')
+            self._toast('💾 恢复', msg)
+        else:
+            self._backup_status_lbl.setText(f'失败: {msg[:60]}')
+            self._backup_status_lbl.setStyleSheet('color: #c95454; font-size: 11px; background: transparent;')
 
     def _build_about_tab(self):
         scroll = QScrollArea()
