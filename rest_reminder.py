@@ -38,7 +38,7 @@ import tempfile
 from PyQt5 import sip
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel,
-                             QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox, QShortcut, QFrame, QTabWidget, QStackedWidget, QComboBox, QLineEdit, QScrollArea, QDialog, QSlider, QSpinBox, QGroupBox, QTextBrowser, QToolTip)
+                             QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox, QShortcut, QFrame, QTabWidget, QStackedWidget, QComboBox, QLineEdit, QScrollArea, QDialog, QSlider, QSpinBox, QGroupBox, QTextBrowser, QToolTip, QGridLayout)
 from PyQt5.QtCore import QTimer, Qt, QPoint, QEvent, QThread, pyqtSignal, QRect
 from PyQt5.QtGui import QIcon, QFont, QPainter, QColor, QBrush, QPen, QKeySequence, QLinearGradient
 from PyQt5.QtWidgets import QGraphicsDropShadowEffect
@@ -97,7 +97,7 @@ if os.path.isdir(_PRO_DIR) and _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v5.6.0'
+VERSION = 'v5.6.1'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=1_000_000, backupCount=3, encoding='utf-8')
@@ -949,14 +949,15 @@ class LocalSync:
         return history_store._path
 
     @classmethod
-    def save_daily_stats(cls):
+    def save_daily_stats(cls, rounds=0):
         """保存今日数据到历史记录（每次调用都更新今日数据）"""
         data = cls._load()
         today = datetime.now().date().isoformat()
         history = history_store.load()
         history[today] = {
             'study': round(data.get('study_hours', 0), 1),
-            'break_minutes': round(data.get('break_minutes_today', 0), 1)
+            'break_minutes': round(data.get('break_minutes_today', 0), 1),
+            'rounds': rounds
         }
         # 只保留365天（支持年趋势）
         dates = sorted(history.keys())
@@ -998,7 +999,7 @@ class LocalSync:
 # ═══ 每周邮件报告（agently-cli） ═══
 class _WeeklyReportWorker(QThread):
     """后台线程：生成并通过 agently-cli 发送每周学习报告邮件"""
-    finished = pyqtSignal(bool, str)  # (success, message)
+    result_ready = pyqtSignal(bool, str)  # (success, message)
 
     def __init__(self, recipient):
         super().__init__()
@@ -1045,7 +1046,7 @@ class _WeeklyReportWorker(QThread):
                 if os.path.isfile(npm_global):
                     agently_bin = npm_global
             if not agently_bin:
-                self.finished.emit(False, 'agently-cli 未安装（npm install -g @tencent-qqmail/agently-cli）')
+                self.result_ready.emit(False, 'agently-cli 未安装（npm install -g @tencent-qqmail/agently-cli）')
                 return
 
             cmd_base = [agently_bin, 'message', '+send',
@@ -1056,7 +1057,7 @@ class _WeeklyReportWorker(QThread):
             # 第一阶段：获取 confirmation token
             result1 = subprocess.run(cmd_base, capture_output=True, text=True, timeout=60)
             if result1.returncode != 0:
-                self.finished.emit(False, f'agently-cli 错误: {result1.stdout[:100]}')
+                self.result_ready.emit(False, f'agently-cli 错误: {result1.stdout[:100]}')
                 return
 
             # 解析确认令牌
@@ -1065,28 +1066,28 @@ class _WeeklyReportWorker(QThread):
                 output = json.loads(result1.stdout.strip())
                 ctk = output.get('data', {}).get('confirmation_token', '')
             except (json.JSONDecodeError, AttributeError):
-                self.finished.emit(False, '无法解析 agently-cli 响应')
+                self.result_ready.emit(False, '无法解析 agently-cli 响应')
                 return
 
             if not ctk:
-                self.finished.emit(False, '未获取到确认令牌')
+                self.result_ready.emit(False, '未获取到确认令牌')
                 return
 
             # 第二阶段：确认发送
             cmd_confirm = cmd_base + ['--confirmation-token', ctk]
             result2 = subprocess.run(cmd_confirm, capture_output=True, text=True, timeout=60)
             if result2.returncode != 0:
-                self.finished.emit(False, f'发送失败: {result2.stdout[:100]}')
+                self.result_ready.emit(False, f'发送失败: {result2.stdout[:100]}')
                 return
 
-            self.finished.emit(True, '邮件发送成功')
+            self.result_ready.emit(True, '邮件发送成功')
             log.info('[周报] 邮件通过 agently-cli 发送成功')
         except subprocess.TimeoutExpired:
-            self.finished.emit(False, 'agently-cli 超时（60秒）')
+            self.result_ready.emit(False, 'agently-cli 超时（60秒）')
         except FileNotFoundError:
-            self.finished.emit(False, 'agently-cli 未安装（npm install -g @tencent-qqmail/agently-cli）')
+            self.result_ready.emit(False, 'agently-cli 未安装（npm install -g @tencent-qqmail/agently-cli）')
         except Exception as e:
-            self.finished.emit(False, str(e))
+            self.result_ready.emit(False, str(e))
             log.warning(f'[周报] 发送失败: {e}')
 
 
@@ -1503,8 +1504,9 @@ class CountdownOverlay(DraggableOverlay):
 
         if not self._chimed:
             self._chimed = True
-            import threading
-            threading.Thread(target=self._play_chime, daemon=True).start()
+            if self.app_settings.get('sound_enabled', True):
+                import threading
+                threading.Thread(target=self._play_chime, daemon=True).start()
 
         if not self.isVisible():
             if self._saved_pos:
@@ -2790,7 +2792,7 @@ def generate_report(report_type, force_refresh=False):
 
 class _ReportWorker(QThread):
     """后台线程：生成 AI 报告，不阻塞 UI"""
-    finished = pyqtSignal(dict)
+    result_ready = pyqtSignal(dict)
 
     def __init__(self, parent=None, report_type=None, force_refresh=False):
         super().__init__(parent)
@@ -2800,10 +2802,10 @@ class _ReportWorker(QThread):
     def run(self):
         try:
             result = generate_report(self.report_type, force_refresh=self.force_refresh)
-            self.finished.emit(result)
+            self.result_ready.emit(result)
         except Exception as e:
             log.error(f'[ReportWorker] 报告生成异常: {e}')
-            self.finished.emit({"ok": False, "error": f"报告生成异常：{e}"})
+            self.result_ready.emit({"ok": False, "error": f"报告生成异常：{e}"})
 
 
 def _create_app_icon():
@@ -3794,7 +3796,7 @@ class RestReminderWidget(QWidget):
                 self._report_view.setHtml(_md_to_html(result['content']))
             elif result.get("error"):
                 self._report_view.setHtml(f'<p style="color:#c95454;">⚠️ AI 请求失败: {result["error"]}</p><p style="color:#888;">点击「刷新」重试。</p>')
-        worker.finished.connect(_on_done)
+        worker.result_ready.connect(_on_done)
         worker.start()
 
     def _build_trend_tab(self):
@@ -4609,7 +4611,7 @@ class RestReminderWidget(QWidget):
             else:
                 self._mail_status_lbl.setText(f'✗ {msg[:40]}')
                 self._mail_status_lbl.setStyleSheet('color: #c95454; font-size: 11px; background: transparent;')
-        self._mail_worker.finished.connect(on_done)
+        self._mail_worker.result_ready.connect(on_done)
         self._mail_worker.start()
 
     def _toggle_weekly_email(self, checked):
@@ -4641,7 +4643,7 @@ class RestReminderWidget(QWidget):
         self.app_settings['mail_last_sent'] = now.date().isoformat()
         LocalSync.save_settings(self.app_settings)
         self._mail_worker = _WeeklyReportWorker(recipient)
-        self._mail_worker.finished.connect(lambda ok, msg: log.info(f'[周报] {msg}'))
+        self._mail_worker.result_ready.connect(lambda ok, msg: log.info(f'[周报] {msg}'))
         self._mail_worker.start()
 
     def _toggle_ambient(self, sound_type):
@@ -5509,7 +5511,8 @@ class RestReminderWidget(QWidget):
             self.timer_state = 'resting'
             self._rest_end_time = now + timedelta(minutes=5)
             self._pending_review = True
-            self._prompt_review()
+            if self.app_settings.get('review_reminder', True):
+                self._prompt_review()
             self._sync_buttons()
             log.info('[计时] 学习60分钟结束，进入5分钟休息')
 
@@ -5719,7 +5722,7 @@ class RestReminderWidget(QWidget):
             self._stats_tick += 1
             if self._stats_tick >= 300:
                 self._stats_tick = 0
-                LocalSync.save_daily_stats()
+                LocalSync.save_daily_stats(rounds=self._round_count)
 
             # --- 每30秒保存运行状态（防崩溃丢失） ---
             self._state_save_tick += 1

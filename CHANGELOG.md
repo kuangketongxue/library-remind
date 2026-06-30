@@ -2,6 +2,19 @@
 
 所有重要版本更新记录。
 
+## v5.6.1 (2026-06-30)
+
+### 🐛 Bug 修复
+- **修复 3 个设置开关无效**：声音提醒/复盘弹窗/学习时长统计的 toggle 开关实际不生效，现已正确响应设置
+- **修复成就永远无法解锁**：`rounds_10/50/100` 成就因 `save_daily_stats` 缺少 `rounds` 字段永远为 0
+- **修复学习时长丢失风险**：学习时长改为进入休息时立即记录，不再等到休息结束（防止崩溃丢失）
+- **修复 QThread 信号名冲突**：`_WeeklyReportWorker`/`_ReportWorker` 的 `finished` 信号覆盖 QThread 内置信号，改为 `result_ready`
+- **修复成就 Tab 崩溃**：`QGridLayout` 未导入导致成就卡片展示时 NameError
+- **修复 PyInstaller 打包**：`RestReminder.spec` 补充 `tray_card`/`feishu_calendar` hiddenimports
+- **更新 AGENTS.md**：关键文件列表补全 `tray_card.py`/`feishu_calendar.py`
+
+---
+
 ## v5.6.0 (2026-06-30)
 
 ### 🎨 体验优化

@@ -10,7 +10,9 @@ Python 3.14+ / PyQt5 / requests / psutil / Win32 API (ctypes)
 ```
 rest_reminder.py        — 主程序（~4737行，含所有 UI + 逻辑）
 storage.py              — 统一 JSON 存储层（JSONStore 类）
-RestReminder.spec       — PyInstaller 配置（含 hiddenimports=['storage']）
+tray_card.py            — 系统托盘卡片（请辨倒计时）
+feishu_calendar.py      — 飞书日程集成
+RestReminder.spec       — PyInstaller 配置（hiddenimports=['storage','tray_card','feishu_calendar']）
 CHANGELOG.md            — 更新日志
 ```
 
