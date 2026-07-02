@@ -529,6 +529,38 @@ python rest_reminder.py`}
                   <h3 className="text-sm font-semibold mb-2">连续打卡中断了怎么办？</h3>
                   <p className="text-[var(--fg-dim)] text-sm leading-relaxed">连续打卡基于每日学习时长判断（满 4 小时算一天）。如果某天未达标，连续天数归零，最佳记录保留。第二天达标后重新开始累计。</p>
                 </div>
+
+                {/* ── 赞助合作 ── */}
+                <div className="border border-[var(--border)] rounded-xl p-5">
+                  <h3 className="text-sm font-semibold mb-2">如何成为赞助商？</h3>
+                  <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
+                    我们欢迎 API 服务、工具产品或其他形式的合作。请发送邮件至 <code className="bg-[var(--surface-raised)] px-1 py-0.5 rounded text-xs font-mono">kuangketongxue@gmail.com</code>，
+                    注明合作意向和联系方式，我们会在 3 个工作日内回复。
+                  </p>
+                </div>
+
+                <div className="border border-[var(--border)] rounded-xl p-5">
+                  <h3 className="text-sm font-semibold mb-2">有哪些合作方案？</h3>
+                  <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
+                    支持多种合作形式：GitHub README 广告位、应用内预置接入、官网赞助商展示、优先技术支持等。
+                    具体方案可根据赞助商的资源和需求定制。
+                  </p>
+                </div>
+
+                <div className="border border-[var(--border)] rounded-xl p-5">
+                  <h3 className="text-sm font-semibold mb-2">完成洽谈后多久可以上线？</h3>
+                  <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
+                    根据合作内容不同，通常 1-2 周内完成接入和上线。简单的 API 接入可更快完成，复杂的定制化合作可能需要更长时间。
+                  </p>
+                </div>
+
+                <div className="border border-[var(--border)] rounded-xl p-5">
+                  <h3 className="text-sm font-semibold mb-2">赞助商可以获得什么？</h3>
+                  <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
+                    赞助商可获得 GitHub README 广告位、应用内预置接入、官网赞助商展示、优先技术支持等权益。
+                    具体权益根据赞助等级和合作形式确定。
+                  </p>
+                </div>
               </div>
             </section>
             {/* ── 底部导航 ── */}

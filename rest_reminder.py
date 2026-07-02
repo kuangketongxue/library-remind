@@ -8,12 +8,18 @@
 """
 import sys
 import os
+import platform
 # Python 版本守卫：vendor 内 .pyd 按 CPython ABI 编译，跨次版本不兼容
 # 启动用 python 指向 3.10 而 vendor 为 3.14 编译时会出现 ImportError: cannot import name 'sip'
-if not getattr(sys, 'frozen', False) and sys.version_info[:2] != (3, 14):
-    print(f"[rest_reminder] 需要 Python 3.14（当前 {sys.version_info.major}.{sys.version_info.minor}）。"
-          f"\n请用: C:\\Python314\\python.exe rest_reminder.py --silent", file=sys.stderr)
-    sys.exit(2)
+if sys.version_info[:2] != (3, 14):
+    msg = (f"[rest_reminder] 此版本仅兼容 Python 3.14（当前 {sys.version_info.major}.{sys.version_info.minor}）。\n"
+           f"请用: C:\\Python314\\python.exe rest_reminder.py --silent")
+    if getattr(sys, 'frozen', False):
+        log.warning(msg)
+    else:
+        print(msg, file=sys.stderr)
+        sys.exit(2)
+log.info(f'[启动] Python {platform.python_version()}，vendor模式={getattr(sys,"frozen",False)}')
 # vendor 目录：开箱即用，无需 pip install -r requirements.txt
 # PyInstaller 打包后 (sys.frozen=True) 由 spec 处理依赖，跳过
 _VENDOR_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vendor')
@@ -102,11 +108,35 @@ if os.path.isdir(_PRO_DIR) and _PRO_DIR not in sys.path:
 VERSION = 'v6.1.2'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
-_handler = RotatingFileHandler(_LOG_FILE, maxBytes=1_000_000, backupCount=3, encoding='utf-8')
+_handler = RotatingFileHandler(_LOG_FILE, maxBytes=500_000, backupCount=7, encoding='utf-8')
 _handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', '%Y-%m-%d %H:%M:%S'))
 log = logging.getLogger('rest_reminder')
 log.setLevel(logging.INFO)
 log.addHandler(_handler)
+
+# 日志按日期轮转辅助逻辑：每天检查一次，将旧日志归档为带日期的文件名
+def _archive_log_by_date():
+    """如果 rest_reminder.log.1 的修改日期与今天不同，则重命名为带日期的归档文件"""
+    try:
+        base = _LOG_FILE
+        rotated = f'{base}.1'
+        if not os.path.exists(rotated):
+            return
+        mtime = datetime.fromtimestamp(os.path.getmtime(rotated))
+        today = datetime.now().date()
+        if mtime.date() != today:
+            dated_name = f'{base}.{mtime.strftime("%Y%m%d")}.log'
+            # 避免覆盖已有归档
+            if not os.path.exists(dated_name):
+                os.rename(rotated, dated_name)
+                log.info(f'[日志归档] {os.path.basename(rotated)} -> {os.path.basename(dated_name)}')
+    except Exception as e:
+        log.warning(f'[日志归档] 失败: {e}')
+
+# 启动每日日志归档检查定时器（每 1 小时检查一次）
+_log_archive_timer = QTimer()
+_log_archive_timer.timeout.connect(_archive_log_by_date)
+_log_archive_timer.start(3600 * 1000)
 
 # ── 存储层（统一 JSON IO） ──
 goal_store      = JSONStore('.goal.json',          default={},          ensure_ascii=False)
@@ -788,8 +818,10 @@ class FloatingBall(QWidget):
 
         # 计算剩余时间
         try:
-            if mw.timer_state == 'running':
-                remaining = max(mw._activity_interval * 60 - (datetime.now() - mw.start_time).total_seconds(), 0)
+            if mw.timer_state == 'running' and mw._perf_start:
+                # Anti-drift: perf_counter for popup timer display too
+                elapsed = time.perf_counter() - mw._perf_start
+                remaining = max(mw._activity_interval * 60 - elapsed, 0)
                 m, s = int(remaining // 60), int(remaining % 60)
                 timer_text = f'⚡ {m:02d}:{s:02d}'
             elif mw.timer_state == 'resting':
@@ -1082,6 +1114,40 @@ class LocalSync:
         app_state_store.save(state)
 
 
+# ═══ 临时文件管理器（防止泄漏） ═══
+class _TempFileManager:
+    """集中管理临时文件生命周期，确保进程退出时清理。
+
+    仅跟踪通过本管理器创建的临时文件；不干预第三方库（如 agently-cli）自身的临时文件。
+    """
+    _files: list[str] = []
+
+    @classmethod
+    def register(cls, path: str):
+        """注册一个临时文件，退出时自动删除"""
+        cls._files.append(path)
+
+    @classmethod
+    def cleanup(cls):
+        """清理所有已注册的临时文件"""
+        for path in cls._files:
+            try:
+                if path and os.path.exists(path):
+                    os.remove(path)
+                    log.info(f'[temp] 已清理: {os.path.basename(path)}')
+            except Exception as e:
+                log.debug(f'[temp] 清理失败 {path}: {e}')
+        cls._files.clear()
+
+
+def _cleanup_tempfiles_atexit():
+    """进程退出时的清理钩子"""
+    _TempFileManager.cleanup()
+
+
+atexit.register(_cleanup_tempfiles_atexit)
+
+
 # ═══ 每周邮件报告（agently-cli） ═══
 class _WeeklyReportWorker(QThread):
     """后台线程：生成并通过 agently-cli 发送每周学习报告邮件"""
@@ -1124,6 +1190,7 @@ class _WeeklyReportWorker(QThread):
             html_path = os.path.join(html_dir, html_name)
             with open(html_path, 'w', encoding='utf-8') as f:
                 f.write(html_body)
+            _TempFileManager.register(html_path)
 
             # 通过 agently-cli 发送（两阶段：先获取确认令牌，再确认）
             # 自动查找 agently-cli 路径（npm 全局安装可能在 PATH 外）
@@ -1324,6 +1391,7 @@ def _generate_ambient_wav(sound_type, duration=30, sample_rate=44100):
                 r = int((right[i] + _rng.uniform(-0.0005, 0.0005)) * 32767)
                 raw += struct.pack('<hh', max(-32768, min(32767, l)), max(-32768, min(32767, r)))
             wf.writeframes(raw)
+    _TempFileManager.register(wav_path)
     return wav_path
 
 
@@ -2592,71 +2660,75 @@ class TrendWindow(QWidget):
             self.close()
 
 
-def _md_to_html(text):
-    """轻量 markdown → HTML（带表格支持）"""
-    lines = text.split('\n')
-    out = []
-    in_code = False
-    table_buf = []
-    in_table = False
-
-    def _flush_table():
-        nonlocal in_table
-        if not table_buf:
-            return
-        rows_html = []
-        for i, row in enumerate(table_buf):
-            cells = [c.strip() for c in row.strip('|').split('|')]
-            if i == 0:
-                row_html = '<tr>' + ''.join(f'<th style="border:1px solid #252530;padding:6px 12px;color:#d4af37;font-weight:bold;">{c}</th>' for c in cells) + '</tr>'
-            else:
-                row_html = '<tr>' + ''.join(f'<td style="border:1px solid #252530;padding:6px 12px;color:#b8b4ac;">{c}</td>' for c in cells) + '</tr>'
-            rows_html.append(row_html)
-        out.append(f'<table style="border-collapse:collapse;width:100%;margin:8px 0;font-size:13px;">{"".join(rows_html)}</table>')
-        table_buf.clear()
+class _Utils:
+    @staticmethod
+    def md_to_html(text):
+        """轻量 markdown → HTML（带表格支持）"""
+        lines = text.split('\n')
+        out = []
+        in_code = False
+        table_buf = []
         in_table = False
 
-    for line in lines:
-        if line.strip().startswith('```'):
-            _flush_table()
+        def _flush_table():
+            nonlocal in_table
+            if not table_buf:
+                return
+            rows_html = []
+            for i, row in enumerate(table_buf):
+                cells = [c.strip() for c in row.strip('|').split('|')]
+                if i == 0:
+                    row_html = '<tr>' + ''.join(f'<th style="border:1px solid #252530;padding:6px 12px;color:#d4af37;font-weight:bold;">{c}</th>' for c in cells) + '</tr>'
+                else:
+                    row_html = '<tr>' + ''.join(f'<td style="border:1px solid #252530;padding:6px 12px;color:#b8b4ac;">{c}</td>' for c in cells) + '</tr>'
+                rows_html.append(row_html)
+            out.append(f'<table style="border-collapse:collapse;width:100%;margin:8px 0;font-size:13px;">{"".join(rows_html)}</table>')
+            table_buf.clear()
+            in_table = False
+
+        for line in lines:
+            if line.strip().startswith('```'):
+                _flush_table()
+                if in_code:
+                    out.append('</pre>')
+                    in_code = False
+                else:
+                    out.append('<pre style="background:#18181f;border:1px solid #252530;border-radius:8px;padding:10px;font-size:12px;font-family:Consolas,monospace;color:#e8e4dc;overflow-x:auto;">')
+                    in_code = True
+                continue
             if in_code:
-                out.append('</pre>')
-                in_code = False
-            else:
-                out.append('<pre style="background:#18181f;border:1px solid #252530;border-radius:8px;padding:10px;font-size:12px;font-family:Consolas,monospace;color:#e8e4dc;overflow-x:auto;">')
-                in_code = True
-            continue
+                out.append(line)
+                continue
+            if '|' in line and not line.strip().startswith('|--'):
+                in_table = True
+                table_buf.append(line)
+                continue
+            if in_table:
+                _flush_table()
+            if line.startswith('# '):
+                out.append(f'<h1 style="color:#e8e6e1;font-size:18px;font-weight:bold;margin:16px 0 8px;">{line[2:]}</h1>')
+            elif line.startswith('## '):
+                out.append(f'<h2 style="color:#d4af37;font-size:15px;font-weight:bold;margin:12px 0 6px;">{line[3:]}</h2>')
+            elif line.startswith('### '):
+                out.append(f'<h3 style="color:#c4b8a0;font-size:13px;font-weight:bold;margin:10px 0 4px;">{line[4:]}</h3>')
+            elif line.startswith('- '):
+                out.append(f'<li style="margin-left:16px;color:#b8b4ac;line-height:1.8;">{line[2:]}</li>')
+            elif line.strip().startswith('> '):
+                out.append(f'<blockquote style="border-left:3px solid #d4af37;padding-left:10px;color:#888;margin:6px 0;">{line.strip()[2:]}</blockquote>')
+            elif line.strip() == '---':
+                out.append('<hr style="border:none;border-top:1px solid #252530;margin:12px 0;">')
+            elif line.strip():
+                line = re.sub(r'\*\*(.+?)\*\*', r'<strong style="color:#e8e6e1;">\1</strong>', line)
+                line = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'<em style="color:#c4b8a0;">\1</em>', line)
+                if re.match(r'^\*\s', line):
+                    line = '•' + line[1:]
+                out.append(f'<p style="color:#b8b4ac;line-height:1.7;margin:4px 0;">{line}</p>')
+        _flush_table()
         if in_code:
-            out.append(line)
-            continue
-        if '|' in line and not line.strip().startswith('|--'):
-            in_table = True
-            table_buf.append(line)
-            continue
-        if in_table:
-            _flush_table()
-        if line.startswith('# '):
-            out.append(f'<h1 style="color:#e8e6e1;font-size:18px;font-weight:bold;margin:16px 0 8px;">{line[2:]}</h1>')
-        elif line.startswith('## '):
-            out.append(f'<h2 style="color:#d4af37;font-size:15px;font-weight:bold;margin:12px 0 6px;">{line[3:]}</h2>')
-        elif line.startswith('### '):
-            out.append(f'<h3 style="color:#c4b8a0;font-size:13px;font-weight:bold;margin:10px 0 4px;">{line[4:]}</h3>')
-        elif line.startswith('- '):
-            out.append(f'<li style="margin-left:16px;color:#b8b4ac;line-height:1.8;">{line[2:]}</li>')
-        elif line.strip().startswith('> '):
-            out.append(f'<blockquote style="border-left:3px solid #d4af37;padding-left:10px;color:#888;margin:6px 0;">{line.strip()[2:]}</blockquote>')
-        elif line.strip() == '---':
-            out.append('<hr style="border:none;border-top:1px solid #252530;margin:12px 0;">')
-        elif line.strip():
-            line = re.sub(r'\*\*(.+?)\*\*', r'<strong style="color:#e8e6e1;">\1</strong>', line)
-            line = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'<em style="color:#c4b8a0;">\1</em>', line)
-            if re.match(r'^\*\s', line):
-                line = '•' + line[1:]
-            out.append(f'<p style="color:#b8b4ac;line-height:1.7;margin:4px 0;">{line}</p>')
-    _flush_table()
-    if in_code:
-        out.append('</pre>')
-    return '\n'.join(out)
+            out.append('</pre>')
+        return '\n'.join(out)
+
+_md_to_html = _Utils.md_to_html
 
 
 def _build_report_data(report_type):
@@ -3067,6 +3139,8 @@ class RestReminderWidget(QWidget):
 
     def __init__(self, silent_start=False):
         super().__init__()
+        self._perf_start = 0.0  # time.perf_counter() snapshot when running/resumed
+        self._last_timer_sync = 0  # last time perf_counter was synced (anti-drift)
         self.start_time = None
         self.remaining_when_paused = None
         self.timer_state = 'idle'
@@ -3123,6 +3197,15 @@ class RestReminderWidget(QWidget):
 
         # 快速复盘
         self._pending_review = False
+
+        # Tab 延迟加载标志（防止重复构建）
+        self._ai_tab_built = False
+        self._about_tab_built = False
+        # Tab 延迟加载定时器/信号追踪（防止重复构建累积）
+        self._ai_tab_timers = []
+        self._about_tab_timers = []
+        self._ai_tab_connections = []
+        self._about_tab_connections = []
 
         # 自动备份定时器（每小时检查，24h未备份则执行）
         self._backup_timer = QTimer(self)
@@ -3903,6 +3986,33 @@ class RestReminderWidget(QWidget):
         self._toast('📅 飞书日程', '正在刷新...')
         self._calendar_mgr.refresh()
 
+    def _refresh_feishu_diag(self):
+        """刷新飞书诊断面板"""
+        try:
+            status = self._calendar_mgr.get_last_sync_status()
+            last_success = status.get('last_success', '从未')
+            last_error = status.get('last_error', '')
+            retry_count = status.get('retry_count', 0)
+            if not hasattr(self, '_feishu_diag_last_sync'):
+                return
+            self._feishu_diag_last_sync.setText(f'上次同步：{last_success}')
+            if self._calendar_enabled:
+                if last_error:
+                    self._feishu_diag_status.setText('状态：失败')
+                    self._feishu_diag_status.setStyleSheet('color: #c95454; font-size: 11px; background: transparent;')
+                    error_text = last_error if len(last_error) <= 100 else last_error[:100] + '...'
+                    self._feishu_diag_error.setText(f'错误：{error_text}')
+                else:
+                    self._feishu_diag_status.setText('状态：正常')
+                    self._feishu_diag_status.setStyleSheet('color: #78B450; font-size: 11px; background: transparent;')
+                    self._feishu_diag_error.setText('错误：')
+            else:
+                self._feishu_diag_status.setText('状态：未启用')
+                self._feishu_diag_status.setStyleSheet('color: #888; font-size: 11px; background: transparent;')
+                self._feishu_diag_error.setText('错误：')
+        except Exception as e:
+            log.warning(f'[飞书诊断] 刷新失败: {e}')
+
     def _update_calendar_list(self):
         """更新今日 tab 中的日程列表文本"""
         try:
@@ -3941,6 +4051,17 @@ class RestReminderWidget(QWidget):
 
     def _build_ai_tab(self):
         """AI 报告 tab：5种报告直接展示，点选即生成"""
+        if getattr(self, '_ai_tab_built', False):
+            return None
+        # 清理旧连接/定时器（防御性：防止重复构建累积）
+        for conn in getattr(self, '_ai_tab_connections', []):
+            try:
+                QObject.disconnect(conn)
+            except Exception:
+                pass
+        self._ai_tab_connections = []
+        self._ai_tab_timers = []
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet('QScrollArea { border: none; background: #0d0d12; }')
@@ -3978,7 +4099,8 @@ class RestReminderWidget(QWidget):
                 }
                 QPushButton:hover { background: rgba(212,175,55,0.14); color: #ccc; }
             """)
-            b.clicked.connect(lambda checked, t=rtype: self._load_report(t))
+            conn = b.clicked.connect(lambda checked, t=rtype: self._load_report(t))
+            self._ai_tab_connections.append(conn)
             btn_row.addWidget(b)
             self._report_buttons[rtype] = b
         # 强制刷新按钮
@@ -3992,7 +4114,8 @@ class RestReminderWidget(QWidget):
             }
             QPushButton:hover { background: rgba(106,140,187,0.2); }
         """)
-        refresh_btn.clicked.connect(self._force_refresh_report)
+        conn = refresh_btn.clicked.connect(self._force_refresh_report)
+        self._ai_tab_connections.append(conn)
         btn_row.addWidget(refresh_btn)
         layout.addLayout(btn_row)
         layout.addSpacing(6)
@@ -4011,7 +4134,9 @@ class RestReminderWidget(QWidget):
 
         scroll.setWidget(container)
         # 默认选中日报
-        QTimer.singleShot(100, lambda: self._load_report('daily'))
+        tid = QTimer.singleShot(100, lambda: self._load_report('daily'))
+        self._ai_tab_timers.append(tid)
+        self._ai_tab_built = True
         return scroll
 
     def _load_report(self, report_type, force_refresh=False):
@@ -4685,6 +4810,32 @@ class RestReminderWidget(QWidget):
         )
         layout.addWidget(feishu_cal_row)
 
+        # 飞书诊断面板
+        feishu_diag_card = QFrame()
+        feishu_diag_card.setObjectName('sectionCard')
+        fdc = QVBoxLayout(feishu_diag_card)
+        fdc.setContentsMargins(14, 12, 14, 12)
+        fdc.setSpacing(6)
+        feishu_diag_title = QLabel('🔍 飞书同步诊断')
+        feishu_diag_title.setStyleSheet('color: #e8e6e1; font-size: 13px; font-weight: bold; background: transparent;')
+        fdc.addWidget(feishu_diag_title)
+        self._feishu_diag_last_sync = QLabel('上次同步：从未')
+        self._feishu_diag_last_sync.setStyleSheet('color: #888; font-size: 11px; background: transparent;')
+        fdc.addWidget(self._feishu_diag_last_sync)
+        self._feishu_diag_status = QLabel('状态：未启用')
+        self._feishu_diag_status.setStyleSheet('color: #888; font-size: 11px; background: transparent;')
+        fdc.addWidget(self._feishu_diag_status)
+        self._feishu_diag_error = QLabel('错误：')
+        self._feishu_diag_error.setStyleSheet('color: #888; font-size: 11px; background: transparent;')
+        self._feishu_diag_error.setWordWrap(True)
+        fdc.addWidget(self._feishu_diag_error)
+        layout.addWidget(feishu_diag_card)
+        # 飞书诊断刷新定时器（每 30 秒）
+        self._feishu_diag_timer = QTimer(self)
+        self._feishu_diag_timer.timeout.connect(self._refresh_feishu_diag)
+        self._feishu_diag_timer.start(30 * 1000)
+        self._refresh_feishu_diag()
+
         # ═══ 环境白噪音 ═══
         layout.addSpacing(8)
         layout.addLayout(self._make_section_header('🎵', '环境白噪音'))
@@ -5319,6 +5470,17 @@ class RestReminderWidget(QWidget):
             self._backup_status_lbl.setStyleSheet('color: #c95454; font-size: 11px; background: transparent;')
 
     def _build_about_tab(self):
+        if getattr(self, '_about_tab_built', False):
+            return None
+        # 清理旧连接/定时器（防御性：防止重复构建累积）
+        for conn in getattr(self, '_about_tab_connections', []):
+            try:
+                QObject.disconnect(conn)
+            except Exception:
+                pass
+        self._about_tab_connections = []
+        self._about_tab_timers = []
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet('QScrollArea { border: none; background: #0d0d12; }')
@@ -5371,7 +5533,8 @@ class RestReminderWidget(QWidget):
             btn.setFixedHeight(32)
             btn.setCursor(Qt.PointingHandCursor)
             btn.setStyleSheet(f'QPushButton {{ background: rgba(255,255,255,0.04); color: {tip_color}; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 0 14px; font-size: 12px; }} QPushButton:hover {{ background: rgba(255,255,255,0.08); }}')
-            btn.clicked.connect(slot)
+            conn = btn.clicked.connect(slot)
+            self._about_tab_connections.append(conn)
             btn_row.addWidget(btn)
         hero_layout.addLayout(btn_row)
         layout.addWidget(hero)
@@ -5661,6 +5824,7 @@ class RestReminderWidget(QWidget):
 
         layout.addStretch()
         scroll.setWidget(container)
+        self._about_tab_built = True
         return scroll
 
     # ── About 页辅助方法 ──
@@ -6033,19 +6197,20 @@ class RestReminderWidget(QWidget):
             log.error(f'[_sync_buttons 异常] {type(e).__name__}: {e}')
 
     def _pause_timer(self, auto_paused=False):
-        """暂停计时器（计算剩余时间）"""
-        remaining = self._activity_interval * 60 - (datetime.now() - self.start_time).total_seconds()
+        """暂停计时器（计算剩余时间，基于 perf_counter 避免计时漂移）"""
+        elapsed = time.perf_counter() - self._perf_start
+        remaining = self._activity_interval * 60 - elapsed
         self.remaining_when_paused = max(remaining, 0)
         self.timer_state = 'paused'
         self._sync_buttons()
 
     def _resume_timer(self):
-        """恢复计时器（从暂停位置继续）"""
+        """恢复计时器（从暂停位置继续，记录新 perf_start）"""
         if self.remaining_when_paused is None:
             log.warning('[_resume_timer] remaining_when_paused is None, resetting to idle')
             self._reset_timer_to_idle()
             return
-        self.start_time = datetime.now() - timedelta(seconds=(self._activity_interval * 60 - self.remaining_when_paused))
+        self._perf_start = time.perf_counter() - (self._activity_interval * 60 - self.remaining_when_paused)
         self.remaining_when_paused = None
         self.timer_state = 'running'
         self._sync_buttons()
@@ -6058,7 +6223,8 @@ class RestReminderWidget(QWidget):
                 self.tray_icon.showMessage('⏰ 今日已结束', '22:00 后不再开始新轮次，明天见！', QSystemTrayIcon.Information, 3000)
                 return
             if self.timer_state == 'idle':
-                self.start_time = datetime.now()
+                self._perf_start = time.perf_counter()
+                self.start_time = datetime.now()  # UI显示用的参考时间戳
                 self._activity_interval = 60
             else:
                 log.info(f'[on_start_clicked] 用户点击继续（剩余{int(self.remaining_when_paused//60)}分{int(self.remaining_when_paused%60)}秒）')
@@ -6088,6 +6254,7 @@ class RestReminderWidget(QWidget):
         try:
             self.timer_state = 'idle'
             self.start_time = None
+            self._perf_start = 0.0
             self.remaining_when_paused = None
             self._study_countdown_active = False
             self.countdown_overlay.hide_overlay()
@@ -6107,14 +6274,23 @@ class RestReminderWidget(QWidget):
         if hasattr(self, 'floating_ball') and self.floating_ball._progress > 0:
             self.floating_ball.set_progress(0.0)
 
+    def _transition_to(self, new_state):
+        """状态机转换守卫：仅当状态不同时才切换，避免重复触发"""
+        if self.timer_state == new_state:
+            return
+        old_state = self.timer_state
+        self.timer_state = new_state
+        log.info(f'[状态机] {old_state} -> {new_state}')
+
     def _handle_running(self, now):
         """处理运行状态 - 固定60分钟倒计时 -> 5分钟请辨 -> 5分钟休息"""
         # 浮球：确保清除环形进度
         if hasattr(self, 'floating_ball') and self.floating_ball._progress > 0:
             self.floating_ball.set_progress(0.0)
 
-        elapsed = (now - self.start_time).total_seconds()
-        total_seconds = self._activity_interval * 60  # 使用配置的间隔而非硬编码
+        # Anti-drift: perf_counter instead of datetime difference
+        elapsed = time.perf_counter() - self._perf_start
+        total_seconds = self._activity_interval * 60
         remaining = max(total_seconds - elapsed, 0)
 
         mins = int(remaining // 60)
@@ -6138,7 +6314,7 @@ class RestReminderWidget(QWidget):
         if remaining <= 0:
             self._study_countdown_active = False
             self.countdown_overlay.hide_overlay()
-            self.timer_state = 'resting'
+            self._transition_to('resting')
             self._rest_end_time = now + timedelta(minutes=5)
             self._pending_review = True
             if self.app_settings.get('review_reminder', True):
@@ -6183,7 +6359,7 @@ class RestReminderWidget(QWidget):
             self._prompt_round_goal()
 
             self.break_start = None
-            self.timer_state = 'idle'
+            self._transition_to('idle')
             self._sync_buttons()
             self.tray_icon.showMessage(
                 '▶ 下一轮',
@@ -6411,8 +6587,8 @@ class RestReminderWidget(QWidget):
             # 计时器标签（本轮剩余/休息剩余）
             timer_lbl = refs.get('timer_lbl')
             if timer_lbl and not sip.isdeleted(timer_lbl):
-                if self.timer_state == 'running' and self.start_time:
-                    elapsed = (datetime.now() - self.start_time).total_seconds() / 60
+                if self.timer_state == 'running' and self._perf_start:
+                    elapsed = (time.perf_counter() - self._perf_start) / 60
                     remaining = max(0, 60 - elapsed)
                     timer_lbl.setText(f'⏱ 本轮剩余：{remaining:.0f} 分钟')
                     timer_lbl.setStyleSheet('color: #6a8cbb; font-size: 12px;')
@@ -6435,6 +6611,9 @@ class RestReminderWidget(QWidget):
         """构建复盘评分对话框：学科6选1 + 标签5选1 + 评分滑块1-100，1分钟自动提交，金色选中态"""
         parent = self.window() or self
         dialog = QDialog(parent)
+        dialog.setAttribute(Qt.WA_DeleteOnClose)
+        self.review_dlg = dialog
+        dialog.destroyed.connect(lambda: setattr(self, 'review_dlg', None))
         dialog.setWindowTitle(title)
         dialog.setFixedSize(480, 420)
         dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
@@ -6924,7 +7103,9 @@ class RestReminderWidget(QWidget):
         if saved_state == 'running':
             saved_remaining = state.get('remaining', 0)
             if saved_remaining > 0 and saved_remaining < self._activity_interval * 60:
-                self.start_time = datetime.now() - timedelta(seconds=(self._activity_interval * 60 - saved_remaining))
+                # Anti-drift: compute perf_start from saved remaining
+                self._perf_start = time.perf_counter() - (self._activity_interval * 60 - saved_remaining)
+                self.start_time = datetime.now()  # UI reference only
                 self.timer_state = 'running'
                 self._sync_buttons()
                 log.info(f'[恢复] 续接倒计时，剩余 {int(saved_remaining//60)} 分 {int(saved_remaining%60)} 秒')
@@ -6967,8 +7148,8 @@ class RestReminderWidget(QWidget):
     def _save_active_state(self):
         """保存当前运行状态到本地文件（防崩溃丢失）"""
         remaining = 0
-        if self.timer_state == 'running' and self.start_time:
-            remaining = max(self._activity_interval * 60 - (datetime.now() - self.start_time).total_seconds(), 0)
+        if self.timer_state == 'running' and self._perf_start:
+            remaining = max(self._activity_interval * 60 - (time.perf_counter() - self._perf_start), 0)
         elif self.timer_state == 'paused' and self.remaining_when_paused is not None:
             remaining = self.remaining_when_paused
 
@@ -7048,6 +7229,9 @@ class RestReminderWidget(QWidget):
         """检查并解锁成就。silent=True 时不弹 Toast（启动时用）。"""
         try:
             data = achievements_store.load()
+            if not data or not isinstance(data.get('earned'), dict):
+                data = {'earned': {}}
+                log.warning('[成就] 数据异常，使用空成就集')
             earned = data.get('earned', {})
 
             # 构建检查数据
@@ -7251,6 +7435,8 @@ class RestReminderWidget(QWidget):
         # 停止飞书日程管理器
         if hasattr(self, "_calendar_mgr"):
             self._calendar_mgr.stop()
+        # 清理临时文件
+        _TempFileManager.cleanup()
 
         try:
             event.ignore()

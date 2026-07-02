@@ -9,11 +9,8 @@ const fade = (delay = 0) => ({
 });
 
 const sponsors = [
-  { name: "LongCat", desc: "美团旗下图像生成模型，为项目提供视觉内容生成能力", url: "https://longcat.chat/platform/docs/zh/" },
-  { name: "StepFun 阶跃星辰", desc: "国产大模型先锋，Step Audio 语音合成 API 为休息提醒提供 TTS 播报能力", url: "https://platform.stepfun.com" },
-  { name: "SenseNova 商汤", desc: "多模态大模型平台，为 AI 学习分析报告提供核心推理引擎", url: "https://sensenova.cn" },
-  { name: "XiaomiMimo", desc: "技术支持伙伴", url: "https://xiumimo.com" },
-  { name: "CC Switch", desc: "AI 编程 CLI 统一管理工具", url: "https://ccswitch.io" },
+  { name: "CC Switch", desc: "AI 编程 CLI 统一管理工具，为项目提供开发效率支持", url: "https://ccswitch.io" },
+  { name: "Kimi K2.7 Code", desc: "Moonshot AI 开源的编程专用开源智能体模型，为项目提供 AI 编程能力", url: "https://kimi.moonshot.cn" },
 ];
 
 const techSupport = [
@@ -21,7 +18,6 @@ const techSupport = [
   { name: "StepFun", desc: "大模型 / TTS 语音" },
   { name: "SenseNova", desc: "多模态大模型 · API" },
   { name: "XiaomiMimo", desc: "技术支持" },
-  { name: "CC Switch", desc: "AI 编程 CLI 管理" },
 ];
 
 export default function Sponsor() {
@@ -30,21 +26,21 @@ export default function Sponsor() {
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <motion.div {...fade(0)} className="text-center mb-16">
-          <p className="text-[var(--accent)] text-sm font-medium mb-4 tracking-wide">❤️ 开源 · 社区驱动</p>
+          <p className="text-[var(--accent)] text-sm font-medium mb-4 tracking-wide">开源生态</p>
           <h2 className="text-3xl md:text-5xl font-extrabold tracking-tight mb-5 font-display">
             感谢每一位支持者
           </h2>
           <p className="text-[var(--fg-dim)] text-lg max-w-2xl mx-auto leading-relaxed">
-            Rest Reminder 是一个面向学习者的开源项目，由社区与赞助商共同支撑。我们将每一份支持都视为让项目走得更远的力量。
+            Rest Reminder 是一个 MIT 开源项目，由社区与赞助商共同支撑。感谢以下团队的支持。
           </p>
         </motion.div>
 
-        {/* Core sponsors */}
+        {/* Sponsors */}
         <motion.div {...fade(0.1)} className="text-center mb-16">
-          <h3 className="text-2xl md:text-3xl font-bold mb-3 font-display">核心赞助商</h3>
-          <p className="text-[var(--fg-dim)] mb-10">Rest Reminder 的 AI 能力由以下团队提供底层支持</p>
+          <h3 className="text-2xl md:text-3xl font-bold mb-3 font-display">赞助商</h3>
+          <p className="text-[var(--fg-dim)] mb-10">感谢以下团队对项目的直接赞助与支持</p>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
             {sponsors.map((s) => (
               <a key={s.name} href={s.url} target="_blank" rel="noopener noreferrer" className="card p-6 text-left group">
                 <div className="flex items-center gap-3 mb-3">
@@ -59,10 +55,10 @@ export default function Sponsor() {
           </div>
         </motion.div>
 
-        {/* Technical support */}
+        {/* Technical partners */}
         <motion.div {...fade(0.15)} className="text-center mb-16">
-          <h3 className="text-2xl md:text-3xl font-bold mb-3 font-display">技术支持</h3>
-          <p className="text-[var(--fg-dim)] mb-10">感谢以下伙伴在技术层面的支持</p>
+          <h3 className="text-2xl md:text-3xl font-bold mb-3 font-display">技术伙伴</h3>
+          <p className="text-[var(--fg-dim)] mb-10">感谢以下团队在技术层面的支持</p>
 
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 max-w-3xl mx-auto">
             {techSupport.map((s) => (
@@ -74,10 +70,10 @@ export default function Sponsor() {
           </div>
         </motion.div>
 
-        {/* Contact CTA */}
+        {/* Become a sponsor CTA */}
         <motion.div {...fade(0.2)} className="text-center mt-16">
           <div className="card p-8 max-w-2xl mx-auto">
-            <h4 className="text-lg font-bold mb-2">商务合作 / 赞助</h4>
+            <h4 className="text-lg font-bold mb-2">成为赞助商</h4>
             <p className="text-sm text-[var(--fg-dim)] mb-4">
               无论是 API 服务、工具产品还是其他合作，欢迎联系。
             </p>

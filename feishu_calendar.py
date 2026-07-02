@@ -457,6 +457,19 @@ class FeishuCalendarManager:
         """
         return self.get_current(), self.get_upcoming()
 
+    def get_last_sync_status(self):
+        """获取最近一次同步状态"""
+        if not self._last_fetch:
+            return {'last_success': '从未', 'last_error': '', 'retry_count': 0}
+        last_success = self._last_fetch.strftime('%Y-%m-%d %H:%M')
+        last_error = self._error_msg or ''
+        retry_count = self._retry_count
+        return {
+            'last_success': last_success,
+            'last_error': last_error,
+            'retry_count': retry_count,
+        }
+
     def get_display_text(self, short=False):
         """
         生成适合 UI 展示的日程摘要文本。
