@@ -15,11 +15,10 @@ if sys.version_info[:2] != (3, 14):
     msg = (f"[rest_reminder] 此版本仅兼容 Python 3.14（当前 {sys.version_info.major}.{sys.version_info.minor}）。\n"
            f"请用: C:\\Python314\\python.exe rest_reminder.py --silent")
     if getattr(sys, 'frozen', False):
-        log.warning(msg)
+        print(msg, file=sys.stderr)
     else:
         print(msg, file=sys.stderr)
         sys.exit(2)
-log.info(f'[启动] Python {platform.python_version()}，vendor模式={getattr(sys,"frozen",False)}')
 # vendor 目录：开箱即用，无需 pip install -r requirements.txt
 # PyInstaller 打包后 (sys.frozen=True) 由 spec 处理依赖，跳过
 _VENDOR_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vendor')
@@ -35,7 +34,6 @@ if not getattr(sys, 'frozen', False) and os.path.isdir(_VENDOR_DIR) and _VENDOR_
 import time
 import random
 import json
-import platform
 import re
 import requests
 import ctypes
@@ -105,7 +103,7 @@ if os.path.isdir(_PRO_DIR) and _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v6.1.2'
+VERSION = 'v6.1.3'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=500_000, backupCount=7, encoding='utf-8')
@@ -113,6 +111,7 @@ _handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s
 log = logging.getLogger('rest_reminder')
 log.setLevel(logging.INFO)
 log.addHandler(_handler)
+log.info(f'[启动] Python {platform.python_version()}，vendor模式={getattr(sys,"frozen",False)}')
 
 # 日志按日期轮转辅助逻辑：每天检查一次，将旧日志归档为带日期的文件名
 def _archive_log_by_date():
