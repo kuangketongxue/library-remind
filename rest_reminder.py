@@ -4020,6 +4020,10 @@ class RestReminderWidget(QWidget):
             cal_list = refs.get('cal_list')
             if not cal_list or sip.isdeleted(cal_list):
                 return
+            # 获取失败时只显示错误，不再显示"今日暂无日程安排"
+            if self._calendar_mgr.error_message:
+                cal_list.setText(f'⚠️ {self._calendar_mgr.error_message}')
+                return
             events = self._calendar_mgr.get_today_events()
             if not events:
                 cal_list.setText('今日暂无日程安排')
