@@ -307,6 +307,7 @@ class FeishuCalendarManager:
         self._events = []
         self._last_fetch = None
         self._error_msg = ''
+        self._fetch_failed = False  # 明确标记最近一次获取是否失败
         self._worker = None
         self._refresh_interval = refresh_interval
         self._enabled = True
@@ -369,6 +370,9 @@ class FeishuCalendarManager:
             return
         if self._worker and self._worker.isRunning():
             return
+        # 开始新获取时暂时清除失败标记，让 UI 进入"同步中"而非持续显示旧错误
+        self._fetch_failed = False
+        self._error_msg = ''
         self._worker = _FetchWorker()
         self._worker.fetched.connect(self._on_fetched)
         self._worker.error.connect(self._on_error)
@@ -383,6 +387,7 @@ class FeishuCalendarManager:
         self._events = events
         self._last_fetch = datetime.now()
         self._error_msg = ''
+        self._fetch_failed = False
         self._fetch_count += 1
         self._retry_count = 0  # 成功则重置重试计数
         self._retry_timer.stop()  # 停止重试定时器
@@ -391,6 +396,7 @@ class FeishuCalendarManager:
     def _on_error(self, msg):
         """后台线程失败回调（主线程执行）"""
         self._error_msg = msg
+        self._fetch_failed = True
         log.warning(f'[FeishuCalendar] 获取失败: {msg}')
         # 失败重试：最多 3 次，每次间隔 10 分钟
         if self._retry_count < self._max_retries:
@@ -470,6 +476,54 @@ class FeishuCalendarManager:
             'retry_count': retry_count,
         }
 
+    @property
+    def fetch_failed(self):
+        """最近一次获取是否失败（True/False）"""
+        return self._fetch_failed
+
+    @property
+    def last_fetch_success(self):
+        """是否至少成功获取过一次"""
+        return self._last_fetch is not None
+
+    def get_status(self):
+        """返回结构化状态，供 UI 精确区分各种场景"""
+        if not self._enabled:
+            return {
+                'kind': 'disabled',
+                'text': '未启用',
+                'error': '',
+                'events_count': 0,
+            }
+        if self._fetch_failed:
+            return {
+                'kind': 'error',
+                'text': '获取失败',
+                'error': self._error_msg or '未知错误',
+                'events_count': len(self._events),
+            }
+        if not self._last_fetch:
+            return {
+                'kind': 'syncing',
+                'text': '正在同步...',
+                'error': '',
+                'events_count': 0,
+            }
+        events = self.get_today_events()
+        if events:
+            return {
+                'kind': 'ok',
+                'text': '已同步',
+                'error': '',
+                'events_count': len(events),
+            }
+        return {
+            'kind': 'empty',
+            'text': '今日无日程',
+            'error': '',
+            'events_count': 0,
+        }
+
     def get_display_text(self, short=False):
         """
         生成适合 UI 展示的日程摘要文本。
@@ -477,8 +531,30 @@ class FeishuCalendarManager:
         返回格式如：
           - "▶ 正在开会（14:00-15:00）"
           - "⏳ 下一个：产品评审（16:00-17:00，还有45分钟）"
-          - "📅 今日无日程"
+          - "📅 今日无日程安排"
         """
+        # 失败优先：明确告知"无法获取"而非显示缓存/空状态
+        if self._fetch_failed:
+            if short:
+                return '⚠️ 日程获取失败'
+            err = self._error_msg or '未知错误'
+            # 对用户友好的简短错误：只保留核心原因
+            if 'lark-cli' in err or '未找到' in err or 'PATH' in err:
+                user_err = '未安装 lark-cli 或不在 PATH'
+            elif '超时' in err:
+                user_err = '连接超时'
+            elif 'API 错误' in err:
+                user_err = '飞书 API 返回错误'
+            elif 'JSON' in err or '解析' in err:
+                user_err = '日程数据解析失败'
+            else:
+                # 其他错误取最简描述，避免技术细节轰炸
+                user_err = err
+            return f'⚠️ 无法获取日程：{user_err}'
+
+        if not self._last_fetch:
+            return '⏳ 正在同步日程...'
+
         current, upcoming = self.get_current_and_next()
 
         if current:
@@ -506,7 +582,4 @@ class FeishuCalendarManager:
                 soon_text = f'，{hours:.1f}小时后开始'
             return f'⏳ {upcoming.summary}（{upcoming.time_range}{soon_text}）'
 
-        if self._error_msg:
-            return f'⚠️ 日程获取失败'
-
-        return '📅 今日无日程'
+        return '📅 今日无日程安排'

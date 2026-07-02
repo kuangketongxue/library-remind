@@ -54,7 +54,6 @@ import wave
 import struct
 import math
 import subprocess
-import tempfile
 import atexit
 import winreg
 import traceback
@@ -103,7 +102,7 @@ if os.path.isdir(_PRO_DIR) and _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v6.1.3'
+VERSION = 'v6.1.4'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=500_000, backupCount=7, encoding='utf-8')
@@ -632,8 +631,34 @@ class FloatingBall(QWidget):
                 return
             delta = (datetime.now() - self.click_time).total_seconds()
             if delta < 0.3:
-                # 短点击 → 弹出 info 浮层
-                self._show_info_popup()
+                # 短点击 → 切换浮球显示/隐藏
+                if self.isVisible():
+                    self.hide()
+                else:
+                    self.show()
+                    self.raise_()
+                return
+        super().mouseReleaseEvent(event)
+
+    def hideEvent(self, event):
+        """隐藏时同步托盘菜单文案"""
+        super().hideEvent(event)
+        try:
+            mw = getattr(self, 'main_window', None)
+            if mw is not None:
+                mw._update_tray_ball_action()
+        except Exception:
+            pass
+
+    def showEvent(self, event):
+        """显示时同步托盘菜单文案"""
+        super().showEvent(event)
+        try:
+            mw = getattr(self, 'main_window', None)
+            if mw is not None:
+                mw._update_tray_ball_action()
+        except Exception:
+            pass
 
     def _show_info_popup(self):
         """点击浮球弹出 info 浮层（距离休息/学习时长/电脑时长 + 开始/暂停按钮）"""
@@ -650,10 +675,10 @@ class FloatingBall(QWidget):
             popup = QWidget(None)
             popup.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint)
             popup.setAttribute(Qt.WA_TranslucentBackground)
-            popup.setFixedSize(200, 130)
+            popup.setFixedSize(260, 200)
 
             root = QFrame(popup)
-            root.setGeometry(4, 4, 192, 122)
+            root.setGeometry(4, 4, 252, 192)
             root.setObjectName('infoRoot')
             root.setStyleSheet("""
                 QFrame#infoRoot {
@@ -665,7 +690,7 @@ class FloatingBall(QWidget):
             """)
 
             layout = QVBoxLayout(root)
-            layout.setContentsMargins(10, 8, 8, 8)
+            layout.setContentsMargins(12, 10, 12, 10)
             layout.setSpacing(4)
 
             # ── 顶部行：标题 + 右上角关闭按钮 ──
@@ -696,25 +721,28 @@ class FloatingBall(QWidget):
             top_row.addWidget(close_btn)
             layout.addLayout(top_row)
 
-            # 计时器
+            # 计时器（居中放大，一目了然）
             popup._timer_lbl = QLabel('')
-            popup._timer_lbl.setFont(QFont('Consolas, "SF Mono", monospace', 14, QFont.Bold))
-            popup._timer_lbl.setStyleSheet('color: #d4af37;')
+            popup._timer_lbl.setFont(QFont('Consolas, "SF Mono", monospace', 22, QFont.Bold))
+            popup._timer_lbl.setStyleSheet('color: #d4af37; background: rgba(212,168,83,0.10); border-radius: 8px; padding: 6px 12px;')
             popup._timer_lbl.setAlignment(Qt.AlignCenter)
+            popup._timer_lbl.setFixedHeight(36)
             layout.addWidget(popup._timer_lbl)
 
-            row = QHBoxLayout()
+            # 学习时长 + 轮次（同一行，紧凑）
+            info_row = QHBoxLayout()
+            info_row.setContentsMargins(0, 0, 0, 0)
             popup._study_lbl = QLabel('')
             popup._study_lbl.setFont(QFont('Microsoft YaHei', 8))
             popup._study_lbl.setStyleSheet('color: #78B450;')
-            row.addWidget(popup._study_lbl)
-            row.addStretch()
-            layout.addLayout(row)
+            info_row.addWidget(popup._study_lbl, 0, Qt.AlignLeft)
+            popup._round_lbl = QLabel('')
+            popup._round_lbl.setFont(QFont('Microsoft YaHei', 8))
+            popup._round_lbl.setStyleSheet('color: #888;')
+            info_row.addWidget(popup._round_lbl, 0, Qt.AlignRight)
+            layout.addLayout(info_row)
 
-            # 目标 + 轮次（目标可点击：未设目标时点击进入设置）
-            goal_row = QHBoxLayout()
-            goal_row.setContentsMargins(0, 0, 0, 0)
-            goal_row.setSpacing(4)
+            # 目标（一行，小字，tooltip 显示完整内容）
             popup._goal_lbl = QPushButton('')
             popup._goal_lbl.setFont(QFont('Microsoft YaHei', 8))
             popup._goal_lbl.setCursor(Qt.PointingHandCursor)
@@ -722,22 +750,16 @@ class FloatingBall(QWidget):
                 QPushButton {
                     background: transparent; border: none;
                     color: #d4a853; text-align: left;
-                    padding: 0;
+                    padding: 1px 0;
                 }
                 QPushButton:hover { color: #f0c060; text-decoration: underline; }
                 QPushButton:pressed { color: #b8901f; }
             ''')
             popup._goal_lbl.setToolTip('点击设置今日目标')
             popup._goal_lbl.clicked.connect(self._on_goal_label_clicked)
-            goal_row.addWidget(popup._goal_lbl, 1)
-            popup._round_lbl = QLabel('')
-            popup._round_lbl.setFont(QFont('Microsoft YaHei', 8))
-            popup._round_lbl.setStyleSheet('color: #888;')
-            popup._round_lbl.setAlignment(Qt.AlignRight)
-            goal_row.addWidget(popup._round_lbl, 0)
-            layout.addLayout(goal_row)
+            layout.addWidget(popup._goal_lbl)
 
-            # 飞书日程（一行摘要）
+            # 飞书日程（摘要行，允许换行）
             popup._cal_lbl = QLabel('')
             popup._cal_lbl.setFont(QFont('Microsoft YaHei', 8))
             popup._cal_lbl.setStyleSheet('color: #6a8cbb;')
@@ -745,7 +767,7 @@ class FloatingBall(QWidget):
             popup._cal_lbl.setVisible(False)
             layout.addWidget(popup._cal_lbl)
 
-            # 开始/暂停按钮（只连接一次）
+            # 开始/暂停按钮
             popup._action_btn = QPushButton()
             popup._action_btn.setFixedHeight(28)
             popup._action_btn.setCursor(Qt.PointingHandCursor)
@@ -789,7 +811,7 @@ class FloatingBall(QWidget):
         """)
         if hasattr(popup, '_title_lbl'):
             popup._title_lbl.setStyleSheet(f'color: {t["text_muted"]};')
-        popup._timer_lbl.setStyleSheet(f'color: {t["accent"]};')
+        popup._timer_lbl.setStyleSheet(f'color: {t["accent"]}; background: {t["accent_bg"]}; border-radius: 8px; padding: 6px 12px;')
         popup._study_lbl.setStyleSheet(f'color: {t["success"]};')
         popup._goal_lbl.setStyleSheet(f'''
             QPushButton {{
@@ -951,9 +973,14 @@ class FloatingBall(QWidget):
 
         menu.addSeparator()
 
-        # 隐藏挂件
-        action_hide = menu.addAction("👁  隐藏挂件")
-        action_hide.triggered.connect(self.hide)
+        # 显示/隐藏挂件（根据当前状态切换文案）
+        if self.isVisible():
+            action_hide = menu.addAction("👁  隐藏挂件")
+            action_hide.triggered.connect(self.hide)
+        else:
+            action_show = menu.addAction("👁  显示挂件")
+            action_show.triggered.connect(self.show)
+            action_show.triggered.connect(self.raise_)
 
         menu.addSeparator()
 
@@ -2806,16 +2833,27 @@ def _build_report_data(report_type):
 
 def _init_ai_providers():
     """初始化 AI 提供商：首次启动填入内置默认（开箱即用），已有配置则跳过。
-    幂等：已初始化过则跳过。"""
+    返回最终的 providers 列表（可能是新创建的，也可能是修复过的）。"""
     try:
         providers = settings_store.get('ai_providers', [])
-        if providers:  # 已有配置，跳过
-            return
-        # 首次启动：填入内置默认 providers
-        settings_store.set('ai_providers', _DEFAULT_AI_PROVIDERS)
-        log.info(f'[AI] 初始化 {len(_DEFAULT_AI_PROVIDERS)} 个内置免费 AI 提供商')
+        if not providers:
+            # 首次启动：填入内置默认 providers
+            providers = list(_DEFAULT_AI_PROVIDERS)
+            settings_store.set('ai_providers', providers)
+            log.info(f'[AI] 初始化 {len(providers)} 个内置免费 AI 提供商')
+        else:
+            # 已有配置：确保内置代理提供商处于启用状态（除非用户有其他可用提供商）
+            default_proxy = next((p for p in providers if p.get('id') == 'default_proxy'), None)
+            if default_proxy and not default_proxy.get('enabled'):
+                any_enabled = any(p.get('enabled') for p in providers if p.get('id') != 'default_proxy')
+                if not any_enabled:
+                    default_proxy['enabled'] = True
+                    settings_store.set('ai_providers', providers)
+                    log.info('[AI] 已重新启用内置免费 AI 代理提供商（无其他可用提供商）')
+        return providers
     except Exception as e:
         log.warning(f'[AI] 初始化默认 providers 失败（不阻塞）: {e}')
+        return []
 
 
 def _call_ai(prompt, model=None):
@@ -2833,6 +2871,9 @@ def _call_ai(prompt, model=None):
     active.sort(key=lambda p: p.get('priority', 999))
 
     if not active:
+        disabled_count = sum(1 for p in providers if not p.get('enabled'))
+        if disabled_count and len(providers):
+            return {'ok': False, 'error': f'有 {len(providers)} 个 AI 提供商，但全部已禁用或缺少 API Key。请在「设置 → AI 服务」中启用至少一个。', 'errors': []}
         return {'ok': False, 'error': '未配置任何 AI 提供商。请在「设置 → AI 服务」添加。', 'errors': []}
 
     headers_base = {'Content-Type': 'application/json'}
@@ -2944,7 +2985,15 @@ def _local_fallback_report(report_type, data):
 
     # 错误详情（帮助用户诊断）
     ai_error = data.get('ai_error', '')
-    error_line = f'\n> ⚠️ **错误详情**：{ai_error}\n> 请在「设置 → AI 服务」检查 API Key 配置\n' if ai_error else ''
+    # 未配置 AI 时，显示友好的引导而非原始错误码
+    if ai_error and ('未配置' in ai_error or '未安装' in ai_error):
+        error_line = f'\n> 💡 配置 AI 服务后，将生成包含深度洞察的个性化报告\n> 前往「设置 → AI 服务」添加 API Key\n'
+    elif ai_error:
+        # 其他错误保留诊断信息
+        short_err = ai_error if len(ai_error) <= 80 else ai_error[:80] + '...'
+        error_line = f'\n> ⚠️ AI 服务暂时不可用：{short_err}\n> 请检查「设置 → AI 服务」中的配置\n'
+    else:
+        error_line = ''
 
     lines = [
         f'## {name}（数据摘要）',
@@ -3133,6 +3182,168 @@ def _create_app_icon():
     return icon
 
 
+# ═══ 侧边栏矢量图标 ═══
+def _draw_sidebar_icon(name, size=24, theme='dark'):
+    """为侧边栏导航绘制矢量图标（32x32，缩放后使用）"""
+    t = THEMES.get(theme, THEMES['dark'])
+    c = t['accent']
+    pm = QPixmap(size, size)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing)
+    s = size / 32  # 缩放因子
+
+    if name == '今日':
+        # 文档图标：矩形 + 折角 + 横线
+        p.setPen(QPen(QColor(c), int(2 * s)))
+        p.setBrush(Qt.NoBrush)
+        p.drawRoundedRect(int(8 * s), int(4 * s), int(16 * s), int(24 * s), int(2 * s), int(2 * s))
+        p.drawLine(int(14 * s), int(4 * s), int(14 * s), int(10 * s))
+        p.drawLine(int(14 * s), int(10 * s), int(24 * s), int(10 * s))
+        p.drawLine(int(8 * s), int(14 * s), int(24 * s), int(14 * s))
+        p.drawLine(int(8 * s), int(20 * s), int(20 * s), int(20 * s))
+    elif name == 'AI 报告':
+        # AI 节点图标：中心圆 + 3个外围节点
+        p.setPen(QPen(QColor(c), int(1.5 * s)))
+        p.setBrush(QBrush(QColor(c)))
+        p.drawEllipse(int(14 * s), int(13 * s), int(4 * s), int(4 * s))
+        p.drawEllipse(int(6 * s), int(6 * s), int(3.5 * s), int(3.5 * s))
+        p.drawEllipse(int(22.5 * s), int(6 * s), int(3.5 * s), int(3.5 * s))
+        p.drawEllipse(int(6 * s), int(22.5 * s), int(3.5 * s), int(3.5 * s))
+        p.setPen(QPen(QColor(c), int(1 * s)))
+        p.drawLine(int(9.5 * s), int(9.5 * s), int(14 * s), int(15 * s))
+        p.drawLine(int(22.5 * s), int(9.5 * s), int(17 * s), int(15 * s))
+        p.drawLine(int(9.5 * s), int(22.5 * s), int(14 * s), int(17 * s))
+    elif name == '趋势':
+        # 趋势折线图
+        p.setPen(QPen(QColor(c), int(2 * s)))
+        p.setBrush(Qt.NoBrush)
+        p.drawLine(int(6 * s), int(22 * s), int(12 * s), int(14 * s))
+        p.drawLine(int(12 * s), int(14 * s), int(18 * s), int(18 * s))
+        p.drawLine(int(18 * s), int(18 * s), int(26 * s), int(6 * s))
+        p.setBrush(QBrush(QColor(c)))
+        p.drawEllipse(int(12 * s), int(12 * s), int(3 * s), int(3 * s))
+        p.drawEllipse(int(18 * s), int(16 * s), int(3 * s), int(3 * s))
+        p.drawEllipse(int(24 * s), int(4 * s), int(3 * s), int(3 * s))
+    elif name == '设置':
+        # 齿轮图标
+        p.setPen(QPen(QColor(c), int(2 * s)))
+        p.setBrush(Qt.NoBrush)
+        p.drawEllipse(int(11 * s), int(11 * s), int(10 * s), int(10 * s))
+        teeth = 8
+        for i in range(teeth):
+            angle = 2 * math.pi * i / teeth
+            x1 = int(16 * s + 5 * s * math.cos(angle))
+            y1 = int(16 * s + 5 * s * math.sin(angle))
+            x2 = int(16 * s + 7 * s * math.cos(angle))
+            y2 = int(16 * s + 7 * s * math.sin(angle))
+            p.drawLine(x1, y1, x2, y2)
+    elif name == '关于':
+        # 信息图标：圆圈 + "i"（加粗线条确保可读性）
+        p.setPen(QPen(QColor(c), int(3 * s)))
+        p.setBrush(Qt.NoBrush)
+        p.drawEllipse(int(7 * s), int(3 * s), int(18 * s), int(18 * s))
+        p.setPen(QPen(QColor(c), int(3 * s)))
+        p.drawPoint(int(16 * s), int(8 * s))
+        p.drawLine(int(16 * s), int(11 * s), int(16 * s), int(19 * s))
+    p.end()
+    return pm
+
+
+def _draw_github_logo(size=16, theme='dark'):
+    """加载真实 GitHub SVG 图标（simple-icons），返回 QPixmap"""
+    t = THEMES.get(theme, THEMES['dark'])
+    pm = QPixmap(size, size)
+    pm.fill(Qt.transparent)
+    painter = QPainter(pm)
+    painter.setRenderHint(QPainter.Antialiasing)
+    # 尝试加载真实 SVG 图标
+    svg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'github-icon.svg')
+    if os.path.exists(svg_path):
+        try:
+            from PyQt5.QtSvg import QSvgRenderer
+            renderer = QSvgRenderer(svg_path)
+            renderer.render(painter)
+        except Exception:
+            pass  # fallback to drawn icon below
+    else:
+        # fallback：简化的 GitHub 猫图标
+        s = size / 24
+        painter.setBrush(QBrush(QColor('#ffffff')))
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(int(2*s), int(2*s), int(20*s), int(20*s))
+        painter.setBrush(QBrush(QColor('#24292e')))
+        painter.drawEllipse(int(4*s), int(4*s), int(16*s), int(14*s))
+        painter.drawPolygon(
+            QPointF(int(4*s), int(4*s)), QPointF(int(8*s), int(4*s)), QPointF(int(4*s), int(9*s))
+        )
+        painter.drawPolygon(
+            QPointF(int(20*s), int(4*s)), QPointF(int(16*s), int(4*s)), QPointF(int(20*s), int(9*s))
+        )
+    painter.end()
+    return pm
+
+
+class _NavSidebarButton(QWidget):
+    """侧边栏导航按钮（垂直 icon + text，可点击）"""
+
+    clicked = pyqtSignal()
+
+    def __init__(self, name, icon_pixmap, parent=None):
+        super().__init__(parent)
+        self._name = name
+        self._checked = False
+        self._icon_pixmap = icon_pixmap
+        self.setFixedWidth(72)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setContentsMargins(0, 0, 0, 0)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(3)
+        layout.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
+
+        self._icon_lbl = QLabel()
+        self._icon_lbl.setPixmap(icon_pixmap)
+        self._icon_lbl.setAlignment(Qt.AlignCenter)
+        self._icon_lbl.setFixedSize(24, 24)
+        layout.addWidget(self._icon_lbl)
+
+        self._text_lbl = QLabel(name)
+        self._text_lbl.setAlignment(Qt.AlignCenter)
+        self._text_lbl.setFont(QFont('Microsoft YaHei', 11))
+        layout.addWidget(self._text_lbl)
+
+        self._apply_style()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(event)
+
+    def setChecked(self, checked):
+        self._checked = checked
+        self._apply_style()
+
+    def _get_theme(self):
+        """获取当前主题（从父级 RestReminderWidget 或默认 dark）"""
+        w = self.window()
+        if w and hasattr(w, '_current_theme'):
+            return w._current_theme
+        return 'dark'
+
+    def _apply_style(self):
+        t = THEMES.get(self._get_theme(), THEMES['dark'])
+        if self._checked:
+            self._icon_lbl.setStyleSheet('background: transparent;')
+            self._text_lbl.setStyleSheet(f'color: {t["accent"]}; font-size: 11px; font-weight: bold; background: transparent;')
+            self.setStyleSheet(f'_NavSidebarButton {{ background: {t["accent_bg"]}; border-radius: 8px; }}')
+        else:
+            self._icon_lbl.setStyleSheet('background: transparent;')
+            # 使用 text_primary 而非 text_secondary，确保未选中 tab 也清晰可见
+            self._text_lbl.setStyleSheet(f'color: {t["text_primary"]}; font-size: 11px; background: transparent;')
+            self.setStyleSheet(f'_NavSidebarButton {{ background: transparent; border-radius: 8px; }} _NavSidebarButton:hover {{ background: {t["accent_bg"]}; }}')
+
+
 class RestReminderWidget(QWidget):
     TAB_NAMES = ['今日', 'AI 报告', '趋势', '设置', '关于']  # 单一来源
 
@@ -3212,7 +3423,7 @@ class RestReminderWidget(QWidget):
         self._backup_timer.start(3600 * 1000)
 
         # 迁移旧 AI key 到 ai_providers（幂等）
-        _init_ai_providers()
+        self.app_settings['ai_providers'] = _init_ai_providers()
 
 
         self.drag_position = None
@@ -3246,6 +3457,7 @@ class RestReminderWidget(QWidget):
         self.setup_timer()
         # 创建小浮球
         self.floating_ball = FloatingBall(self)
+        self._update_tray_ball_action()
         # 创建5分钟倒计时浮层
         self.countdown_overlay = CountdownOverlay()
         # 20-20-20 护眼提醒
@@ -3341,24 +3553,16 @@ class RestReminderWidget(QWidget):
         sb_layout.addWidget(div1)
         sb_layout.addSpacing(8)
 
-        # 导航按钮
+        # 导航按钮（矢量图标，取代 emoji）
         self._tab_buttons = {}
         self._sidebar_icons = {}
-        nav_items = [
-            ('今日', '📋'),
-            ('AI 报告', '🤖'),
-            ('趋势', '📈'),
-            ('设置', '⚙️'),
-            ('关于', 'ℹ'),
-        ]
-        for name, icon in nav_items:
-            btn = QPushButton(f'{icon}\n{name}')
-            btn.setObjectName('navBtn')
-            btn.setCheckable(True)
-            btn.setCursor(Qt.PointingHandCursor)
-            btn.clicked.connect(lambda checked, n=name: self._switch_tab(n))
+        nav_names = ['今日', 'AI 报告', '趋势', '设置', '关于']
+        for name in nav_names:
+            pm = _draw_sidebar_icon(name, theme=self._current_theme)
+            btn = _NavSidebarButton(name, pm)
+            btn.clicked.connect(lambda checked=False, n=name: self._switch_tab(n))
             self._tab_buttons[name] = btn
-            self._sidebar_icons[name] = icon
+            self._sidebar_icons[name] = pm
             sb_layout.addWidget(btn)
 
         sb_layout.addStretch()
@@ -3373,7 +3577,8 @@ class RestReminderWidget(QWidget):
 
         # ── 右侧主内容区 ──
         content_widget = QWidget()
-        content_widget.setStyleSheet('background: #0d0d12;')
+        bg = THEMES[self._current_theme]['bg_base']
+        content_widget.setStyleSheet(f'background: {bg};')
         main_layout = QVBoxLayout(content_widget)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
@@ -3381,7 +3586,7 @@ class RestReminderWidget(QWidget):
         # 顶部标题栏
         top_bar = QWidget()
         top_bar.setFixedHeight(48)
-        top_bar.setStyleSheet('background: #0d0d12;')
+        top_bar.setStyleSheet(f'background: {bg};')
         top_layout = QHBoxLayout(top_bar)
         top_layout.setContentsMargins(16, 8, 12, 8)
 
@@ -3438,7 +3643,8 @@ class RestReminderWidget(QWidget):
 
         # Tab 内容区
         self._tab_content = QStackedWidget()
-        self._tab_content.setStyleSheet('background: #0d0d12; border: none;')
+        bg = THEMES[self._current_theme]['bg_base']
+        self._tab_content.setStyleSheet(f'background: {bg}; border: none;')
         main_layout.addWidget(self._tab_content)
 
         # 构建各 tab — 首屏只加载"今日"，其余延迟加载
@@ -3450,7 +3656,7 @@ class RestReminderWidget(QWidget):
         for i in range(1, 5):
             placeholder = QLabel('加载中...')
             placeholder.setAlignment(Qt.AlignCenter)
-            placeholder.setStyleSheet('color: #666; font-size: 14px; background: #0d0d12;')
+            placeholder.setStyleSheet(f'color: #666; font-size: 14px; background: {bg};')
             self._tab_content.addWidget(placeholder)
 
         root_layout.addWidget(content_widget, 1)
@@ -3485,21 +3691,39 @@ class RestReminderWidget(QWidget):
         return slider
 
     def _make_stat_card(self, icon, title, value, color):
-        """统一风格的数据卡片（暴露 _value_label 供刷新）"""
+        """统一风格的数据卡片（暴露 _value_label 供刷新）
+        布局：左侧圆形色块图标，右侧数值+标题"""
         card = QFrame()
         card.setObjectName('statCard')
-        c = QVBoxLayout(card)
-        c.setContentsMargins(16, 14, 16, 14)
-        c.setSpacing(4)
+        c = QHBoxLayout(card)
+        c.setContentsMargins(14, 12, 14, 12)
+        c.setSpacing(12)
+
+        # 左侧图标色块
+        icon_container = QFrame()
+        icon_container.setFixedSize(40, 40)
+        icon_container.setStyleSheet(f'background: {color}22; border-radius: 20px;')
+        icon_layout = QVBoxLayout(icon_container)
+        icon_layout.setContentsMargins(0, 0, 0, 0)
         icon_lbl = QLabel(icon)
-        icon_lbl.setStyleSheet('font-size: 18px; background: transparent;')
-        c.addWidget(icon_lbl)
+        icon_lbl.setAlignment(Qt.AlignCenter)
+        icon_lbl.setStyleSheet(f'font-size: 16px; color: {color}; background: transparent;')
+        icon_layout.addWidget(icon_lbl)
+        c.addWidget(icon_container)
+
+        # 右侧文字
+        text_wrapper = QWidget()
+        tw = QVBoxLayout(text_wrapper)
+        tw.setContentsMargins(0, 0, 0, 0)
+        tw.setSpacing(2)
         val_lbl = QLabel(value)
         val_lbl.setStyleSheet(f'color: {color}; font-size: 16px; font-weight: bold; background: transparent;')
-        c.addWidget(val_lbl)
+        tw.addWidget(val_lbl)
         title_lbl = QLabel(title)
         title_lbl.setStyleSheet('color: #888; font-size: 11px; background: transparent;')
-        c.addWidget(title_lbl)
+        tw.addWidget(title_lbl)
+        c.addWidget(text_wrapper, 1)
+
         card._value_label = val_lbl
         return card
 
@@ -3745,7 +3969,8 @@ class RestReminderWidget(QWidget):
         """今日 tab：学习概览 + 今日数据"""
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet('QScrollArea { border: none; background: #0d0d12; }')
+        bg = THEMES[self._current_theme]['bg_base']
+        scroll.setStyleSheet(f'QScrollArea {{ border: none; background: {bg}; }}')
         self._today_refs = {}
         container = QWidget()
         layout = QVBoxLayout(container)
@@ -3755,10 +3980,10 @@ class RestReminderWidget(QWidget):
         # 大标题
         h1 = QLabel('今日')
         h1.setFont(QFont('Georgia, "Noto Serif SC", serif', 20, QFont.Bold))
-        h1.setStyleSheet('color: #e8e6e1;')
+        h1.setStyleSheet(f'color: {THEMES[self._current_theme]["text_primary"]};')
         layout.addWidget(h1)
         sub = QLabel(self._today_subtitle())
-        sub.setStyleSheet('color: #666; font-size: 13px;')
+        sub.setStyleSheet(f'color: {THEMES[self._current_theme]["text_secondary"]}; font-size: 13px;')
         layout.addWidget(sub)
         layout.addSpacing(12)
 
@@ -3791,10 +4016,12 @@ class RestReminderWidget(QWidget):
         sc = QVBoxLayout(status_card)
         sc.setContentsMargins(16, 14, 16, 14)
         sc.setSpacing(6)
-        state_names = {'idle': '⏸ 待机', 'running': '▶ 学习中', 'resting': '☕ 休息中', 'paused': '⏸ 已暂停'}
+        state_colors = {'idle': '#888', 'running': '#78B450', 'resting': '#d97757', 'paused': '#d4a853'}
+        state_names = {'idle': '待机', 'running': '学习中', 'resting': '休息中', 'paused': '已暂停'}
+        state_color = state_colors.get(self.timer_state, '#888')
         state_lbl = QLabel(f'状态：{state_names.get(self.timer_state, self.timer_state)}')
         state_lbl.setObjectName('stateLabel')
-        state_lbl.setStyleSheet('color: #e8e6e1; font-size: 14px;')
+        state_lbl.setStyleSheet(f'color: {state_color}; font-size: 14px; font-weight: bold;')
         sc.addWidget(state_lbl)
         # 计时器标签（始终创建，由 _refresh_general_tab 每秒更新）
         timer_lbl = QLabel('')
@@ -3814,15 +4041,15 @@ class RestReminderWidget(QWidget):
         cal_layout.setSpacing(6)
         # 标题行 + 刷新按钮
         cal_title_row = QHBoxLayout()
-        cal_title = QLabel('📅 飞书日程')
+        cal_title = QLabel('飞书日程')
         cal_title.setStyleSheet('color: #e8e6e1; font-size: 13px; font-weight: bold;')
         cal_title_row.addWidget(cal_title)
         cal_title_row.addStretch()
-        cal_refresh_btn = QPushButton('🔄')
-        cal_refresh_btn.setFixedSize(28, 28)
+        cal_refresh_btn = QPushButton('刷新')
+        cal_refresh_btn.setFixedSize(52, 28)
         cal_refresh_btn.setCursor(Qt.PointingHandCursor)
         cal_refresh_btn.setToolTip('手动刷新日程')
-        cal_refresh_btn.setStyleSheet('QPushButton { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; font-size: 13px; } QPushButton:hover { background: rgba(212,168,83,0.15); }')
+        cal_refresh_btn.setStyleSheet('QPushButton { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); border-radius: 6px; font-size: 12px; color: #f0f0f0; font-weight: bold; } QPushButton:hover { background: rgba(212,168,83,0.22); color: #fff; border-color: rgba(212,168,83,0.4); }')
         cal_refresh_btn.clicked.connect(self._manual_refresh_calendar)
         cal_title_row.addWidget(cal_refresh_btn)
         cal_layout.addLayout(cal_title_row)
@@ -3831,7 +4058,7 @@ class RestReminderWidget(QWidget):
         cal_status.setWordWrap(True)
         cal_status.setStyleSheet('color: #6a8cbb; font-size: 12px;')
         cal_layout.addWidget(cal_status)
-        # 今日日程列表（最多显示 5 条）
+        # 今日日程列表（最多显示 6 条）
         cal_list = QLabel('')
         cal_list.setObjectName('calListLabel')
         cal_list.setWordWrap(True)
@@ -3840,6 +4067,7 @@ class RestReminderWidget(QWidget):
         self._today_refs['cal_status'] = cal_status
         self._today_refs['cal_list'] = cal_list
         self._today_refs['cal_card'] = cal_card
+        self._today_refs['cal_refresh_btn'] = cal_refresh_btn
         if self._calendar_enabled:
             self._update_calendar_list()
         layout.addWidget(cal_card)
@@ -3851,7 +4079,7 @@ class RestReminderWidget(QWidget):
         cc = QVBoxLayout(countdown_card)
         cc.setContentsMargins(16, 14, 16, 14)
         cc.setSpacing(6)
-        cd_title = QLabel('⏳ 距离22:00')
+        cd_title = QLabel('距离 22:00')
         cd_title.setStyleSheet('color: #e8e6e1; font-size: 13px; font-weight: bold;')
         cc.addWidget(cd_title)
         cd_bar = QProgressBar()
@@ -3866,7 +4094,7 @@ class RestReminderWidget(QWidget):
         """)
         cc.addWidget(cd_bar)
         cd_time = QLabel('')
-        cd_time.setStyleSheet('color: #888; font-size: 11px;')
+        cd_time.setStyleSheet('color: #b0b0b0; font-size: 13px; font-weight: bold;')
         cc.addWidget(cd_time)
         self._cd_bar = cd_bar
         self._cd_time = cd_time
@@ -3882,20 +4110,20 @@ class RestReminderWidget(QWidget):
         today_reviews = reviews_data.get(datetime.now().date().isoformat(), [])
         if today_reviews:
             info = _review_summary(today_reviews)
-            sufx = '⭐' if info['is_old'] else '分'
+            sufx = '分'
             review_card = QFrame()
             review_card.setObjectName('statCard')
             rc = QVBoxLayout(review_card)
             rc.setContentsMargins(16, 14, 16, 14)
             rc.setSpacing(4)
-            rc_title = QLabel(f'📊 今日复盘：{info["count"]} 次 · 平均 {info["avg"]:.1f}{sufx}')
+            rc_title = QLabel(f'今日复盘：{info["count"]} 次 · 平均 {info["avg"]:.1f}{sufx}')
             rc_title.setStyleSheet('color: #e8e6e1; font-size: 13px; font-weight: bold;')
             rc.addWidget(rc_title)
             b = info['best']; w = info['worst']
             if b and w:
-                rc_detail = QLabel(f'🏆 最佳 {b["score"]}{sufx} ({b["time"]})  ⚠️ 最低 {w["score"]}{sufx} ({w["time"]})')
+                rc_detail = QLabel(f'<span style="color:#78B450;">最佳</span> {b["score"]}{sufx} ({b["time"]})  ·  <span style="color:#c95454;">最低</span> {w["score"]}{sufx} ({w["time"]})')
             else:
-                rc_detail = QLabel(f'🏆 平均 {info["avg"]:.1f}{sufx}')
+                rc_detail = QLabel(f'平均 {info["avg"]:.1f}{sufx}')
             rc_detail.setStyleSheet('color: #888; font-size: 11px;')
             rc.addWidget(rc_detail)
             layout.addWidget(review_card)
@@ -3903,7 +4131,7 @@ class RestReminderWidget(QWidget):
 
         # ── 连续打卡 ──
         streak = LocalSync.load_streak()
-        streak_card = self._make_stat_card('🔥', '连续打卡', f'{streak["current_streak"]} 天（最佳 {streak["best_streak"]} 天）', '#d4af37')
+        streak_card = self._make_stat_card('连', '连续打卡', f'{streak["current_streak"]} 天（最佳 {streak["best_streak"]} 天）', '#d4af37')
 
         layout.addWidget(streak_card)
         layout.addStretch()
@@ -4017,24 +4245,71 @@ class RestReminderWidget(QWidget):
         try:
             refs = getattr(self, '_today_refs', {})
             cal_list = refs.get('cal_list')
+            cal_status = refs.get('cal_status')
             if not cal_list or sip.isdeleted(cal_list):
                 return
-            # 获取失败时只显示错误，不再显示"今日暂无日程安排"
-            if self._calendar_mgr.error_message:
-                cal_list.setText(f'⚠️ {self._calendar_mgr.error_message}')
+            if not self._calendar_enabled:
+                if cal_status and not sip.isdeleted(cal_status):
+                    cal_status.setText('未启用')
+                    cal_status.setStyleSheet('color: #888; font-size: 12px;')
+                cal_list.setText('')
                 return
+
+            status = self._calendar_mgr.get_status()
+            kind = status.get('kind')
+
+            if kind == 'error':
+                err = status.get('error', '')
+                # 用户友好的错误提示，保留诊断入口
+                if 'lark-cli' in err or '未找到' in err or 'PATH' in err:
+                    user_err = '未安装 lark-cli 或不在 PATH，请检查设置'
+                elif '超时' in err:
+                    user_err = '连接超时，请检查网络后重试'
+                elif 'API 错误' in err:
+                    user_err = '飞书 API 错误，请确认已授权登录'
+                elif 'JSON' in err or '解析' in err:
+                    user_err = '日程数据解析失败，请重试'
+                else:
+                    user_err = err if len(err) <= 60 else err[:60] + '...'
+                # 错误只显示在 cal_status，cal_list 留空避免重复
+                if cal_status and not sip.isdeleted(cal_status):
+                    cal_status.setText(f'⚠️ 无法获取日程：{user_err}')
+                    cal_status.setStyleSheet('color: #c95454; font-size: 12px;')
+                cal_list.setText('')
+                return
+
+            if kind == 'syncing':
+                if cal_status and not sip.isdeleted(cal_status):
+                    cal_status.setText('⏳ 正在同步日程...')
+                    cal_status.setStyleSheet('color: #6a8cbb; font-size: 12px;')
+                cal_list.setText('')
+                return
+
+            if kind == 'empty':
+                # 无日程：cal_status 已显示状态，cal_list 留空避免重复
+                cal_list.setText('')
+                if cal_status and not sip.isdeleted(cal_status):
+                    cal_status.setStyleSheet('color: #888; font-size: 12px;')
+                return
+
+            # kind == 'ok'
             events = self._calendar_mgr.get_today_events()
             if not events:
-                cal_list.setText('今日暂无日程安排')
+                cal_list.setText('')
+                if cal_status and not sip.isdeleted(cal_status):
+                    cal_status.setStyleSheet('color: #888; font-size: 12px;')
                 return
             from feishu_calendar import _TZ_CST
             now = datetime.now(_TZ_CST)
             lines = []
             for evt in events[:6]:
                 status = evt.status_at(now)
-                marker = '🟢' if status == 'ongoing' else ('⏳' if status == 'upcoming' else '✔')
-                lines.append(f'{marker} {evt.time_range}  {evt.summary}')
-            cal_list.setText('\n'.join(lines))
+                marker = '●' if status == 'ongoing' else ('○' if status == 'upcoming' else '✓')
+                marker_color = '#78B450' if status == 'ongoing' else ('#d4a853' if status == 'upcoming' else '#888')
+                lines.append(f'<span style="color:{marker_color};">{marker}</span> {evt.time_range}  {evt.summary}')
+            cal_list.setText('<br>'.join(lines))
+            if cal_status and not sip.isdeleted(cal_status):
+                cal_status.setStyleSheet('color: #78B450; font-size: 12px;')
         except Exception:
             pass
 
@@ -4067,7 +4342,8 @@ class RestReminderWidget(QWidget):
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet('QScrollArea { border: none; background: #0d0d12; }')
+        bg = THEMES[self._current_theme]['bg_base']
+        scroll.setStyleSheet(f'QScrollArea {{ border: none; background: {bg}; }}')
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.setContentsMargins(20, 16, 20, 16)
@@ -4092,7 +4368,7 @@ class RestReminderWidget(QWidget):
             b.setCheckable(True)
             b.setStyleSheet("""
                 QPushButton {
-                    background: rgba(212,175,55,0.08); color: #999;
+                    background: rgba(212,175,55,0.08); color: #8c9c9c;
                     border: 1px solid #2a2a35; border-radius: 100px;
                     padding: 8px 18px; font-size: 13px;
                 }
@@ -4107,7 +4383,7 @@ class RestReminderWidget(QWidget):
             btn_row.addWidget(b)
             self._report_buttons[rtype] = b
         # 强制刷新按钮
-        refresh_btn = QPushButton('🔄 强制刷新')
+        refresh_btn = QPushButton('强制刷新')
         refresh_btn.setCursor(Qt.PointingHandCursor)
         refresh_btn.setStyleSheet("""
             QPushButton {
@@ -4123,15 +4399,16 @@ class RestReminderWidget(QWidget):
         layout.addLayout(btn_row)
         layout.addSpacing(6)
 
-        # 报告内容区
+        # 报告内容区（主题化背景）
+        t = THEMES.get(self._current_theme, THEMES['dark'])
         self._report_view = QTextBrowser()
         self._report_view.setOpenExternalLinks(True)
-        self._report_view.setStyleSheet("""
-            QTextBrowser {
-                background: #14141a; color: #e8e6e1;
-                border: 1px solid #222; border-radius: 8px;
+        self._report_view.setStyleSheet(f"""
+            QTextBrowser {{
+                background: {t['bg_card']}; color: {t['text_primary']};
+                border: 1px solid {t['border']}; border-radius: 8px;
                 padding: 16px; font-size: 13px; line-height: 1.7;
-            }
+            }}
         """)
         layout.addWidget(self._report_view, 1)
 
@@ -4193,7 +4470,8 @@ class RestReminderWidget(QWidget):
         """趋势 tab：带时间选择器的学习趋势图 + 时段热力图"""
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet('QScrollArea { border: none; background: #0d0d12; }')
+        bg = THEMES[self._current_theme]['bg_base']
+        scroll.setStyleSheet(f'QScrollArea {{ border: none; background: {bg}; }}')
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.setContentsMargins(20, 16, 20, 16)
@@ -4673,7 +4951,8 @@ class RestReminderWidget(QWidget):
         """设置 tab：所有 toggle 开关"""
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet('QScrollArea { border: none; background: #0d0d12; }')
+        bg = THEMES[self._current_theme]['bg_base']
+        scroll.setStyleSheet(f'QScrollArea {{ border: none; background: {bg}; }}')
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.setContentsMargins(20, 16, 20, 16)
@@ -5092,7 +5371,10 @@ class RestReminderWidget(QWidget):
                 self._mail_status_lbl.setStyleSheet('color: #78B450; font-size: 11px; background: transparent;')
                 self._toast('设置', '已保存配置')
             else:
-                self._mail_status_lbl.setText(f'✗ {msg[:40]}')
+                # 显示精简错误（60字符），tooltip 显示完整信息
+                short_msg = msg[:60] if len(msg) > 60 else msg
+                self._mail_status_lbl.setText(f'✗ {short_msg}')
+                self._mail_status_lbl.setToolTip(msg)
                 self._mail_status_lbl.setStyleSheet('color: #c95454; font-size: 11px; background: transparent;')
         self._mail_worker.result_ready.connect(on_done)
         self._mail_worker.start()
@@ -5270,7 +5552,25 @@ class RestReminderWidget(QWidget):
         test_btn = QPushButton('测试连接')
         test_btn.setFixedHeight(28)
         test_btn.setCursor(Qt.PointingHandCursor)
-        test_btn.setStyleSheet('QPushButton { background: rgba(106,140,187,0.1); color: #6a8cbb; border: 1px solid rgba(106,140,187,0.2); border-radius: 6px; font-size: 11px; } QPushButton:hover { background: rgba(106,140,187,0.2); }')
+        test_btn.setStyleSheet('''
+            QPushButton {
+                background: rgba(106,140,187,0.12);
+                color: #8aa4cc;
+                border: 1px solid rgba(106,140,187,0.25);
+                border-radius: 6px;
+                font-size: 11px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: rgba(106,140,187,0.22);
+                color: #a0bce0;
+            }
+            QPushButton:disabled {
+                background: rgba(106,140,187,0.06);
+                color: rgba(106,140,187,0.5);
+                border-color: rgba(106,140,187,0.1);
+            }
+        ''')
         test_row.addWidget(test_btn)
         status_lbl = QLabel('')
         status_lbl.setStyleSheet('color: #888; font-size: 11px; background: transparent;')
@@ -5301,16 +5601,33 @@ class RestReminderWidget(QWidget):
         def do_test():
             status_lbl.setText('⏳ 测试中...')
             status_lbl.setStyleSheet('color: #6a8cbb; font-size: 11px; background: transparent;')
+            test_btn.setEnabled(False)
             url = url_input.text().strip()
             model = model_input.text().strip()
             key = key_input.text().strip()
-            ok, msg = _test_ai_provider(url, model, key)
-            if ok:
-                status_lbl.setText(f'✓ {msg}')
-                status_lbl.setStyleSheet('color: #78B450; font-size: 11px; background: transparent;')
-            else:
-                status_lbl.setText(f'✗ {msg[:80]}')
-                status_lbl.setStyleSheet('color: #c95454; font-size: 11px; background: transparent;')
+
+            # 后台线程测试，避免卡顿 UI
+            def _run():
+                try:
+                    ok, msg = _test_ai_provider(url, model, key)
+                except Exception as e:
+                    ok, msg = False, f'错误: {e}'
+
+                def _update(ok, msg):
+                    if sip.isdeleted(status_lbl) or sip.isdeleted(test_btn):
+                        return
+                    if ok:
+                        status_lbl.setText(f'✓ {msg}')
+                        status_lbl.setStyleSheet('color: #78B450; font-size: 11px; background: transparent;')
+                    else:
+                        status_lbl.setText(f'✗ {msg[:80]}')
+                        status_lbl.setStyleSheet('color: #c95454; font-size: 11px; background: transparent;')
+                    test_btn.setEnabled(True)
+
+                QTimer.singleShot(0, lambda: _update(ok, msg))
+
+            import threading
+            threading.Thread(target=_run, daemon=True).start()
 
         def do_delete():
             reply = QMessageBox.question(self, '确认删除', f'确定删除提供商「{name_input.text() or "未命名"}」吗？',
@@ -5486,7 +5803,8 @@ class RestReminderWidget(QWidget):
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet('QScrollArea { border: none; background: #0d0d12; }')
+        bg = THEMES[self._current_theme]['bg_base']
+        scroll.setStyleSheet(f'QScrollArea {{ border: none; background: {bg}; }}')
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.setContentsMargins(20, 16, 20, 16)
@@ -5526,16 +5844,19 @@ class RestReminderWidget(QWidget):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
         btn_row.setContentsMargins(0, 8, 0, 0)
-        for text, slot, tip_color in [
-            ('🌐 官网', self._open_website, '#6a8cbb'),
-            ('🐱 GitHub', self._open_github, '#78B450'),
-            ('📋 更新日志', self._show_changelog, '#d4a853'),
-            ('🔄 检查更新', self._check_update, '#d97757'),
+        for text, slot, tip_color, icon_pm in [
+            ('官网', self._open_website, '#6a8cbb', None),
+            ('GitHub', self._open_github, '#78B450', _draw_github_logo(theme=self._current_theme)),
+            ('更新日志', self._show_changelog, '#d4a853', None),
+            ('检查更新', self._check_update, '#d97757', None),
         ]:
             btn = QPushButton(text)
             btn.setFixedHeight(32)
             btn.setCursor(Qt.PointingHandCursor)
-            btn.setStyleSheet(f'QPushButton {{ background: rgba(255,255,255,0.04); color: {tip_color}; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 0 14px; font-size: 12px; }} QPushButton:hover {{ background: rgba(255,255,255,0.08); }}')
+            if icon_pm and not icon_pm.isNull():
+                btn.setIcon(QIcon(icon_pm))
+                btn.setIconSize(icon_pm.size())
+            btn.setStyleSheet(f'QPushButton {{ background: rgba(255,255,255,0.04); color: {tip_color}; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 0 10px; font-size: 12px; }} QPushButton:hover {{ background: rgba(255,255,255,0.08); }}')
             conn = btn.clicked.connect(slot)
             self._about_tab_connections.append(conn)
             btn_row.addWidget(btn)
@@ -6082,14 +6403,41 @@ class RestReminderWidget(QWidget):
         self.tray_icon.setToolTip('⚡ 精力管理 · 待开始')
         self.tray_icon.activated.connect(self._on_tray_activated)
 
-        # 右键菜单：3 个按钮
+        # 右键菜单：5 个按钮
         tray_menu = QMenu()
+        tray_menu.setStyleSheet("""
+            QMenu {
+                background-color: rgba(20, 20, 24, 0.95);
+                border: 1px solid rgba(212, 175, 55, 0.25);
+                border-radius: 10px;
+                padding: 6px;
+            }
+            QMenu::item {
+                color: #e8e6e1;
+                padding: 8px 18px;
+                border-radius: 6px;
+                font-family: "Microsoft YaHei", sans-serif;
+                font-size: 12px;
+            }
+            QMenu::item:selected {
+                background-color: rgba(255, 255, 255, 0.1);
+            }
+            QMenu::separator {
+                height: 1px;
+                background: rgba(255, 255, 255, 0.08);
+                margin: 4px 10px;
+            }
+        """)
         action_main = QAction('🖥️  打开主界面', self)
         action_main.triggered.connect(self._tray_open_main)
         tray_menu.addAction(action_main)
         action_web = QAction('🌐  打开官方网站', self)
         action_web.triggered.connect(self._tray_open_website)
         tray_menu.addAction(action_web)
+        tray_menu.addSeparator()
+        self._action_toggle_ball = QAction('⚡  显示浮球', self)
+        self._action_toggle_ball.triggered.connect(self._tray_toggle_floating_ball)
+        tray_menu.addAction(self._action_toggle_ball)
         tray_menu.addSeparator()
         action_quit = QAction('✕  退出', self)
         action_quit.triggered.connect(self.quit_app)
@@ -6116,6 +6464,32 @@ class RestReminderWidget(QWidget):
 
     def _tray_open_website(self):
         open_url("https://crazy-rest-reminder.pages.dev")
+
+    def _tray_toggle_floating_ball(self):
+        """切换浮球显示/隐藏"""
+        try:
+            ball = getattr(self, 'floating_ball', None)
+            if ball is None:
+                return
+            if ball.isVisible():
+                ball.hide()
+            else:
+                ball.show()
+                ball.raise_()
+            self._update_tray_ball_action()
+        except Exception as e:
+            log.error(f'[_tray_toggle_floating_ball 异常] {type(e).__name__}: {e}')
+
+    def _update_tray_ball_action(self):
+        """根据浮球可见性更新托盘菜单文字"""
+        try:
+            action = getattr(self, '_action_toggle_ball', None)
+            ball = getattr(self, 'floating_ball', None)
+            if action is None or ball is None:
+                return
+            action.setText('⚡  隐藏浮球' if ball.isVisible() else '⚡  显示浮球')
+        except Exception as e:
+            log.error(f'[_update_tray_ball_action 异常] {type(e).__name__}: {e}')
 
     def toggle_visibility(self):
         """切换窗口可见性（不停止后台计时器——电池监控、电脑使用追踪等需持续运行）"""
@@ -6432,7 +6806,7 @@ class RestReminderWidget(QWidget):
             self._check_streak()
 
     def _update_countdown_display(self):
-        """更新今日tab中距离22:00的倒计时进度条（4:30=0%, 22:00=100%）"""
+        """更新今日tab中距离22:00的倒计时进度条（倒计时模式：4:30=100%, 22:00=0%）"""
         bar = getattr(self, '_cd_bar', None)
         lbl = getattr(self, '_cd_time', None)
         if bar is None or lbl is None or sip.isdeleted(bar) or sip.isdeleted(lbl):
@@ -6440,20 +6814,22 @@ class RestReminderWidget(QWidget):
         now = datetime.now()
         midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
         span_start = int(4.5 * 3600)  # 4:30 = 16200秒
-        total_span = int(22 * 3600 - 4.5 * 3600)  # 63000秒
+        total_span = int(22 * 3600 - 4.5 * 3600)  # 63000秒（从4:30到22:00）
         if now.hour >= 22:
-            bar.setValue(100)
+            bar.setValue(0)
             lbl.setText('今天的学习已结束')
         else:
             seconds_since_midnight = (now - midnight).total_seconds()
             if seconds_since_midnight < span_start:
-                bar.setValue(0)
+                bar.setValue(100)
                 remaining_secs = 22 * 3600 - seconds_since_midnight
                 h = int(remaining_secs // 3600)
                 m = int((remaining_secs % 3600) // 60)
                 lbl.setText(f'剩余 {h}小时{m}分钟')
             else:
-                progress = int(((seconds_since_midnight - span_start) / total_span) * 100)
+                # 倒计时模式：剩余时间占比 = 1 - 已用时间占比
+                elapsed = seconds_since_midnight - span_start
+                progress = max(0, int((1 - elapsed / total_span) * 100))
                 bar.setValue(min(progress, 100))
                 remaining = 22 * 3600 - seconds_since_midnight
                 h = int(remaining // 3600)
@@ -6584,8 +6960,11 @@ class RestReminderWidget(QWidget):
             # 状态标签 + 计时器标签
             state_lbl = refs.get('state_lbl')
             if state_lbl and not sip.isdeleted(state_lbl):
-                state_names = {'idle': '⏸ 待机', 'running': '▶ 学习中', 'resting': '☕ 休息中', 'paused': '⏸ 已暂停'}
+                state_colors = {'idle': '#888', 'running': '#78B450', 'resting': '#d97757', 'paused': '#d4a853'}
+                state_names = {'idle': '待机', 'running': '学习中', 'resting': '休息中', 'paused': '已暂停'}
+                state_color = state_colors.get(self.timer_state, '#888')
                 state_lbl.setText(f'状态：{state_names.get(self.timer_state, self.timer_state)}')
+                state_lbl.setStyleSheet(f'color: {state_color}; font-size: 14px; font-weight: bold;')
 
             # 计时器标签（本轮剩余/休息剩余）
             timer_lbl = refs.get('timer_lbl')
@@ -6593,15 +6972,15 @@ class RestReminderWidget(QWidget):
                 if self.timer_state == 'running' and self._perf_start:
                     elapsed = (time.perf_counter() - self._perf_start) / 60
                     remaining = max(0, 60 - elapsed)
-                    timer_lbl.setText(f'⏱ 本轮剩余：{remaining:.0f} 分钟')
+                    timer_lbl.setText(f'本轮剩余：{remaining:.0f} 分钟')
                     timer_lbl.setStyleSheet('color: #6a8cbb; font-size: 12px;')
                 elif self.timer_state == 'resting' and self._rest_end_time:
                     remaining = max(0, (self._rest_end_time - datetime.now()).total_seconds() / 60)
-                    timer_lbl.setText(f'⏱ 休息剩余：{remaining:.0f} 分钟')
+                    timer_lbl.setText(f'休息剩余：{remaining:.0f} 分钟')
                     timer_lbl.setStyleSheet('color: #d97757; font-size: 12px;')
                 elif self.timer_state == 'paused' and self.remaining_when_paused:
                     remaining = max(0, self.remaining_when_paused / 60)
-                    timer_lbl.setText(f'⏱ 暂停剩余：{remaining:.0f} 分钟')
+                    timer_lbl.setText(f'暂停剩余：{remaining:.0f} 分钟')
                     timer_lbl.setStyleSheet('color: #888; font-size: 12px;')
             # ── 日程卡片刷新 ──
             if self._calendar_enabled:
@@ -6733,6 +7112,9 @@ class RestReminderWidget(QWidget):
         remaining = [AUTO_SUBMIT_SECONDS]
         def _countdown():
             remaining[0] -= 1
+            # 对话框可能已关闭（用户手动提交），跳过已销毁的控件
+            if sip.isdeleted(info_lbl) or sip.isdeleted(dialog):
+                return
             if remaining[0] > 0:
                 info_lbl.setText(f'⏳ {remaining[0]}秒后自动提交')
                 QTimer.singleShot(1000, _countdown)
@@ -7049,6 +7431,9 @@ class RestReminderWidget(QWidget):
             remaining = [AUTO_SUBMIT_SECONDS]
             def _countdown():
                 remaining[0] -= 1
+                # 对话框可能已关闭，跳过已销毁的控件
+                if sip.isdeleted(info_lbl) or sip.isdeleted(dialog):
+                    return
                 if remaining[0] > 0:
                     info_lbl.setText(f'⏳ {remaining[0]}秒后自动提交')
                     QTimer.singleShot(1000, _countdown)
