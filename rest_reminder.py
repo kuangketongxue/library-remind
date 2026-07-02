@@ -5487,13 +5487,25 @@ class RestReminderWidget(QWidget):
         cl.setContentsMargins(12, 10, 12, 10)
         cl.setSpacing(6)
 
-        # 第一行：名称 + 启用开关 + 删除按钮
+        # 第一行：名称 + 优先级标签 + 启用开关 + 删除按钮
         top_row = QHBoxLayout()
         top_row.setSpacing(6)
         name_input = QLineEdit(provider.get('name', ''))
         name_input.setPlaceholderText('提供商名称（如 SenseNova）')
         name_input.setStyleSheet('QLineEdit { background: #16161c; color: #e8e4dc; border: 1px solid #252530; border-radius: 6px; padding: 4px 8px; font-size: 12px; font-weight: bold; }')
         top_row.addWidget(name_input, 2)
+
+        # 优先级标签（priority=1 为首选，其余为备份）
+        priority = provider.get('priority', 999)
+        if priority == 1:
+            badge = QLabel('⭐ 首选')
+            badge.setStyleSheet('background: rgba(212,168,83,0.15); color: #d4a853; border: 1px solid rgba(212,168,83,0.3); border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold;')
+        else:
+            badge = QLabel(f'备份 {priority}')
+            badge.setStyleSheet('background: rgba(255,255,255,0.04); color: #888; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; padding: 2px 6px; font-size: 10px;')
+        badge.setFixedHeight(20)
+        badge.setAlignment(Qt.AlignCenter)
+        top_row.addWidget(badge)
 
         enable_btn = QPushButton('✓ 启用' if provider.get('enabled', True) else '✗ 禁用')
         enable_btn.setFixedHeight(28)
@@ -5560,10 +5572,12 @@ class RestReminderWidget(QWidget):
                 border-radius: 6px;
                 font-size: 11px;
                 font-weight: bold;
+                padding: 0 12px;
             }
             QPushButton:hover {
                 background: rgba(106,140,187,0.22);
                 color: #a0bce0;
+                border-color: rgba(106,140,187,0.35);
             }
             QPushButton:disabled {
                 background: rgba(106,140,187,0.06);
@@ -5574,6 +5588,7 @@ class RestReminderWidget(QWidget):
         test_row.addWidget(test_btn)
         status_lbl = QLabel('')
         status_lbl.setStyleSheet('color: #888; font-size: 11px; background: transparent;')
+        status_lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         test_row.addWidget(status_lbl, 1)
         cl.addLayout(test_row)
 
@@ -5599,6 +5614,8 @@ class RestReminderWidget(QWidget):
             self._save_ai_providers()
 
         def do_test():
+            if test_btn.isEnabled() is False:
+                return
             status_lbl.setText('⏳ 测试中...')
             status_lbl.setStyleSheet('color: #6a8cbb; font-size: 11px; background: transparent;')
             test_btn.setEnabled(False)
@@ -6137,6 +6154,52 @@ class RestReminderWidget(QWidget):
                     info_lbl.setStyleSheet('color: #555; font-size: 10px; background: transparent;')
                 cl.addWidget(info_lbl)
 
+                # 点击查看详情
+                def show_detail(a=ach, earned=is_earned, date_str=earned_date if is_earned else None, progress=prog):
+                    dlg = QDialog(self)
+                    dlg.setWindowTitle(f'🏅 {a["name"]}')
+                    dlg.setFixedSize(380, 220)
+                    dlg.setStyleSheet('QDialog { background-color: #0c0c10; color: #e8e6e1; }')
+                    layout = QVBoxLayout(dlg)
+                    layout.setContentsMargins(24, 20, 24, 20)
+                    layout.setSpacing(10)
+
+                    title = QLabel(f'{a["icon"]} {a["name"]}')
+                    title.setFont(QFont('Georgia, "Noto Serif SC", serif', 16, QFont.Bold))
+                    title.setStyleSheet('color: #e8e6e1; background: transparent;')
+                    layout.addWidget(title)
+
+                    desc = QLabel(a['desc'])
+                    desc.setStyleSheet('color: #888; font-size: 12px; background: transparent;')
+                    desc.setWordWrap(True)
+                    layout.addWidget(desc)
+
+                    if earned:
+                        status = QLabel(f'✅ 已解锁\n解锁日期：{date_str}')
+                        status.setStyleSheet('color: #78B450; font-size: 12px; background: transparent;')
+                    else:
+                        status = QLabel('🔒 未解锁')
+                        status.setStyleSheet('color: #c95454; font-size: 12px; background: transparent;')
+                    layout.addWidget(status)
+
+                    if not earned and progress:
+                        prog_text = QLabel(f'当前进度：{progress.get("current", 0)}{progress.get("unit", "")} / 目标：{progress.get("target", 0)}{progress.get("unit", "")} ({int(progress.get("pct", 0)*100)}%)')
+                        prog_text.setStyleSheet('color: #6a8cbb; font-size: 11px; font-family: Consolas; background: transparent;')
+                        layout.addWidget(prog_text)
+
+                    btn = QPushButton('关闭')
+                    btn.setFixedHeight(32)
+                    btn.setCursor(Qt.PointingHandCursor)
+                    btn.setStyleSheet('QPushButton { background: rgba(255,255,255,0.06); color: #e8e6e1; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; font-size: 12px; } QPushButton:hover { background: rgba(255,255,255,0.1); }')
+                    btn.clicked.connect(dlg.accept)
+                    layout.addWidget(btn)
+
+                    dlg.exec_()
+
+                card.mousePressEvent = lambda event, a=card, handler=show_detail: (
+                    handler() if event.button() == Qt.LeftButton else None
+                )
+
                 grid.addWidget(card, row, col)
 
             ach_layout.addLayout(grid)
@@ -6403,29 +6466,32 @@ class RestReminderWidget(QWidget):
         self.tray_icon.setToolTip('⚡ 精力管理 · 待开始')
         self.tray_icon.activated.connect(self._on_tray_activated)
 
-        # 右键菜单：5 个按钮
+        # 右键菜单：5 个按钮（现代卡片风格）
         tray_menu = QMenu()
         tray_menu.setStyleSheet("""
             QMenu {
-                background-color: rgba(20, 20, 24, 0.95);
-                border: 1px solid rgba(212, 175, 55, 0.25);
-                border-radius: 10px;
+                background-color: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 rgba(28,28,36,0.98), stop:1 rgba(20,20,26,0.98));
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 12px;
                 padding: 6px;
+                min-width: 180px;
             }
             QMenu::item {
                 color: #e8e6e1;
-                padding: 8px 18px;
-                border-radius: 6px;
-                font-family: "Microsoft YaHei", sans-serif;
+                padding: 9px 16px;
+                border-radius: 8px;
+                font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
                 font-size: 12px;
+                spacing: 8px;
             }
             QMenu::item:selected {
-                background-color: rgba(255, 255, 255, 0.1);
+                background-color: rgba(255, 255, 255, 0.08);
+                color: #ffffff;
             }
             QMenu::separator {
                 height: 1px;
-                background: rgba(255, 255, 255, 0.08);
-                margin: 4px 10px;
+                background: rgba(255, 255, 255, 0.06);
+                margin: 5px 12px;
             }
         """)
         action_main = QAction('🖥️  打开主界面', self)

@@ -346,9 +346,24 @@ python rest_reminder.py`}
               <div className="space-y-6">
                 <div className="border-l-2 border-[var(--accent)] pl-4">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-bold">v6.1.3</span>
+                    <span className="text-sm font-bold">v6.1.4</span>
                     <span className="text-xs text-[var(--fg-dim)]">2026-07-02</span>
                     <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">最新</span>
+                  </div>
+                  <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
+                    <li>修复 AI 服务不可用：default_proxy 被禁用后重启仍不可用</li>
+                    <li>修复设置页测试连接卡顿：HTTP 请求改后台线程，UI 不再冻结</li>
+                    <li>浮球短点击切换显示/隐藏，右键菜单动态文案</li>
+                    <li>托盘菜单新增浮球显示切换</li>
+                    <li>浮球 popup 扩容到 260×200，22:00 进度条改为倒计时模式</li>
+                    <li>飞书刷新按钮对比度修复，侧边栏矢量图标，GitHub 真实图标</li>
+                  </ul>
+                </div>
+
+                <div className="border-l-2 border-[var(--border)] pl-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm font-bold">v6.1.3</span>
+                    <span className="text-xs text-[var(--fg-dim)]">2026-07-02</span>
                   </div>
                   <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
                     <li>修复计时漂移：引入 time.perf_counter() 统一计时源</li>
