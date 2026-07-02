@@ -2,6 +2,19 @@
 
 所有重要版本更新记录。
 
+## v6.1.3 (2026-07-02)
+
+### 🐛 Bug 修复
+- **修复计时漂移**：`datetime.now()` 差值导致长时间运行误差 5-10%，引入 `time.perf_counter()` 统一计时源
+- **修复临时文件泄漏**：weekly HTML + ambient WAV 永久残留，引入 `_TempFileManager` 集中注册 + atexit 清理
+- **增强日志归档**：按日期自动归档旧日志，避免 `rest_reminder.log` 无限增长
+
+### 🌐 官网
+- Sponsor 区重构：去除虚假赞助暗示，更新为真实技术生态（CC Switch、Kimi K2.7 Code）
+- 文档 FAQ 新增赞助合作 4 条
+
+---
+
 ## v6.1.2 (2026-07-01)
 
 ### 🐛 Bug 修复

@@ -346,27 +346,27 @@ python rest_reminder.py`}
               <div className="space-y-6">
                 <div className="border-l-2 border-[var(--accent)] pl-4">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-bold">v6.1.2</span>
-                    <span className="text-xs text-[var(--fg-dim)]">2026-07-01</span>
+                    <span className="text-sm font-bold">v6.1.3</span>
+                    <span className="text-xs text-[var(--fg-dim)]">2026-07-02</span>
                     <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">最新</span>
                   </div>
                   <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                    <li>修复趋势图完全空白（延迟加载后初始数据未加载）</li>
-                    <li>修复设置 Tab 错误显示趋势内容（索引错位）</li>
-                    <li>官网下载截图替换为 GitHub Releases 页面</li>
+                    <li>修复计时漂移：引入 time.perf_counter() 统一计时源</li>
+                    <li>修复临时文件泄漏：_TempFileManager 集中注册 + atexit 清理</li>
+                    <li>增强日志归档：按日期自动归档旧日志</li>
+                    <li>Sponsor 区重构：真实技术生态 + 文档 FAQ 赞助合作</li>
                   </ul>
                 </div>
 
                 <div className="border-l-2 border-[var(--border)] pl-4">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-bold">v6.1.0</span>
+                    <span className="text-sm font-bold">v6.1.2</span>
                     <span className="text-xs text-[var(--fg-dim)]">2026-07-01</span>
                   </div>
                   <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                    <li>启动速度优化：非首屏 Tab 延迟加载</li>
-                    <li>趋势图 QPixmap 缓存，避免重绘</li>
-                    <li>飞书日程手动刷新、AI 报告强制刷新按钮</li>
-                    <li>复盘记忆上次学科标签、护眼提醒跳过按钮</li>
+                    <li>修复趋势图完全空白（延迟加载后初始数据未加载）</li>
+                    <li>修复设置 Tab 错误显示趋势内容（索引错位）</li>
+                    <li>官网下载截图替换为 GitHub Releases 页面</li>
                   </ul>
                 </div>
 
