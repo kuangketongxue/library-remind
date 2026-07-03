@@ -119,3 +119,6 @@ rest-reminder-site/out/
 
 # 本地临时文件
 cleanup.bat
+*.png
+release-notes.md
+screenshot.ps1
