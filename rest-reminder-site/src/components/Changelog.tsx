@@ -2,9 +2,33 @@
 
 const releases = [
   {
+    version: "v6.1.6",
+    date: "2026.07.03",
+    tag: "最新",
+    changes: [
+      "设置保存防抖：300ms 内多次调用合并为一次磁盘写入，减少 IO 压力",
+      "单实例锁删除 msvcrt 文件锁残留，仅用 Named Mutex（无竞态、崩溃自释放）",
+      "飞书日程 subprocess 改 Popen，stop() 时可立即终止子进程",
+      "飞书日程缓存 24h→1h，避免跨天后今日日程不刷新",
+      "3 处 except Exception: pass 加 log，便于诊断",
+    ],
+  },
+  {
+    version: "v6.1.5",
+    date: "2026.07.03",
+    tag: "",
+    changes: [
+      "修复邮件测试发送连点堆叠 QThread 导致 Qt abort",
+      "修复 JSONStore 并发写丢 key（后台报告线程+主线程写同一 store）",
+      "md_to_html 接受 theme 参数，light 主题下报告不再显示 dark 底色",
+      "飞书 node 版本路径动态 glob，WorkBuddy 升级 node 后不再失效",
+      "托盘卡片版本号从 v3.3 改为动态读取真实版本",
+    ],
+  },
+  {
     version: "v6.1.4",
     date: "2026.07.02",
-    tag: "最新",
+    tag: "",
     changes: [
       "修复 AI 服务不可用：default_proxy 被禁用后重启仍不可用",
       "修复设置页测试连接卡顿：HTTP 请求改后台线程，UI 不再冻结",

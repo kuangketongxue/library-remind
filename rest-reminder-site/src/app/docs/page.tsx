@@ -397,9 +397,24 @@ python rest_reminder.py`}
               <div className="space-y-6">
                 <div className="border-l-2 border-[var(--accent)] pl-4">
                   <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm font-bold">v6.1.6</span>
+                    <span className="text-xs text-[var(--fg-dim)]">2026-07-03</span>
+                    <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">最新</span>
+                  </div>
+                  <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
+                    <li>设置保存防抖：300ms 内多次调用合并为一次磁盘写入</li>
+                    <li>单实例锁删除 msvcrt 文件锁残留，仅用 Named Mutex</li>
+                    <li>飞书日程 subprocess 改 Popen，stop() 可立即终止子进程</li>
+                    <li>飞书日程缓存 24h→1h，避免跨天日程不刷新</li>
+                    <li>修复邮件测试连点堆叠 QThread 崩溃、JSONStore 并发写丢 key</li>
+                    <li>md_to_html 接受 theme 参数，light 主题报告不再显示 dark 底色</li>
+                  </ul>
+                </div>
+
+                <div className="border-l-2 border-[var(--border)] pl-4">
+                  <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-bold">v6.1.4</span>
                     <span className="text-xs text-[var(--fg-dim)]">2026-07-02</span>
-                    <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">最新</span>
                   </div>
                   <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
                     <li>修复 AI 服务不可用：default_proxy 被禁用后重启仍不可用</li>
