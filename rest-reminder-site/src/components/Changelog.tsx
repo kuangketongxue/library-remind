@@ -2,9 +2,21 @@
 
 const releases = [
   {
+    version: "v6.1.7",
+    date: "2026.07.04",
+    tag: "最新",
+    changes: [
+      "修复 import copy 缺失导致设置保存崩溃",
+      "修复复盘弹窗 QSlider GC 崩溃（自动提交后评分丢失）",
+      "清理 _enter_rest() 重复通知",
+      "关于页 AI 服务动态展示真实 providers 列表",
+      "CLAUDE.md 与规格文档同步到 v6.x",
+    ],
+  },
+  {
     version: "v6.1.6",
     date: "2026.07.03",
-    tag: "最新",
+    tag: "",
     changes: [
       "设置保存防抖：300ms 内多次调用合并为一次磁盘写入，减少 IO 压力",
       "单实例锁删除 msvcrt 文件锁残留，仅用 Named Mutex（无竞态、崩溃自释放）",

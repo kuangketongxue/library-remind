@@ -397,9 +397,23 @@ python rest_reminder.py`}
               <div className="space-y-6">
                 <div className="border-l-2 border-[var(--accent)] pl-4">
                   <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm font-bold">v6.1.7</span>
+                    <span className="text-xs text-[var(--fg-dim)]">2026-07-04</span>
+                    <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">最新</span>
+                  </div>
+                  <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
+                    <li>修复 import copy 缺失导致设置保存崩溃</li>
+                    <li>修复复盘弹窗 QSlider GC 崩溃（自动提交后评分丢失）</li>
+                    <li>清理 _enter_rest() 重复通知</li>
+                    <li>关于页 AI 服务动态展示真实 providers 列表</li>
+                    <li>CLAUDE.md 与规格文档同步到 v6.x</li>
+                  </ul>
+                </div>
+
+                <div className="border-l-2 border-[var(--border)] pl-4">
+                  <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-bold">v6.1.6</span>
                     <span className="text-xs text-[var(--fg-dim)]">2026-07-03</span>
-                    <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">最新</span>
                   </div>
                   <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
                     <li>设置保存防抖：300ms 内多次调用合并为一次磁盘写入</li>

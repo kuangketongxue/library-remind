@@ -60,6 +60,7 @@ import winreg
 import traceback
 import base64
 import hashlib
+import copy
 import backup
 
 
@@ -3829,8 +3830,6 @@ class RestReminderWidget(QWidget):
         self._sync_buttons()
         log.info('[计时] 快捷键触发：手动进入休息')
         self.tray_icon.showMessage('☕ 快捷键', '已进入休息时间', QSystemTrayIcon.Information, 2000)
-        log.info('[计时] 快捷键触发：手动进入休息')
-        self.tray_icon.showMessage('☕ 快捷键', '已进入休息时间', QSystemTrayIcon.Information, 2000)
 
     def _load_heatmap_data(self):
         """加载 52 周热力图数据"""
@@ -6113,8 +6112,12 @@ class RestReminderWidget(QWidget):
         ai_header.addStretch()
         aic.addLayout(ai_header)
 
-        sn_key = self.app_settings.get('sensenova_api_key', '')
-        ag_key = self.app_settings.get('agnes_api_key', '') or os.environ.get('AGNES_API_KEY', '')
+        # 展示真实配置的 providers（兼容 legacy SenseNova/Agnes key 展示）
+        ai_providers = self.app_settings.get('ai_providers', [])
+        legacy_sn = bool(self.app_settings.get('sensenova_api_key', ''))
+        legacy_ag = bool(self.app_settings.get('agnes_api_key', ''))
+        sn_key = legacy_sn
+        ag_key = legacy_ag
         for provider, has_key in [('SenseNova', bool(sn_key)), ('Agnes AI', bool(ag_key))]:
             row = QHBoxLayout()
             row.setSpacing(6)
@@ -6132,10 +6135,38 @@ class RestReminderWidget(QWidget):
             row.addStretch()
             aic.addLayout(row)
 
-        if not sn_key and not ag_key:
-            ai_hint = QLabel('→ 设置 tab “AI 服务”区域可配置 API Key')
+        # 不提供 legacy hint 了，下面会展示 providers 列表
+        if not sn_key and not ag_key and not ai_providers:
+            ai_hint = QLabel('→ 设置 tab "AI 服务"区域可配置 API Key')
             ai_hint.setStyleSheet('color: #fcc419; font-size: 13px; background: transparent; padding-top: 2px;')
             aic.addWidget(ai_hint)
+
+        # 展示真实配置的 providers（v6.0+ 任意 OpenAI 兼容 API）
+        if ai_providers:
+            providers_header = QLabel(f'已配置 {len(ai_providers)} 个 AI 提供商：')
+            providers_header.setStyleSheet('color: #999; font-size: 11px; background: transparent; padding-top: 4px;')
+            aic.addWidget(providers_header)
+            for p in ai_providers:
+                row = QHBoxLayout()
+                row.setSpacing(6)
+                enabled = p.get('enabled', True)
+                priority = p.get('priority', 999)
+                has_key = bool(p.get('api_key', ''))
+                status_text = ('⭐ 首选' if priority == 1 else f'备份 {priority}') + (' · 启用' if enabled else ' · 禁用')
+                dot = QLabel('●')
+                dot.setStyleSheet(f'color: {"#78B450" if has_key and enabled else "#444"}; font-size: 10px; background: transparent;')
+                dot.setFixedWidth(14)
+                row.addWidget(dot)
+                pname_lbl = QLabel(p.get('name', '未命名'))
+                pname_lbl.setStyleSheet('color: #b8b4ac; font-size: 12px; background: transparent;')
+                pname_lbl.setFixedWidth(100)
+                row.addWidget(pname_lbl)
+                model_name = p.get('model', '默认模型')
+                pstatus = QLabel(f'{status_text} · {model_name}' if has_key else f'{status_text} · 无 Key')
+                pstatus.setStyleSheet(f'color: {"#b8b4ac" if has_key and enabled else "#555"}; font-size: 11px; background: transparent;')
+                row.addWidget(pstatus, 1)
+                row.addStretch()
+                aic.addLayout(row)
 
         right_col.addWidget(ai_card)
         status_row.addLayout(right_col)
@@ -6444,12 +6475,16 @@ class RestReminderWidget(QWidget):
         except ImportError:
             diag_lines.append('❌ psutil 未安装')
 
+        # AI 服务状态：展示真实 providers 数量
+        ai_providers = self.app_settings.get('ai_providers', [])
         sn_key = self.app_settings.get('sensenova_api_key', '')
         ag_key = self.app_settings.get('agnes_api_key', '')
-        if sn_key:
-            diag_lines.append('AI: SenseNova ✓')
+        if ai_providers:
+            diag_lines.append(f'AI: {len(ai_providers)} 个提供商已配置')
+        elif sn_key:
+            diag_lines.append('AI: SenseNova ✓ (legacy key)')
         elif ag_key:
-            diag_lines.append('AI: Agnes ✓')
+            diag_lines.append('AI: Agnes ✓ (legacy key)')
         else:
             diag_lines.append('AI: 未配置（使用本地报告）')
 
@@ -7182,9 +7217,8 @@ class RestReminderWidget(QWidget):
         """构建复盘评分对话框：学科6选1 + 标签5选1 + 评分滑块1-100，1分钟自动提交，金色选中态"""
         parent = self.window() or self
         dialog = QDialog(parent)
-        dialog.setAttribute(Qt.WA_DeleteOnClose)
+        # 不使用 WA_DeleteOnClose：exec_() 返回后 _score_slider 在 exit 时会被 C++ 销毁
         self.review_dlg = dialog
-        dialog.destroyed.connect(lambda: setattr(self, 'review_dlg', None))
         dialog.setWindowTitle(title)
         dialog.setFixedSize(480, 420)
         dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
@@ -7315,6 +7349,8 @@ class RestReminderWidget(QWidget):
         dialog._subject_val = subject_val
         dialog._label_val = label_val
         dialog._score_slider = score_slider
+        # 快照：避免 WA_DeleteOnClose 后，exec_() 退出时 slider 被销毁
+        dialog._score = score_slider.value() if score_slider else 50
         return dialog
 
     def _get_today_goal(self):
@@ -7351,7 +7387,7 @@ class RestReminderWidget(QWidget):
             if dialog.exec_():
                 subject = dialog._subject_val[0]
                 label = dialog._label_val[0]
-                score = dialog._score_slider.value()
+                score = dialog._score_slider.value() if dialog._score_slider is not None else dialog._score
                 self._record_review(score, subject, label)
         except Exception as e:
             log.error(f'[复盘] 弹窗异常: {e}')

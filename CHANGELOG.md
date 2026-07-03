@@ -2,7 +2,20 @@
 
 所有重要版本更新记录。
 
-## v6.1.6 (2026-07-03)
+## v6.1.7 (2026-07-04)
+
+### 🐛 崩溃修复
+- **import copy 缺失**：`LocalSync.save_settings` 使用 `copy.deepcopy` 但文件未 `import copy`，触发 NameError（crash.log 2026-07-03 17:54）。补充 `import copy`
+- **复盘弹窗 QSlider GC**：`_build_review_dialog` 设了 `WA_DeleteOnClose`，`exec_()` 返回时 C++ 对象已销毁，自动提交或手动提交后访问 `_score_slider.value()` 报错。移除 `WA_DeleteOnClose`，在 `_prompt_review` 中安全取值
+
+### 🧹 代码清理
+- **`_enter_rest()` 重复代码**：移除重复的 `log.info` + `tray_icon.showMessage`，保留一份
+
+### 📖 文档同步
+- **CLAUDE.md**：行号从 4413 更正为 8127；AI 系统从"SenseNova + Agnes 双 API"更新为"任意 OpenAI 兼容 API + fallback"
+- **`产品规格-v4.3.md`**：头部添加弃用声明，标记为历史文档与当前 v6.1.6 脱节
+- **关于页**：动态展示真实 `ai_providers` 列表（name/model/priority/status），兼容 legacy SenseNova/Agnes key
+- **诊断窗口**：更新 AI 状态检测逻辑，优先展示 providers 数量而非 legacy key
 
 ### ⚡ 性能
 - **设置保存防抖**：28 处 `LocalSync.save_settings` 同步直调，连续勾选/拖动滑块时高频写磁盘。改为 class-level QTimer 300ms 防抖，多次调用合并为一次写入；`quit_app` 前 `flush_pending_settings` 确保落盘

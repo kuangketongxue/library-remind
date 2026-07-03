@@ -8,21 +8,20 @@ Python 3.14+ / PyQt5 / requests / psutil / Win32 API (ctypes)
 
 ## 关键文件
 ```
-rest_reminder.py              — 主程序（~4413行，含所有 UI + 逻辑）
+rest_reminder.py              — 主程序（~8127行，含所有 UI + 逻辑）
 storage.py                    — 统一 JSON 存储层（JSONStore 类）
-RestReminder.spec             — PyInstaller 配置（含 hiddenimports=['storage']）
-产品规格-v4.3.md              — v4.3 完整产品规格
+RestReminder.spec             — PyInstaller 配置（含 hiddenimports=['storage','tray_card','feishu_calendar']）
+产品规格-v4.3.md              — ⚠️ 历史规格，最后更新 v4.4 (2026-06-22)，与当前 v6.1.6 脱节
 ```
 
 ## AI 学习分析
 - **无需付费**：AI 报告直接可用
-- **主 API**：SenseNova `sensenova-6.7-flash-lite`（`token.sensenova.cn/v1/chat/completions`）
-- **备用 API**：Agnes `agnes-2.0-flash`（`apihub.agnes-ai.com/v1/chat/completions`），自动降级链 + 指数退避
+- **架构**：任意 OpenAI 兼容 API + Cloudflare Worker 代理（`ai-proxy-worker/`）
+- **provider 模型**：`ai_providers` 列表，priority 排序，fallback 链式尝试
 - **TTS 语音**：StepFun `stepaudio-2.5-tts`（`api.stepfun.com/v1/audio/speech`），异步线程播放
 - **功能**：日报/周报/月报/季报/年报
 - **缓存**：`.report_cache/` 目录，每个报告类型一个 JSON
 - **数据源**：`.stats_history.json` + `.review_log.json`
-- **⚠️ SenseNova 推理模型特殊处理**：`sensenova-6.7-flash-lite` 是推理模型，`content` 字段可能为空，实际回复在 `reasoning` 字段。需 `max_tokens >= 4096` 并 fallback 到 `msg['reasoning']`
 
 ## 持久化文件
 `.daily_log.json` · `.app_state.json` · `.goal.json` · `.streak.json` · `.settings.json` · `.stats_history.json` · `.review_log.json`
