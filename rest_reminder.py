@@ -1126,9 +1126,14 @@ class LocalSync:
         if cls._pending_settings is None:
             return
         settings = cls._pending_settings
-        cls._pending_settings = None
-        settings_store.save(settings)
-        log.info(f'[LocalSync] 设置已保存（防抖合并）: {settings}')
+        # 先 save 成功再清 _pending_settings，避免 save 异常时挂起改动永久丢失
+        try:
+            settings_store.save(settings)
+            cls._pending_settings = None
+            log.info(f'[LocalSync] 设置已保存（防抖合并）: {settings}')
+        except Exception as e:
+            # 保留 _pending_settings，下次定时器触发时重试
+            log.error(f'[LocalSync] 设置保存失败，保留挂起数据待重试: {type(e).__name__}: {e}')
 
     def flush_pending_settings(cls):
         """立即刷新挂起的设置写入（用于应用退出前确保落盘）"""
