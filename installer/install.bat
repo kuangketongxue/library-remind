@@ -24,22 +24,24 @@ echo   用户协议
 echo ════════════════════════════════════════════════════════════════
 echo.
 echo   1. 本软件为免费开源软件，仅供个人学习使用
-echo   2. 本软件不会收集您的任何个人数据
-echo   3. 本软件不会自动上传数据到任何服务器
-echo   4. 您可以选择是否开启 AI 学习分析功能（需要配置 API Key）
-echo   5. 本软件按"现状"提供，不提供任何明示或暗示的保证
-echo   6. 使用本软件产生的任何后果由使用者自行承担
+echo   2. 默认情况下，本软件不会将您的数据上传到任何服务器
+echo   3. 如您开启"GitHub 自动备份"功能，学习/复盘/设置等数据将加密后上传至您配置的私有仓库
+echo   4. AI 学习分析功能仅在您主动点击时发送数据到您配置的 API
+echo   5. 您拥有自己产生的所有数据，卸载时可选择是否保留或删除
+echo   6. 本软件按"现状"提供，不提供任何明示或暗示的保证
+echo   7. 使用本软件产生的任何后果由使用者自行承担
 echo.
 echo ════════════════════════════════════════════════════════════════
 echo   隐私政策
 echo ════════════════════════════════════════════════════════════════
 echo.
 echo   本软件尊重并保护您的隐私：
-echo   • 所有学习数据仅存储在本地计算机
-echo   • 不会收集任何个人信息
-echo   • 不会跟踪您的使用行为
-echo   • 飞书日程集成仅在本地运行，不上传数据
-echo   • AI 报告功能仅在使用时发送数据到您配置的 API
+echo   • 默认情况下，所有学习数据仅存储在本地计算机
+echo   • 不会收集任何个人信息（姓名、邮箱、IP 等）
+echo   • 不会跟踪您的使用行为或发送遥测数据
+echo   • 飞书日程集成仅在本地运行，不上传数据到第三方
+echo   • AI 报告功能仅在使用时发送数据到您配置的 API，不会留存
+echo   • 开启"GitHub 自动备份"后，数据将加密后存入您的私有仓库
 echo.
 echo ════════════════════════════════════════════════════════════════
 echo   开源协议
@@ -116,7 +118,7 @@ echo   ✓ 复制成功
 
 :: Copy icon
 echo   复制图标文件...
-copy /Y "%~dp0cute_icon.ico" "!INSTALL_DIR!\" >nul
+copy /Y "%~dp0cute_icon.png" "!INSTALL_DIR!\" >nul
 if errorlevel 1 (
     echo   ✗ 复制失败
     pause
@@ -153,7 +155,7 @@ if not exist "!STARTMENU_DIR!" mkdir "!STARTMENU_DIR!"
 
 :: Create Start Menu shortcut
 echo   创建开始菜单快捷方式...
-powershell -Command "$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('!STARTMENU_DIR!\休息提醒.lnk'); $Shortcut.TargetPath = '!INSTALL_DIR!\RestReminder.exe'; $Shortcut.WorkingDirectory = '!INSTALL_DIR!'; $Shortcut.IconLocation = '!INSTALL_DIR!\cute_icon.ico,0'; $Shortcut.Description = '休息提醒 - 专注力管理挂件'; $Shortcut.Save()" 2>nul
+powershell -Command "$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('!STARTMENU_DIR!\休息提醒.lnk'); $Shortcut.TargetPath = '!INSTALL_DIR!\RestReminder.exe'; $Shortcut.WorkingDirectory = '!INSTALL_DIR!'; $Shortcut.IconLocation = '!INSTALL_DIR!\cute_icon.png,0'; $Shortcut.Description = '休息提醒 - 专注力管理挂件'; $Shortcut.Save()" 2>nul
 if errorlevel 1 (
     echo   ✗ 创建开始菜单快捷方式失败
 ) else (
@@ -162,7 +164,7 @@ if errorlevel 1 (
 
 :: Create Desktop shortcut
 echo   创建桌面快捷方式...
-powershell -Command "$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('%USERPROFILE%\Desktop\休息提醒.lnk'); $Shortcut.TargetPath = '!INSTALL_DIR!\RestReminder.exe'; $Shortcut.WorkingDirectory = '!INSTALL_DIR!'; $Shortcut.IconLocation = '!INSTALL_DIR!\cute_icon.ico,0'; $Shortcut.Description = '休息提醒 - 专注力管理挂件'; $Shortcut.Save()" 2>nul
+powershell -Command "$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('%USERPROFILE%\Desktop\休息提醒.lnk'); $Shortcut.TargetPath = '!INSTALL_DIR!\RestReminder.exe'; $Shortcut.WorkingDirectory = '!INSTALL_DIR!'; $Shortcut.IconLocation = '!INSTALL_DIR!\cute_icon.png,0'; $Shortcut.Description = '休息提醒 - 专注力管理挂件'; $Shortcut.Save()" 2>nul
 if errorlevel 1 (
     echo   ✗ 创建桌面快捷方式失败（可能需要手动创建）
 ) else (
