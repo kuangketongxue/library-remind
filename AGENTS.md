@@ -56,7 +56,9 @@ taskkill /F /IM python.exe
 - **`python` 命令陷阱**：PATH 里 `python` 可能解析到其他版本，启动会报 `ImportError: cannot import name 'sip'`，必须用 `C:\Python314\python.exe`
 - **_md_to_html 是模块级函数**：不在任何类中，`RestReminderWidget` 和 `FloatingBall` 都可直接调用
 - **Edit 工具中文 TSX**：含中文的 TSX 文件 Edit 静默失败 → 改用 Write 工具全量重写
-- **CF Pages 部署**：`npx wrangler pages deploy out --project-name=crazy-rest-reminder`（不是 `wrangler deploy`）
+- **CF Pages 部署**：`npx wrangler pages deploy out --project-name=crazy-rest-reminder`（需要 `CLOUDFLARE_API_TOKEN` 环境变量；不是 `wrangler deploy`；不是 CloudStudio）
+- **浮球 popup 空白**：`_show_info_popup()` 默认文字刷新在 `if popup is None:` 块内，关闭后再点击浮球打开时跳过刷新。默认文字 + `_update_popup_text()` 必须移到块外，每次显示都执行
+- **Next.js 构建缓存**：`.next` 缓存导致 Turbopack 报错时行号与实际文件不符 → `rm -rf .next out node_modules/.cache` 清缓存重建
 - **git push 认证**：WARP 环境下用 `git config credential.helper store` + `~/.git-credentials` 文件
 - **Windows 任务栏图标**：直接 `python.exe` 启动会显示 Python 图标；需创建 `.lnk` 快捷方式绑定 `cute_icon.ico`，或用 PyInstaller 打包 EXE
 - **PyQt5 多实例防护**：用 `kernel32.CreateMutexW + GetLastError==183`，原子操作，崩溃自动释放，名称用 `Global\` 前缀（v5.4.0，2026-06-29）
