@@ -22,11 +22,19 @@ const navSections = [
     label: "功能说明",
     defaultOpen: false,
     items: [
-      { href: "/docs#60分钟循环", label: "60 分钟专注循环" },
+      { href: "/docs#专注循环", label: "60 分钟专注循环" },
       { href: "/docs#护眼提醒", label: "20-20-20 护眼提醒" },
       { href: "/docs#学习追踪", label: "学习时长追踪" },
       { href: "/docs#趋势分析", label: "趋势分析" },
       { href: "/docs#ai分析", label: "AI 学习分析" },
+    ],
+  },
+  {
+    icon: "⚙",
+    label: "设置详解",
+    defaultOpen: false,
+    items: [
+      { href: "/docs#设置详解", label: "设置详解" },
     ],
   },
   {
@@ -43,6 +51,14 @@ const navSections = [
     defaultOpen: false,
     items: [
       { href: "/docs#常见问题", label: "FAQ" },
+    ],
+  },
+  {
+    icon: "🔧",
+    label: "故障排除",
+    defaultOpen: false,
+    items: [
+      { href: "/docs#故障排除", label: "故障排除" },
     ],
   },
 ];
@@ -75,7 +91,7 @@ export default function DocsNav() {
   return (
     <aside
       ref={navRef}
-      className="w-56 shrink-0 sticky top-20 h-[calc(100vh-5rem)] overflow-y-auto py-6 hidden lg:block"
+      className="docs-sidebar"
     >
       {/* Search */}
       <div className="px-3 mb-4">
@@ -116,7 +132,6 @@ export default function DocsNav() {
                 onClick={() => toggleSection(section.label)}
                 className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-[var(--fg-dim)] hover:text-[var(--fg)] hover:bg-[var(--surface)] transition-colors"
               >
-                <span className="text-base">{section.icon}</span>
                 <span className="flex-1 text-left">{section.label}</span>
                 <svg
                   className={`w-3.5 h-3.5 transition-transform duration-200 ${

@@ -815,7 +815,7 @@ class FloatingBall(QWidget):
 
         mw._info_popup = popup
 
-        # ★ 先写死默认文案，避免 _update_popup_text() 异常时卡片空白
+        # ★ 每次显示都刷新默认文字，避免复用旧 popup 时内容空白
         popup._timer_lbl.setText('⚡ 60:00')
         popup._study_lbl.setText('📚 0.0h')
         popup._round_lbl.setText('第1轮')
