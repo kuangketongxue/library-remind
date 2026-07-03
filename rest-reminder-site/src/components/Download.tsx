@@ -6,13 +6,13 @@ const steps = [
   {
     num: "1",
     title: "下载安装",
-    desc: "从 GitHub Releases 下载 RestReminder.exe，46MB 秒装",
+    desc: "从 GitHub Releases 下载 RestReminder.exe，48MB 秒装",
     img: "/screenshot-download.png",
   },
   {
     num: "2",
     title: "开始计时",
-    desc: "右下角出现浮球，点击开始学习，60分钟自动循环",
+    desc: "右下角出现浮球，点击弹出信息面板，60分钟自动循环",
     img: "/screenshot-main.png",
   },
   {

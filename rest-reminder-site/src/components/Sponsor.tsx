@@ -17,7 +17,6 @@ const techSupport = [
   { name: "LongCat", desc: "图像生成" },
   { name: "StepFun", desc: "大模型 / TTS 语音" },
   { name: "SenseNova", desc: "多模态大模型 · API" },
-  { name: "XiaomiMimo", desc: "技术支持" },
 ];
 
 export default function Sponsor() {

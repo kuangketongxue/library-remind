@@ -9,6 +9,7 @@ const tocItems: TocItem[] = [
   { id: "设定目标", label: "2. 设定目标", level: 3 },
   { id: "开始学习", label: "3. 开始学习", level: 3 },
   { id: "复盘追踪", label: "4. 复盘追踪", level: 3 },
+  { id: "界面预览", label: "界面预览", level: 2 },
   { id: "功能说明", label: "功能说明", level: 2 },
   { id: "专注循环", label: "60 分钟专注循环", level: 3 },
   { id: "护眼提醒", label: "20-20-20 护眼提醒", level: 3 },
@@ -19,6 +20,7 @@ const tocItems: TocItem[] = [
   { id: "设置详解", label: "设置详解", level: 2 },
   { id: "更新日志", label: "更新日志", level: 2 },
   { id: "常见问题", label: "常见问题", level: 2 },
+  { id: "故障排除", label: "故障排除", level: 2 },
 ];
 
 export default function DocsPage() {
@@ -51,6 +53,13 @@ export default function DocsPage() {
             <section className="mb-16" id="快速开始">
               <h2 className="text-2xl font-bold mb-1 font-display">快速开始</h2>
               <p className="text-[var(--fg-dim)] text-sm mb-6">5 分钟上手 Rest Reminder</p>
+
+              <div className="bg-[var(--surface-raised)] rounded-xl p-5 mb-6">
+                <p className="text-sm font-semibold mb-2">隐私与数据安全</p>
+                <p className="text-xs text-[var(--fg-dim)] leading-relaxed">
+                  所有数据仅存储在本地 JSON 文件，不上传任何服务器。无需注册账号，无需登录，MIT 开源可审计。
+                </p>
+              </div>
 
               <div className="space-y-8">
                 <div id="下载运行">
@@ -136,6 +145,48 @@ python rest_reminder.py`}
                         22:00 自动弹出每日学习汇报。
                       </p>
                     </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* ── 界面预览 ── */}
+            <section className="mb-16" id="界面预览">
+              <h2 className="text-2xl font-bold mb-1 font-display">界面预览</h2>
+              <p className="text-[var(--fg-dim)] text-sm mb-6">Rest Reminder 核心界面一览</p>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="border border-[var(--border)] rounded-xl overflow-hidden">
+                  <div className="bg-[var(--bg)] p-8 flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="w-12 h-12 rounded-full bg-[var(--accent-soft)] flex items-center justify-center text-2xl mx-auto mb-2">⚡</div>
+                      <p className="text-xs text-[var(--fg-dim)]">浮球挂件</p>
+                    </div>
+                  </div>
+                  <div className="p-3 border-t border-[var(--border)]">
+                    <p className="text-xs text-[var(--fg-dim)]">60×60 桌面浮球，短点击弹出信息面板，长按拖动 reposition。休息时显示环形进度条。</p>
+                  </div>
+                </div>
+                <div className="border border-[var(--border)] rounded-xl overflow-hidden">
+                  <div className="bg-[var(--bg)] p-8 flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold font-display text-[var(--accent)] mb-2">⏱ 58:32</div>
+                      <p className="text-[10px] text-[var(--fg-dim)]">学习倒计时</p>
+                    </div>
+                  </div>
+                  <div className="p-3 border-t border-[var(--border)]">
+                    <p className="text-xs text-[var(--fg-dim)]">主面板实时显示倒计时、学习时长、轮次、状态标签。每秒刷新，22:00 自动弹出每日汇报。</p>
+                  </div>
+                </div>
+                <div className="border border-[var(--border)] rounded-xl overflow-hidden">
+                  <div className="bg-[var(--bg)] p-8 flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="w-16 h-8 rounded bg-[var(--accent-soft)] mb-2"></div>
+                      <p className="text-[10px] text-[var(--fg-dim)]">趋势图表</p>
+                    </div>
+                  </div>
+                  <div className="p-3 border-t border-[var(--border)]">
+                    <p className="text-xs text-[var(--fg-dim)]">今日复盘时间线、周/月/季/年柱状图、7×24 学习热力图。鼠标悬浮查看具体数值。</p>
                   </div>
                 </div>
               </div>
@@ -254,7 +305,7 @@ python rest_reminder.py`}
                     <div>
                       <p className="text-sm font-medium text-[var(--fg)]">托盘控制</p>
                       <p className="text-xs text-[var(--fg-dim)] mt-1">
-                        系统托盘右键菜单可补录复盘、打开主界面、隐藏/退出程序。
+                        系统托盘右键菜单可补录复盘、打开信息面板、隐藏/退出程序。
                         托盘图标 tooltip 实时显示倒计时和状态。
                       </p>
                     </div>
@@ -326,7 +377,7 @@ python rest_reminder.py`}
                 <div className="border border-[var(--border)] rounded-xl p-5">
                   <h3 className="text-sm font-semibold mb-1">🤫 静默启动</h3>
                   <p className="text-xs text-[var(--fg-dim)] leading-relaxed">
-                    启动后只显示浮球，不弹出主窗口。点击浮球打开主界面。
+                    启动后只显示浮球，不弹出主窗口。点击浮球弹出信息面板，显示倒计时与学习状态。
                   </p>
                 </div>
                 <div className="border border-[var(--border)] rounded-xl p-5">
@@ -514,7 +565,7 @@ python rest_reminder.py`}
               <div className="space-y-4">
                 <div className="border border-[var(--border)] rounded-xl p-5">
                   <h3 className="text-sm font-semibold mb-2">程序启动后只看到浮球，主界面不显示？</h3>
-                  <p className="text-[var(--fg-dim)] text-sm leading-relaxed">正常行为。默认静默启动只显示右下角浮球，点击浮球打开主界面。如需启动即显示主窗口，在设置中关闭「静默启动」。</p>
+                  <p className="text-[var(--fg-dim)] text-sm leading-relaxed">正常行为。默认静默启动只显示右下角浮球，点击浮球弹出信息面板。如需启动即显示主窗口，在设置中关闭「静默启动」。</p>
                 </div>
                 <div className="border border-[var(--border)] rounded-xl p-5">
                   <h3 className="text-sm font-semibold mb-2">B 站收藏夹没打开？</h3>
@@ -528,6 +579,13 @@ python rest_reminder.py`}
                   <h3 className="text-sm font-semibold mb-2">复盘评分的数据存在哪里？</h3>
                   <p className="text-[var(--fg-dim)] text-sm leading-relaxed">所有复盘数据存储在程序同目录的 <code className="bg-[var(--surface-raised)] px-1 py-0.5 rounded text-xs font-mono">.review_log.json</code> 中。每轮学习结束后自动追加记录，包含时间、学科、标签和评分。</p>
                 </div>
+                <div className="border border-[var(--border)] rounded-xl p-5">
+                  <h3 className="text-sm font-semibold mb-2">如何卸载？</h3>
+                  <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
+                    直接删除程序文件夹即可。如开启了开机自启，请先运行 <code className="bg-[var(--surface-raised)] px-1 py-0.5 rounded text-xs font-mono">uninstall.bat</code> 清除注册表项，再删除文件夹。
+                  </p>
+                </div>
+
                 <div className="border border-[var(--border)] rounded-xl p-5">
                   <h3 className="text-sm font-semibold mb-2">数据会丢失吗？</h3>
                   <p className="text-[var(--fg-dim)] text-sm leading-relaxed">所有数据存储在本地 JSON 文件，重启电脑不丢失。重装系统前建议备份程序目录下的 <code className="bg-[var(--surface-raised)] px-1 py-0.5 rounded text-xs font-mono">.daily_log.json</code>、<code className="bg-[var(--surface-raised)] px-1 py-0.5 rounded text-xs font-mono">.review_log.json</code>、<code className="bg-[var(--surface-raised)] px-1 py-0.5 rounded text-xs font-mono">.streak.json</code> 等文件。</p>
@@ -578,6 +636,62 @@ python rest_reminder.py`}
                 </div>
               </div>
             </section>
+
+            {/* ── 故障排除 ── */}
+            <section className="mb-16" id="故障排除">
+              <h2 className="text-2xl font-bold mb-1 font-display">故障排除</h2>
+              <p className="text-[var(--fg-dim)] text-sm mb-6">常见问题排查步骤</p>
+
+              <div className="space-y-4">
+                <div className="border border-[var(--border)] rounded-xl p-5">
+                  <h3 className="text-sm font-semibold mb-2">浮球不显示 / 点击无反应</h3>
+                  <p className="text-[var(--fg-dim)] text-sm leading-relaxed mb-2">按以下步骤排查：</p>
+                  <ol className="text-xs text-[var(--fg-dim)] leading-relaxed list-decimal list-inside space-y-1">
+                    <li>检查程序是否在运行：查看系统托盘是否有图标。</li>
+                    <li>右键点击托盘图标 → 选择「⚡ 显示浮球」。</li>
+                    <li>若托盘图标也不存在，检查是否被安全软件拦截。</li>
+                    <li>重启程序，确保无 crash.log 生成。</li>
+                  </ol>
+                </div>
+
+                <div className="border border-[var(--border)] rounded-xl p-5">
+                  <h3 className="text-sm font-semibold mb-2">AI 报告生成失败 / 卡死</h3>
+                  <p className="text-[var(--fg-dim)] text-sm leading-relaxed mb-2">按以下步骤排查：</p>
+                  <ol className="text-xs text-[var(--fg-dim)] leading-relaxed list-decimal list-inside space-y-1">
+                    <li>进入「设置 → AI 服务」检查 API Key 是否配置正确。</li>
+                    <li>检查网络连接，确保能访问 API 端点。</li>
+                    <li>未配置 Key 时自动降级为本地数据摘要，不会报错。若仍异常，查看 crash.log。</li>
+                    <li>在「关于」页面的环境诊断中检查依赖状态。</li>
+                  </ol>
+                </div>
+
+                <div className="border border-[var(--border)] rounded-xl p-5">
+                  <h3 className="text-sm font-semibold mb-2">倒计时不准 / 计时漂移</h3>
+                  <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
+                    程序使用 <code className="bg-[var(--surface-raised)] px-1 py-0.5 rounded text-xs font-mono">time.perf_counter()</code> 作为计时源，长时间运行误差极小。若发现明显不准，请确认没有通过任务管理器强制暂停 python.exe 进程。
+                  </p>
+                </div>
+
+                <div className="border border-[var(--border)] rounded-xl p-5">
+                  <h3 className="text-sm font-semibold mb-2">B 站收藏夹没打开</h3>
+                  <p className="text-[var(--fg-dim)] text-sm leading-relaxed mb-2">按以下步骤排查：</p>
+                  <ol className="text-xs text-[var(--fg-dim)] leading-relaxed list-decimal list-inside space-y-1">
+                    <li>检查设置中的 B 站收藏夹 ID（fid）和用户 ID（mid）是否正确。</li>
+                    <li>确认默认浏览器可正常启动。</li>
+                    <li>尝试手动打开收藏夹链接：<code className="bg-[var(--surface-raised)] px-1 py-0.5 rounded text-xs font-mono">https://space.bilibili.com/529362421/favlist?fid=3648313921</code></li>
+                    <li>如收藏夹为私有，请确保账号已登录。</li>
+                  </ol>
+                </div>
+
+                <div className="border border-[var(--border)] rounded-xl p-5">
+                  <h3 className="text-sm font-semibold mb-2">数据丢失 / 重装后恢复</h3>
+                  <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
+                    所有数据存储在程序同目录的 <code className="bg-[var(--surface-raised)] px-1 py-0.5 rounded text-xs font-mono">.daily_log.json</code>、<code className="bg-[var(--surface-raised)] px-1 py-0.5 rounded text-xs font-mono">.review_log.json</code>、<code className="bg-[var(--surface-raised)] px-1 py-0.5 rounded text-xs font-mono">.streak.json</code>。重装前请备份这些文件。
+                  </p>
+                </div>
+              </div>
+            </section>
+
             {/* ── 底部导航 ── */}
             <nav className="border-t border-[var(--border)] pt-8 mt-16 flex flex-col sm:flex-row justify-between gap-4">
               <a href="#更新日志" className="group flex items-center gap-3 text-sm">
