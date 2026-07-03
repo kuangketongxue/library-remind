@@ -2,6 +2,35 @@
 
 所有重要版本更新记录。
 
+## v6.1.6 (2026-07-03)
+
+### ⚡ 性能
+- **设置保存防抖**：28 处 `LocalSync.save_settings` 同步直调，连续勾选/拖动滑块时高频写磁盘。改为 class-level QTimer 300ms 防抖，多次调用合并为一次写入；`quit_app` 前 `flush_pending_settings` 确保落盘
+
+### 🧹 死代码清理
+- **单实例锁 msvcrt 文件锁残留删除**：`_file_lock_check`/`_cleanup_file`/`_lock_handle`/`_lock_path`/`import msvcrt` 全部删除。Windows Named Mutex 是内核级可靠方案（崩溃自动释放、无竞态），文件锁是死代码且 `msvcrt.locking` 有竞态。Mutex 失败时降级为"允许启动"（宁可多开也不误拦）
+
+### 🛠 健壮性
+- **飞书日程 subprocess 不可中断**：`subprocess.run` 改 `Popen + communicate`，`cancel()` 里 `proc.terminate()/kill()`，stop() 时能立即终止子进程，不再等到 30s timeout
+- **飞书日程缓存默认值 24h → 1h**：`refresh_interval` 默认 86400 → 3600，避免跨天后今日日程不刷新（调用方仍可覆盖）
+- **3 处 `except Exception: pass` 加 log**：`FloatingBall.hideEvent/showEvent` 加 `log.warning`，趋势时段评分解析加 `log.debug`，便于诊断
+
+## v6.1.5 (2026-07-03)
+
+### 🐛 崩溃修复
+- **邮件测试发送线程堆叠崩溃**：`_send_test_email` 连点会 new 多个 `_WeeklyReportWorker` 并发跑 agently-cli，旧 worker 既不 quit/wait 也不 deleteLater。改为发送前先 quit+wait(2000)+deleteLater 旧 worker，发送按钮 disable 防连点，回调首行 `sip.isdeleted(self)/sip.isdeleted(self._mail_status_lbl)` 守卫，主窗口关闭后回调安全返回
+- **周报自动发送回调崩溃**：`_check_weekly_report` 的 lambda 直接调 `log.info`，无 `sip.isdeleted` 守卫。改为具名函数 + 守卫
+- **JSONStore 并发写丢 key**：`storage.py` 的 `load`/`save`/`set` 无锁，后台报告线程读 `.stats_history.json` 与主线程写同一 store 时静默丢 key。新增实例级 `threading.Lock`，`set` 复合操作原子化
+- **JSONStore 异常静默吞**：`load()` 原 `except Exception` 吞所有错误无日志。收窄到 `json.JSONDecodeError` + `OSError` 并 `log.warning` 记录路径与原因，便于排查
+
+### 🎨 主题一致性
+- **`md_to_html` 不接受 theme 参数**：报告 HTML、邮件 HTML 全硬编码 dark 色（`#252530`/`#d4af37`/`#e8e4dc`/`#18181f`/`#b8b4ac`），light 主题下报告视图仍是 dark 底色色块。`md_to_html(text, theme='dark')` 新增可选参数，颜色全部从 `THEMES` 字典取，AI 报告视图调用传 `self._current_theme`，跟随主题切换
+
+### 🛠 健壮性
+- **飞书 node 版本路径硬编码**：`feishu_calendar.py` 硬编码 `.workbuddy\binaries\node\versions\22.22.2\node.exe`，WorkBuddy 升级 node 后路径失效。改为 `glob` 动态匹配 `versions\*\node.exe` 取最新版本
+- **托盘卡片版本号永远显示 v3.3**：`tray_card.py` `update_data` 默认 `version='v3.3'`，调用方未传时永远显示 v3.3（实际 v6.1.5）。改为尝试 `from rest_reminder import VERSION`，失败用占位
+- **PyInstaller 残留 hiddenimport**：`RestReminder.spec` 含 `'backup'` 但 `backup.py` 已不存在，构建 warning。删除残留
+
 ## v6.1.4 (2026-07-02)
 
 ### 🐛 Bug 修复

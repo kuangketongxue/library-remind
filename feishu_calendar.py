@@ -27,12 +27,19 @@ def _find_lark_cli():
     path = shutil.which('lark-cli.cmd')
     if path:
         return path
-    # 3. 搜索常见安装位置
+
+    # 3. 搜索常见安装位置（包含 WorkBuddy 托管目录和 npm 全局目录）
+    home = os.path.expanduser('~')
     candidates = [
         os.path.expandvars(r'%APPDATA%\npm\lark-cli.cmd'),
         os.path.expandvars(r'%LOCALAPPDATA%\npm\lark-cli.cmd'),
         r'C:\Program Files\nodejs\lark-cli.cmd',
-        os.path.expanduser('~/.local/bin/lark-cli'),
+        r'C:\Program Files (x86)\nodejs\lark-cli.cmd',
+        os.path.join(home, r'.workbuddy\binaries\node\cli-connector-packages\lark-cli'),
+        os.path.join(home, r'.workbuddy\binaries\node\versions\22.22.2\lark-cli'),
+        os.path.join(home, '.local/bin/lark-cli'),
+        '/usr/local/bin/lark-cli',
+        '/usr/bin/lark-cli',
     ]
     for c in candidates:
         if os.path.isfile(c):
@@ -134,12 +141,24 @@ class _FetchWorker(QThread):
     fetched = pyqtSignal(list)      # 成功时发送 [CalendarEvent, ...]
     error = pyqtSignal(str)         # 失败时发送错误信息
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, cli_path=None):
         super().__init__(parent)
         self._cancelled = False
+        self._cli_path = cli_path
+        self._proc = None  # 当前子进程，供 cancel() 终止
 
     def cancel(self):
+        """取消后台获取：标志位 + 终止子进程（Popen.terminate/kill）"""
         self._cancelled = True
+        proc = self._proc
+        if proc is not None and proc.poll() is None:
+            try:
+                proc.terminate()
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
 
     def run(self):
         if self._cancelled:
@@ -151,31 +170,65 @@ class _FetchWorker(QThread):
             tomorrow = now + timedelta(days=1)
             end_str = tomorrow.strftime('%Y-%m-%d')
 
-            cli_path = _find_lark_cli()
-            cmd = [
-                cli_path, 'calendar', '+agenda',
-                '--as', 'user',
-                '--start', start_str,
-                '--end', end_str,
-                '--format', 'json',
-            ]
+            cli_path = self._cli_path or _find_lark_cli()
+
+            # ★ 直接用 node.exe 运行 lark-cli，避免 .CMD 脚本在 pythonw 环境下 PATH 问题
+            # node 版本路径动态 glob，避免 WorkBuddy 升级 node 后硬编码版本号失效
+            home = os.path.expanduser('~')
+            workbuddy_node = ''
+            try:
+                import glob
+                node_versions_dir = os.path.join(home, r'.workbuddy\binaries\node\versions')
+                candidates = sorted(glob.glob(os.path.join(node_versions_dir, '*', 'node.exe')), reverse=True)
+                if candidates:
+                    workbuddy_node = candidates[0]
+            except Exception:
+                pass
+            lark_run_js = os.path.join(
+                os.path.dirname(os.path.abspath(cli_path)),
+                'node_modules', '@larksuite', 'cli', 'scripts', 'run.js'
+            )
+
+            if os.path.isfile(workbuddy_node) and os.path.isfile(lark_run_js):
+                # 直接用 node.exe 执行，完全绕过 .CMD 的 PATH 查找
+                cmd = [
+                    workbuddy_node, lark_run_js,
+                    'calendar', '+agenda',
+                    '--as', 'user',
+                    '--start', start_str,
+                    '--end', end_str,
+                    '--format', 'json',
+                ]
+            else:
+                cmd = [
+                    cli_path, 'calendar', '+agenda',
+                    '--as', 'user',
+                    '--start', start_str,
+                    '--end', end_str,
+                    '--format', 'json',
+                ]
 
             # 最多重试 2 次（应对 token 刷新窗口/网络瞬断）
             last_err = ''
             for attempt in range(2):
                 if self._cancelled:
                     return
+                # 用 Popen + communicate 替代 subprocess.run，
+                # 这样 cancel() 可以 terminate 子进程，不会等到 timeout 才返回
                 try:
-                    result = subprocess.run(
+                    proc = subprocess.Popen(
                         cmd,
-                        capture_output=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
                         text=True,
                         encoding='utf-8',
-                        timeout=30,
                         creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0,
                     )
-                except subprocess.TimeoutExpired:
-                    last_err = 'lark-cli 超时（30秒）'
+                except FileNotFoundError:
+                    self.error.emit('未找到 lark-cli，请确认已安装')
+                    return
+                except Exception as e:
+                    last_err = f'启动 lark-cli 失败: {type(e).__name__}: {e}'
                     if attempt == 0:
                         import time as _time
                         _time.sleep(2)
@@ -183,14 +236,32 @@ class _FetchWorker(QThread):
                     self.error.emit(last_err)
                     return
 
+                self._proc = proc
+                try:
+                    stdout, stderr = proc.communicate(timeout=30)
+                    result_code = proc.returncode
+                except subprocess.TimeoutExpired:
+                    # 超时：强杀子进程
+                    try:
+                        proc.kill()
+                        proc.communicate()
+                    except Exception:
+                        pass
+                    self._proc = None
+                    last_err = 'lark-cli 超时（30秒）'
+                    if attempt == 0:
+                        import time as _time
+                        _time.sleep(2)
+                        continue
+                    self.error.emit(last_err)
+                    return
+                self._proc = None
+
                 if self._cancelled:
                     return
 
                 # returncode != 0 时，仍尝试解析 stdout（lark-cli 有时 returncode=1 但 stdout 有 JSON）
-                stdout = result.stdout or ''
-                stderr = result.stderr or ''
-
-                if result.returncode != 0:
+                if result_code != 0:
                     # 先试 stdout 是否有有效 JSON
                     parsed = None
                     if stdout.strip():
@@ -202,7 +273,7 @@ class _FetchWorker(QThread):
                         data = parsed
                     else:
                         # 真正失败，记录 stdout + stderr（消除诊断盲区）
-                        last_err = f'lark-cli 返回 {result.returncode}: stdout={stdout[:200]} stderr={stderr[:200]}'
+                        last_err = f'lark-cli 返回 {result_code}: stdout={stdout[:200]} stderr={stderr[:200]}'
                         if attempt == 0:
                             import time as _time
                             _time.sleep(2)
@@ -299,10 +370,12 @@ class FeishuCalendarManager:
         all_events = mgr.get_today_events()  # 今日全部日程
     """
 
-    def __init__(self, refresh_interval=86400):
+    def __init__(self, refresh_interval=3600, cli_path=None):
         """
         Args:
-            refresh_interval: 自动刷新间隔（秒），默认 24 小时（每天获取一次）
+            refresh_interval: 自动刷新间隔（秒），默认 3600 秒（1 小时）
+            注意：过长的间隔会导致跨天后日程不刷新，建议不超过 1 小时
+            cli_path: 可选，强制指定 lark-cli 可执行文件路径
         """
         self._events = []
         self._last_fetch = None
@@ -314,6 +387,7 @@ class FeishuCalendarManager:
         self._fetch_count = 0
         self._retry_count = 0  # 失败重试计数
         self._max_retries = 3  # 最多重试 3 次
+        self._cli_path = cli_path
 
         # 定时刷新器
         self._refresh_timer = QTimer()
@@ -373,7 +447,7 @@ class FeishuCalendarManager:
         # 开始新获取时暂时清除失败标记，让 UI 进入"同步中"而非持续显示旧错误
         self._fetch_failed = False
         self._error_msg = ''
-        self._worker = _FetchWorker()
+        self._worker = _FetchWorker(cli_path=self._cli_path)
         self._worker.fetched.connect(self._on_fetched)
         self._worker.error.connect(self._on_error)
         self._worker.start()

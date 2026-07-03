@@ -11,6 +11,8 @@ import os
 import platform
 # Python 版本守卫：vendor 内 .pyd 按 CPython ABI 编译，跨次版本不兼容
 # 启动用 python 指向 3.10 而 vendor 为 3.14 编译时会出现 ImportError: cannot import name 'sip'
+# ★ 必须在所有文件操作之前，确保工作目录是项目目录（开机启动/快捷方式启动时 cwd 不是项目目录）
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 if sys.version_info[:2] != (3, 14):
     msg = (f"[rest_reminder] 此版本仅兼容 Python 3.14（当前 {sys.version_info.major}.{sys.version_info.minor}）。\n"
            f"请用: C:\\Python314\\python.exe rest_reminder.py --silent")
@@ -37,18 +39,17 @@ import json
 import re
 import requests
 import ctypes
-import msvcrt
 import tempfile
 from PyQt5 import sip
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel,
-                             QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox, QFrame, QTabWidget, QStackedWidget, QComboBox, QLineEdit, QScrollArea, QDialog, QSlider, QSpinBox, QGroupBox, QTextBrowser, QToolTip, QGridLayout)
+                             QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox, QFrame, QTabWidget, QStackedWidget, QComboBox, QLineEdit, QScrollArea, QDialog, QSlider, QSpinBox, QGroupBox, QTextBrowser, QToolTip, QGridLayout, QFileDialog)
 from PyQt5.QtCore import QTimer, Qt, QPoint, QPointF, QEvent, QThread, pyqtSignal, QRect
 from PyQt5.QtGui import (QIcon, QFont, QPainter, QColor, QBrush, QPen,
                          QLinearGradient, QRadialGradient, QPainterPath, QPixmap)
 from PyQt5.QtWidgets import QGraphicsDropShadowEffect
 from tray_card import TrayCardWidget
-from feishu_calendar import FeishuCalendarManager
+from feishu_calendar import FeishuCalendarManager, _find_lark_cli
 import psutil
 import wave
 import struct
@@ -102,7 +103,7 @@ if os.path.isdir(_PRO_DIR) and _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v6.1.4'
+VERSION = 'v6.1.6'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=500_000, backupCount=7, encoding='utf-8')
@@ -625,19 +626,18 @@ class FloatingBall(QWidget):
             self.move(event.globalPos() - self.drag_position)
 
     def mouseReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton and self.dragging:
-            self.dragging = False
-            if self.click_time is None:
-                return
-            delta = (datetime.now() - self.click_time).total_seconds()
-            if delta < 0.3:
-                # 短点击 → 切换浮球显示/隐藏
-                if self.isVisible():
-                    self.hide()
-                else:
-                    self.show()
-                    self.raise_()
-                return
+        try:
+            if event.button() == Qt.LeftButton and self.dragging:
+                self.dragging = False
+                if self.click_time is None:
+                    return
+                delta = (datetime.now() - self.click_time).total_seconds()
+                if delta < 0.3:
+                    # 短点击 → 显示/隐藏 info 浮层（不隐藏浮球本身）
+                    self._show_info_popup()
+                    return
+        except Exception as e:
+            log.error(f'[浮球] mouseReleaseEvent 异常: {type(e).__name__}: {e}')
         super().mouseReleaseEvent(event)
 
     def hideEvent(self, event):
@@ -647,8 +647,8 @@ class FloatingBall(QWidget):
             mw = getattr(self, 'main_window', None)
             if mw is not None:
                 mw._update_tray_ball_action()
-        except Exception:
-            pass
+        except Exception as e:
+            log.warning(f'[FloatingBall] hideEvent 同步托盘文案失败: {type(e).__name__}: {e}')
 
     def showEvent(self, event):
         """显示时同步托盘菜单文案"""
@@ -657,12 +657,15 @@ class FloatingBall(QWidget):
             mw = getattr(self, 'main_window', None)
             if mw is not None:
                 mw._update_tray_ball_action()
-        except Exception:
-            pass
+        except Exception as e:
+            log.warning(f'[FloatingBall] showEvent 同步托盘文案失败: {type(e).__name__}: {e}')
 
     def _show_info_popup(self):
         """点击浮球弹出 info 浮层（距离休息/学习时长/电脑时长 + 开始/暂停按钮）"""
         mw = self.main_window
+        if mw is None:
+            log.error('[popup] main_window 为 None')
+            return
 
         # 如果已显示就隐藏，否则创建（首次）或显示
         if hasattr(mw, '_info_popup') and mw._info_popup.isVisible():
@@ -676,124 +679,159 @@ class FloatingBall(QWidget):
             popup.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint)
             popup.setAttribute(Qt.WA_TranslucentBackground)
             popup.setFixedSize(260, 200)
+            popup._drag_pos = None
+            popup._user_dragged = False
 
-            root = QFrame(popup)
-            root.setGeometry(4, 4, 252, 192)
-            root.setObjectName('infoRoot')
-            root.setStyleSheet("""
-                QFrame#infoRoot {
-                    background-color: rgba(20, 20, 24, 235);
-                    border: 1px solid rgba(212, 175, 55, 0.15);
-                    border-radius: 12px;
-                }
-                QLabel { background: transparent; }
-            """)
+            # ★ 拖动事件过滤器：整卡可拖，但按钮保持可点击
+            class _InfoDragFilter(QWidget):
+                def __init__(self, popup):
+                    super().__init__(popup)
+                    self.popup = popup
+                    self.drag_pos = None
 
-            layout = QVBoxLayout(root)
-            layout.setContentsMargins(12, 10, 12, 10)
-            layout.setSpacing(4)
+                def eventFilter(self, obj, event):
+                    t = event.type()
+                    if t == QEvent.MouseButtonPress:
+                        if event.button() == Qt.LeftButton:
+                            child = self.popup.childAt(event.pos())
+                            if isinstance(child, QPushButton):
+                                return False
+                            self.drag_pos = event.globalPos() - self.popup.frameGeometry().topLeft()
+                            return True
+                    elif t == QEvent.MouseMove:
+                        if self.drag_pos is not None and event.buttons() == Qt.LeftButton:
+                            self.popup.move(event.globalPos() - self.drag_pos)
+                            return True
+                    elif t == QEvent.MouseButtonRelease:
+                        if event.button() == Qt.LeftButton:
+                            if self.drag_pos is not None:
+                                self.popup._user_dragged = True
+                            self.drag_pos = None
+                            return True
+                    return False
 
-            # ── 顶部行：标题 + 右上角关闭按钮 ──
-            top_row = QHBoxLayout()
-            top_row.setContentsMargins(0, 0, 0, 0)
-            title_lbl = QLabel('精力管理')
-            title_lbl.setFont(QFont('Microsoft YaHei', 9))
-            title_lbl.setStyleSheet('color: #777;')
-            popup._title_lbl = title_lbl
-            top_row.addWidget(title_lbl)
-            top_row.addStretch()
+            drag_filter = _InfoDragFilter(popup)
+            popup.installEventFilter(drag_filter)
+            popup._drag_filter = drag_filter
 
-            close_btn = QPushButton('✕')
-            close_btn.setFixedSize(22, 22)
-            close_btn.setCursor(Qt.PointingHandCursor)
-            close_btn.setToolTip('关闭')
-            close_btn.setStyleSheet("""
-                QPushButton {
-                    background: transparent; border: none;
-                    color: #555; font-size: 14px; font-weight: bold;
-                    border-radius: 11px;
-                }
-                QPushButton:hover {
-                    background: rgba(255,80,80,0.20); color: #ff6b6b;
-                }
-            """)
-            close_btn.clicked.connect(popup.hide)
-            top_row.addWidget(close_btn)
-            layout.addLayout(top_row)
+        root = QFrame(popup)
+        root.setGeometry(4, 4, 252, 192)
+        root.setObjectName('infoRoot')
+        root.setStyleSheet("""
+            QFrame#infoRoot {
+                background-color: rgba(20, 20, 24, 235);
+                border: 1px solid rgba(212, 175, 55, 0.15);
+                border-radius: 12px;
+            }
+            QLabel { background: transparent; }
+        """)
 
-            # 计时器（居中放大，一目了然）
-            popup._timer_lbl = QLabel('')
-            popup._timer_lbl.setFont(QFont('Consolas, "SF Mono", monospace', 22, QFont.Bold))
-            popup._timer_lbl.setStyleSheet('color: #d4af37; background: rgba(212,168,83,0.10); border-radius: 8px; padding: 6px 12px;')
-            popup._timer_lbl.setAlignment(Qt.AlignCenter)
-            popup._timer_lbl.setFixedHeight(36)
-            layout.addWidget(popup._timer_lbl)
+        layout = QVBoxLayout(root)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(4)
 
-            # 学习时长 + 轮次（同一行，紧凑）
-            info_row = QHBoxLayout()
-            info_row.setContentsMargins(0, 0, 0, 0)
-            popup._study_lbl = QLabel('')
-            popup._study_lbl.setFont(QFont('Microsoft YaHei', 8))
-            popup._study_lbl.setStyleSheet('color: #78B450;')
-            info_row.addWidget(popup._study_lbl, 0, Qt.AlignLeft)
-            popup._round_lbl = QLabel('')
-            popup._round_lbl.setFont(QFont('Microsoft YaHei', 8))
-            popup._round_lbl.setStyleSheet('color: #888;')
-            info_row.addWidget(popup._round_lbl, 0, Qt.AlignRight)
-            layout.addLayout(info_row)
+        # ── 顶部行：标题 + 右上角关闭按钮 ──
+        top_row = QHBoxLayout()
+        top_row.setContentsMargins(0, 0, 0, 0)
+        title_lbl = QLabel('精力管理')
+        title_lbl.setFont(QFont('Microsoft YaHei', 9))
+        title_lbl.setStyleSheet('color: #777;')
+        popup._title_lbl = title_lbl
+        top_row.addWidget(title_lbl)
+        top_row.addStretch()
 
-            # 目标（一行，小字，tooltip 显示完整内容）
-            popup._goal_lbl = QPushButton('')
-            popup._goal_lbl.setFont(QFont('Microsoft YaHei', 8))
-            popup._goal_lbl.setCursor(Qt.PointingHandCursor)
-            popup._goal_lbl.setStyleSheet('''
-                QPushButton {
-                    background: transparent; border: none;
-                    color: #d4a853; text-align: left;
-                    padding: 1px 0;
-                }
-                QPushButton:hover { color: #f0c060; text-decoration: underline; }
-                QPushButton:pressed { color: #b8901f; }
-            ''')
-            popup._goal_lbl.setToolTip('点击设置今日目标')
-            popup._goal_lbl.clicked.connect(self._on_goal_label_clicked)
-            layout.addWidget(popup._goal_lbl)
+        close_btn = QPushButton('✕')
+        close_btn.setFixedSize(22, 22)
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setToolTip('关闭')
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent; border: none;
+                color: #555; font-size: 14px; font-weight: bold;
+                border-radius: 11px;
+            }
+            QPushButton:hover {
+                background: rgba(255,80,80,0.20); color: #ff6b6b;
+            }
+        """)
+        close_btn.clicked.connect(popup.hide)
+        top_row.addWidget(close_btn)
+        layout.addLayout(top_row)
 
-            # 飞书日程（摘要行，允许换行）
-            popup._cal_lbl = QLabel('')
-            popup._cal_lbl.setFont(QFont('Microsoft YaHei', 8))
-            popup._cal_lbl.setStyleSheet('color: #6a8cbb;')
-            popup._cal_lbl.setWordWrap(True)
-            popup._cal_lbl.setVisible(False)
-            layout.addWidget(popup._cal_lbl)
+        # 计时器（居中放大，一目了然）
+        popup._timer_lbl = QLabel('')
+        popup._timer_lbl.setFont(QFont('Consolas, "SF Mono", monospace', 22, QFont.Bold))
+        popup._timer_lbl.setStyleSheet('color: #d4af37; background: rgba(212,168,83,0.10); border-radius: 8px; padding: 6px 12px;')
+        popup._timer_lbl.setAlignment(Qt.AlignCenter)
+        popup._timer_lbl.setFixedHeight(36)
+        layout.addWidget(popup._timer_lbl)
 
-            # 开始/暂停按钮
-            popup._action_btn = QPushButton()
-            popup._action_btn.setFixedHeight(28)
-            popup._action_btn.setCursor(Qt.PointingHandCursor)
-            popup._action_btn.setStyleSheet('QPushButton { background: #3b82f6; color: #fff; border: none; border-radius: 6px; font-size: 11px; font-weight: bold; } QPushButton:hover { background: #2563eb; }')
-            popup._action_btn.clicked.connect(self._on_popup_btn_clicked)
-            layout.addWidget(popup._action_btn)
+        # 学习时长 + 轮次（同一行，紧凑）
+        info_row = QHBoxLayout()
+        info_row.setContentsMargins(0, 0, 0, 0)
+        popup._study_lbl = QLabel('')
+        popup._study_lbl.setFont(QFont('Microsoft YaHei', 8))
+        popup._study_lbl.setStyleSheet('color: #78B450;')
+        info_row.addWidget(popup._study_lbl, 0, Qt.AlignLeft)
+        popup._round_lbl = QLabel('')
+        popup._round_lbl.setFont(QFont('Microsoft YaHei', 8))
+        popup._round_lbl.setStyleSheet('color: #888;')
+        info_row.addWidget(popup._round_lbl, 0, Qt.AlignRight)
+        layout.addLayout(info_row)
 
-            mw._info_popup = popup
+        # 目标（一行，小字，tooltip 显示完整内容）
+        popup._goal_lbl = QPushButton('')
+        popup._goal_lbl.setFont(QFont('Microsoft YaHei', 8))
+        popup._goal_lbl.setCursor(Qt.PointingHandCursor)
+        popup._goal_lbl.setStyleSheet('''
+            QPushButton {
+                background: transparent; border: none;
+                color: #d4a853; text-align: left;
+                padding: 1px 0;
+            }
+            QPushButton:hover { color: #f0c060; text-decoration: underline; }
+            QPushButton:pressed { color: #b8901f; }
+        ''')
+        popup._goal_lbl.setToolTip('点击设置今日目标')
+        popup._goal_lbl.clicked.connect(self._on_goal_label_clicked)
+        layout.addWidget(popup._goal_lbl)
+
+        # 飞书日程（摘要行，允许换行）
+        popup._cal_lbl = QLabel('')
+        popup._cal_lbl.setFont(QFont('Microsoft YaHei', 8))
+        popup._cal_lbl.setStyleSheet('color: #6a8cbb;')
+        popup._cal_lbl.setWordWrap(True)
+        popup._cal_lbl.setVisible(False)
+        layout.addWidget(popup._cal_lbl)
+
+        # 开始/暂停按钮
+        popup._action_btn = QPushButton()
+        popup._action_btn.setFixedHeight(28)
+        popup._action_btn.setCursor(Qt.PointingHandCursor)
+        popup._action_btn.setStyleSheet('QPushButton { background: #3b82f6; color: #fff; border: none; border-radius: 6px; font-size: 11px; font-weight: bold; } QPushButton:hover { background: #2563eb; }')
+        popup._action_btn.clicked.connect(self._on_popup_btn_clicked)
+        layout.addWidget(popup._action_btn)
+
+        mw._info_popup = popup
 
         # ★ 应用/刷新主题样式（应对主题切换）
         self._apply_popup_theme(popup)
         # ★ 每次只更新文字，不重建 widget
         self._update_popup_text()
 
-        # 定位到浮球左边
-        ball_pos = self.frameGeometry().topLeft()
-        screen = QApplication.primaryScreen()
-        if screen:
-            sg = screen.geometry()
-            x = min(ball_pos.x() - 170, sg.width() - 200)
-            y = min(ball_pos.y(), sg.height() - 110)
-            y = max(y, 10)
-        else:
-            x = ball_pos.x() - 170
-            y = ball_pos.y()
-        popup.move(x, y)
+        # 定位：如果用户曾手动拖动过卡片，记住位置；否则默认定位到浮球左边
+        if not getattr(popup, '_user_dragged', False) or popup.pos() == QPoint(0, 0):
+            ball_pos = self.frameGeometry().topLeft()
+            screen = QApplication.primaryScreen()
+            if screen:
+                sg = screen.geometry()
+                x = min(ball_pos.x() - 170, sg.width() - 200)
+                y = min(ball_pos.y(), sg.height() - 110)
+                y = max(y, 10)
+            else:
+                x = ball_pos.x() - 170
+                y = ball_pos.y()
+            popup.move(x, y)
         popup.show()
         popup.raise_()
 
@@ -1012,6 +1050,9 @@ class LocalSync:
 
     _data = None
     _current_date = None
+    # 设置保存防抖：300ms 内多次调用合并为一次磁盘写入
+    _save_timer = None
+    _pending_settings = None
 
     @classmethod
     def _load(cls):
@@ -1070,8 +1111,30 @@ class LocalSync:
 
     @classmethod
     def save_settings(cls, settings):
+        """保存设置（防抖：300ms 内多次调用合并为一次写入，减少磁盘 IO）"""
+        cls._pending_settings = copy.deepcopy(settings)
+        if cls._save_timer is None:
+            from PyQt5.QtCore import QTimer
+            cls._save_timer = QTimer()
+            cls._save_timer.setSingleShot(True)
+            cls._save_timer.timeout.connect(cls._flush_save_settings)
+        cls._save_timer.start(300)
+
+    @classmethod
+    def _flush_save_settings(cls):
+        """防抖定时器到期后实际写入磁盘"""
+        if cls._pending_settings is None:
+            return
+        settings = cls._pending_settings
+        cls._pending_settings = None
         settings_store.save(settings)
-        log.info(f'[LocalSync] 设置已保存: {settings}')
+        log.info(f'[LocalSync] 设置已保存（防抖合并）: {settings}')
+
+    def flush_pending_settings(cls):
+        """立即刷新挂起的设置写入（用于应用退出前确保落盘）"""
+        if cls._save_timer is not None and cls._save_timer.isActive():
+            cls._save_timer.stop()
+            cls._flush_save_settings()
 
     # --- 连续打卡 (.streak.json) ---
     @classmethod
@@ -1481,20 +1544,18 @@ class AmbientPlayer:
 
 
 class SingleInstanceChecker:
-    """单实例检查器 — Windows Named Mutex + 文件锁双保险
-    
-    优先使用 Windows Named Mutex（内核级，进程崩溃自动释放，无竞态）。
-    文件锁作为降级方案（非 Windows 平台或 Mutex 创建失败时）。
+    """单实例检查器 — Windows Named Mutex
+
+    使用 Windows 内核级 Named Mutex（Global 前缀，跨会话可见）。
+    进程崩溃时内核自动释放 Mutex，无竞态、无 stale lock 问题。
+    Mutex 创建失败时降级为"允许启动"（极小概率，宁可多开也不误拦）。
     """
     _MUTEX_NAME = r'Global\RestReminder_SingleInstance_Mutex'
 
     def __init__(self):
         self._mutex_handle = None
-        self._lock_handle = None
-        self._lock_path = os.path.join(tempfile.gettempdir(), 'rest_reminder.lock')
 
     def is_already_running(self):
-        # ── 方案 1：Windows Named Mutex（首选） ──
         try:
             kernel32 = ctypes.windll.kernel32
             # CreateMutexW: 如果 mutex 已存在，GetLastError 返回 ERROR_ALREADY_EXISTS (183)
@@ -1511,64 +1572,11 @@ class SingleInstanceChecker:
                 atexit.register(self._cleanup_mutex)
                 return False
             else:
-                log.warning(f'[单实例] CreateMutexW 返回空句柄，last_error={last_error}')
+                log.warning(f'[单实例] CreateMutexW 返回空句柄，last_error={last_error}，降级允许启动')
+                return False
         except Exception as e:
-            log.warning(f'[单实例] Named Mutex 不可用: {e}')
-
-        # ── 方案 2：文件锁降级 ──
-        return self._file_lock_check()
-
-    def _file_lock_check(self):
-        """文件锁降级方案"""
-        try:
-            # 尝试直接获取锁
-            self._lock_handle = open(self._lock_path, 'w')
-            msvcrt.locking(self._lock_handle.fileno(), msvcrt.LK_NBLCK, 1)
-            self._lock_handle.write(str(os.getpid()))
-            self._lock_handle.flush()
-            atexit.register(self._cleanup_file)
-            log.info('[单实例] 文件锁获取成功')
+            log.warning(f'[单实例] Named Mutex 不可用: {e}，降级允许启动')
             return False
-        except IOError:
-            if self._lock_handle:
-                self._lock_handle.close()
-                self._lock_handle = None
-
-        # 锁被占用 → 验证旧进程是否存活
-        if os.path.exists(self._lock_path):
-            try:
-                with open(self._lock_path, "r") as f:
-                    old_pid = int(f.read().strip())
-                if psutil.pid_exists(old_pid):
-                    try:
-                        proc = psutil.Process(old_pid)
-                        cmdline = " ".join(proc.cmdline()).lower()
-                        if "rest_reminder" in cmdline or "python" in cmdline:
-                            log.info(f'[单实例] PID {old_pid} 仍在运行')
-                            return True
-                    except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        pass
-            except (ValueError, IOError):
-                pass
-            # 旧进程已死，清理 stale lock
-            try:
-                os.remove(self._lock_path)
-            except Exception:
-                pass
-
-        # 重新尝试获取锁
-        try:
-            self._lock_handle = open(self._lock_path, 'w')
-            msvcrt.locking(self._lock_handle.fileno(), msvcrt.LK_NBLCK, 1)
-            self._lock_handle.write(str(os.getpid()))
-            self._lock_handle.flush()
-            atexit.register(self._cleanup_file)
-            log.info('[单实例] 文件锁重新获取成功')
-            return False
-        except Exception as e:
-            # 兜底：获取失败时阻止启动（宁可误拦，不允许多实例）
-            log.warning(f'[单实例] 文件锁获取失败，阻止启动: {e}')
-            return True
 
     def _cleanup_mutex(self):
         """清理 Named Mutex"""
@@ -1581,21 +1589,6 @@ class SingleInstanceChecker:
                 log.info('[单实例] Named Mutex 已释放')
         except Exception as e:
             log.warning(f'[单实例] Mutex 清理失败: {e}')
-
-    def _cleanup_file(self):
-        """清理文件锁"""
-        try:
-            if self._lock_handle:
-                try:
-                    msvcrt.locking(self._lock_handle.fileno(), msvcrt.LK_UNLCK, 1)
-                except Exception:
-                    pass
-                self._lock_handle.close()
-                self._lock_handle = None
-            if os.path.exists(self._lock_path):
-                os.remove(self._lock_path)
-        except Exception as e:
-            log.warning(f'[单实例] 文件锁清理失败: {e}')
 
 
 class DraggableOverlay(QWidget):
@@ -2455,7 +2448,8 @@ class TrendWindow(QWidget):
                     if h not in hour_scores:
                         hour_scores[h] = []
                     hour_scores[h].append(e['score'])
-                except Exception:
+                except Exception as ex:
+                    log.debug(f'[趋势] 时段评分解析跳过一条: {type(ex).__name__}: {ex}, entry={e}')
                     continue
 
         if not hour_scores:
@@ -2688,8 +2682,13 @@ class TrendWindow(QWidget):
 
 class _Utils:
     @staticmethod
-    def md_to_html(text):
-        """轻量 markdown → HTML（带表格支持）"""
+    def md_to_html(text, theme='dark'):
+        """轻量 markdown → HTML（带表格支持）
+
+        theme: 'dark' 或 'light'，颜色从 THEMES 字典取，默认 dark 兼容旧调用。
+        切换主题时报告/邮件 HTML 跟随主题，避免 light 主题下出现 dark 底色色块。
+        """
+        t = THEMES.get(theme, THEMES['dark'])
         lines = text.split('\n')
         out = []
         in_code = False
@@ -2704,9 +2703,9 @@ class _Utils:
             for i, row in enumerate(table_buf):
                 cells = [c.strip() for c in row.strip('|').split('|')]
                 if i == 0:
-                    row_html = '<tr>' + ''.join(f'<th style="border:1px solid #252530;padding:6px 12px;color:#d4af37;font-weight:bold;">{c}</th>' for c in cells) + '</tr>'
+                    row_html = '<tr>' + ''.join(f'<th style="border:1px solid {t["border"]};padding:6px 12px;color:{t["accent"]};font-weight:bold;">{c}</th>' for c in cells) + '</tr>'
                 else:
-                    row_html = '<tr>' + ''.join(f'<td style="border:1px solid #252530;padding:6px 12px;color:#b8b4ac;">{c}</td>' for c in cells) + '</tr>'
+                    row_html = '<tr>' + ''.join(f'<td style="border:1px solid {t["border"]};padding:6px 12px;color:{t["text_secondary"]};">{c}</td>' for c in cells) + '</tr>'
                 rows_html.append(row_html)
             out.append(f'<table style="border-collapse:collapse;width:100%;margin:8px 0;font-size:13px;">{"".join(rows_html)}</table>')
             table_buf.clear()
@@ -2719,7 +2718,7 @@ class _Utils:
                     out.append('</pre>')
                     in_code = False
                 else:
-                    out.append('<pre style="background:#18181f;border:1px solid #252530;border-radius:8px;padding:10px;font-size:12px;font-family:Consolas,monospace;color:#e8e4dc;overflow-x:auto;">')
+                    out.append(f'<pre style="background:{t["bg_raised"]};border:1px solid {t["border"]};border-radius:8px;padding:10px;font-size:12px;font-family:Consolas,monospace;color:{t["text_primary"]};overflow-x:auto;">')
                     in_code = True
                 continue
             if in_code:
@@ -2732,23 +2731,23 @@ class _Utils:
             if in_table:
                 _flush_table()
             if line.startswith('# '):
-                out.append(f'<h1 style="color:#e8e6e1;font-size:18px;font-weight:bold;margin:16px 0 8px;">{line[2:]}</h1>')
+                out.append(f'<h1 style="color:{t["text_primary"]};font-size:18px;font-weight:bold;margin:16px 0 8px;">{line[2:]}</h1>')
             elif line.startswith('## '):
-                out.append(f'<h2 style="color:#d4af37;font-size:15px;font-weight:bold;margin:12px 0 6px;">{line[3:]}</h2>')
+                out.append(f'<h2 style="color:{t["accent"]};font-size:15px;font-weight:bold;margin:12px 0 6px;">{line[3:]}</h2>')
             elif line.startswith('### '):
-                out.append(f'<h3 style="color:#c4b8a0;font-size:13px;font-weight:bold;margin:10px 0 4px;">{line[4:]}</h3>')
+                out.append(f'<h3 style="color:{t["text_secondary"]};font-size:13px;font-weight:bold;margin:10px 0 4px;">{line[4:]}</h3>')
             elif line.startswith('- '):
-                out.append(f'<li style="margin-left:16px;color:#b8b4ac;line-height:1.8;">{line[2:]}</li>')
+                out.append(f'<li style="margin-left:16px;color:{t["text_secondary"]};line-height:1.8;">{line[2:]}</li>')
             elif line.strip().startswith('> '):
-                out.append(f'<blockquote style="border-left:3px solid #d4af37;padding-left:10px;color:#888;margin:6px 0;">{line.strip()[2:]}</blockquote>')
+                out.append(f'<blockquote style="border-left:3px solid {t["accent"]};padding-left:10px;color:{t["text_secondary"]};margin:6px 0;">{line.strip()[2:]}</blockquote>')
             elif line.strip() == '---':
-                out.append('<hr style="border:none;border-top:1px solid #252530;margin:12px 0;">')
+                out.append(f'<hr style="border:none;border-top:1px solid {t["border"]};margin:12px 0;">')
             elif line.strip():
-                line = re.sub(r'\*\*(.+?)\*\*', r'<strong style="color:#e8e6e1;">\1</strong>', line)
-                line = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'<em style="color:#c4b8a0;">\1</em>', line)
+                line = re.sub(r'\*\*(.+?)\*\*', r'<strong style="color:' + t["text_primary"] + r';">\1</strong>', line)
+                line = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'<em style="color:' + t["text_secondary"] + r';">\1</em>', line)
                 if re.match(r'^\*\s', line):
                     line = '•' + line[1:]
-                out.append(f'<p style="color:#b8b4ac;line-height:1.7;margin:4px 0;">{line}</p>')
+                out.append(f'<p style="color:{t["text_secondary"]};line-height:1.7;margin:4px 0;">{line}</p>')
         _flush_table()
         if in_code:
             out.append('</pre>')
@@ -3441,7 +3440,16 @@ class RestReminderWidget(QWidget):
         self._ambient_player.set_volume(ambient_vol)
 
         # ── 飞书日程管理器（必须在 init_ui 之前，_build_general_tab 会读取） ──
-        self._calendar_mgr = FeishuCalendarManager(refresh_interval=300)
+        lark_cli_path = self.app_settings.get('lark_cli_path', '')
+        if not lark_cli_path:
+            # 自动探测并持久化 lark-cli 路径，避免 pythonw/PyInstaller 环境 PATH 不全
+            detected = _find_lark_cli()
+            if detected and detected != 'lark-cli':
+                lark_cli_path = detected
+                self.app_settings['lark_cli_path'] = lark_cli_path
+                LocalSync.save_settings(self.app_settings)
+                log.info(f'[Feishu] 自动探测并保存 lark-cli 路径: {lark_cli_path}')
+        self._calendar_mgr = FeishuCalendarManager(refresh_interval=300, cli_path=lark_cli_path or None)
         self._calendar_enabled = self.app_settings.get('feishu_calendar', False)
         self._calendar_mgr.enabled = self._calendar_enabled
         self._calendar_tick = 0
@@ -3812,9 +3820,10 @@ class RestReminderWidget(QWidget):
         self.timer_state = 'resting'
         self._rest_end_time = now + timedelta(minutes=5)
         self._pending_review = True
-        if self.app_settings.get('review_reminder', True):
-            self._prompt_review()
+        # ★ 不在这里弹出复盘，等5分钟休息结束后再弹
         self._sync_buttons()
+        log.info('[计时] 快捷键触发：手动进入休息')
+        self.tray_icon.showMessage('☕ 快捷键', '已进入休息时间', QSystemTrayIcon.Information, 2000)
         log.info('[计时] 快捷键触发：手动进入休息')
         self.tray_icon.showMessage('☕ 快捷键', '已进入休息时间', QSystemTrayIcon.Information, 2000)
 
@@ -4191,6 +4200,31 @@ class RestReminderWidget(QWidget):
         LocalSync.save_settings(self.app_settings)
         self._toast('设置', '已保存配置')
 
+    def _on_lark_cli_path_changed(self, text):
+        """lark-cli 路径变更：保存设置并重新初始化日程管理器"""
+        self.app_settings['lark_cli_path'] = text.strip()
+        LocalSync.save_settings(self.app_settings)
+        # 重新创建管理器以使用新路径
+        enabled = self._calendar_mgr.enabled
+        self._calendar_mgr.stop()
+        self._calendar_mgr = FeishuCalendarManager(
+            refresh_interval=300,
+            cli_path=text.strip() or None
+        )
+        self._calendar_mgr.enabled = enabled
+        if enabled:
+            self._calendar_mgr.start()
+
+    def _browse_lark_cli_path(self):
+        """浏览选择 lark-cli 可执行文件"""
+        path, _ = QFileDialog.getOpenFileName(
+            self, '选择 lark-cli 可执行文件',
+            os.path.expanduser('~'),
+            '可执行文件 (*.exe *.cmd *.bat);;所有文件 (*.*)'
+        )
+        if path:
+            self._lark_cli_path_input.setText(path)
+
     def _toggle_feishu_calendar(self, checked):
         self._calendar_enabled = (checked == 1)
         self.app_settings['feishu_calendar'] = self._calendar_enabled
@@ -4455,7 +4489,7 @@ class RestReminderWidget(QWidget):
             for b in self._report_buttons.values():
                 b.setEnabled(True)
             if result.get("ok"):
-                self._report_view.setHtml(_md_to_html(result['content']))
+                self._report_view.setHtml(_md_to_html(result['content'], theme=self._current_theme))
             elif result.get("error"):
                 self._report_view.setHtml(f'<p style="color:#c95454;">⚠️ AI 请求失败: {result["error"]}</p><p style="color:#888;">点击「刷新」重试。</p>')
         worker.result_ready.connect(_on_done)
@@ -5101,6 +5135,41 @@ class RestReminderWidget(QWidget):
         feishu_diag_title = QLabel('🔍 飞书同步诊断')
         feishu_diag_title.setStyleSheet('color: #e8e6e1; font-size: 13px; font-weight: bold; background: transparent;')
         fdc.addWidget(feishu_diag_title)
+
+        # lark-cli 路径配置
+        path_layout = QHBoxLayout()
+        path_layout.setSpacing(6)
+        path_lbl = QLabel('lark-cli 路径：')
+        path_lbl.setStyleSheet('color: #888; font-size: 11px; background: transparent;')
+        path_layout.addWidget(path_lbl)
+        self._lark_cli_path_input = QLineEdit()
+        self._lark_cli_path_input.setPlaceholderText('留空自动查找')
+        self._lark_cli_path_input.setText(self.app_settings.get('lark_cli_path', ''))
+        self._lark_cli_path_input.setStyleSheet('''
+            QLineEdit {
+                background: #1a1a20;
+                color: #b8b4ac;
+                border: 1px solid #2a2a35;
+                border-radius: 4px;
+                padding: 3px 6px;
+                font-size: 11px;
+            }
+            QLineEdit:focus { border-color: #d4a853; }
+        ''')
+        self._lark_cli_path_input.editingFinished.connect(self._on_lark_cli_path_changed)
+        path_layout.addWidget(self._lark_cli_path_input, 1)
+        browse_btn = QPushButton('浏览')
+        browse_btn.setStyleSheet('''
+            QPushButton {
+                background: #2a2a35; color: #b8b4ac; border: 1px solid #3a3a45;
+                border-radius: 4px; padding: 3px 10px; font-size: 11px;
+            }
+            QPushButton:hover { background: #3a3a45; }
+        ''')
+        browse_btn.clicked.connect(self._browse_lark_cli_path)
+        path_layout.addWidget(browse_btn)
+        fdc.addLayout(path_layout)
+
         self._feishu_diag_last_sync = QLabel('上次同步：从未')
         self._feishu_diag_last_sync.setStyleSheet('color: #888; font-size: 11px; background: transparent;')
         fdc.addWidget(self._feishu_diag_last_sync)
@@ -5362,10 +5431,40 @@ class RestReminderWidget(QWidget):
             self._mail_status_lbl.setText('✗ 请填写收件人')
             self._mail_status_lbl.setStyleSheet('color: #c95454; font-size: 11px; background: transparent;')
             return
+        # 防连点：旧 worker 仍在跑时先 quit+wait，避免线程堆叠
+        old = getattr(self, '_mail_worker', None)
+        if old is not None:
+            try:
+                if old.isRunning():
+                    old.quit()
+                    old.wait(2000)
+            except Exception:
+                pass
+            try:
+                old.deleteLater()
+            except Exception:
+                pass
+        # 发送按钮 disable，防止连点堆叠 worker
+        if hasattr(self, '_mail_send_btn'):
+            try:
+                self._mail_send_btn.setEnabled(False)
+            except Exception:
+                pass
         self._mail_status_lbl.setText('⏳ 发送中...')
         self._mail_status_lbl.setStyleSheet('color: #6a8cbb; font-size: 11px; background: transparent;')
         self._mail_worker = _WeeklyReportWorker(recipient)
         def on_done(ok, msg):
+            # 守卫：邮件发送期间主窗口可能已关闭，控件 C++ 对象已销毁
+            try:
+                if sip.isdeleted(self) or sip.isdeleted(self._mail_status_lbl):
+                    return
+            except Exception:
+                return
+            try:
+                if hasattr(self, '_mail_send_btn'):
+                    self._mail_send_btn.setEnabled(True)
+            except Exception:
+                pass
             if ok:
                 self._mail_status_lbl.setText('✓ 发送成功')
                 self._mail_status_lbl.setStyleSheet('color: #78B450; font-size: 11px; background: transparent;')
@@ -5409,7 +5508,15 @@ class RestReminderWidget(QWidget):
         self.app_settings['mail_last_sent'] = now.date().isoformat()
         LocalSync.save_settings(self.app_settings)
         self._mail_worker = _WeeklyReportWorker(recipient)
-        self._mail_worker.result_ready.connect(lambda ok, msg: log.info(f'[周报] {msg}'))
+        def _on_weekly_done(ok, msg):
+            # 守卫：主窗口可能已关闭
+            try:
+                if sip.isdeleted(self):
+                    return
+            except Exception:
+                return
+            log.info(f'[周报] {msg}')
+        self._mail_worker.result_ready.connect(_on_weekly_done)
         self._mail_worker.start()
 
     def _toggle_ambient(self, sound_type):
@@ -6760,9 +6867,14 @@ class RestReminderWidget(QWidget):
             self._transition_to('resting')
             self._rest_end_time = now + timedelta(minutes=5)
             self._pending_review = True
-            if self.app_settings.get('review_reminder', True):
-                self._prompt_review()
+            # ★ 不在这里弹出复盘弹窗，等5分钟休息结束后再弹
             self._sync_buttons()
+            self.tray_icon.showMessage(
+                '☕ 学习结束',
+                '60分钟学习完成！休息5分钟后复盘',
+                QSystemTrayIcon.Information,
+                4000
+            )
             log.info('[计时] 学习60分钟结束，进入5分钟休息')
 
 
@@ -6782,6 +6894,15 @@ class RestReminderWidget(QWidget):
             if hasattr(self, 'floating_ball'):
                 self.floating_ball.set_progress(0.0)
 
+            # ★ 休息结束后弹出复盘弹窗（评分1-100）
+            if self.app_settings.get('review_reminder', True):
+                self._prompt_review()
+            else:
+                self._pending_review = False
+
+            # 弹出本轮目标（非阻塞，60秒自动提交）
+            self._prompt_round_goal()
+
             # 每3轮后（第3、6、9...轮）打开护眼视频，否则打开收藏夹
             if self._round_count % 3 == 0:
                 eye_url = 'https://www.bilibili.com/video/BV14Y4y1N7PW/?spm_id_from=333.1387.favlist.content.click'
@@ -6797,9 +6918,6 @@ class RestReminderWidget(QWidget):
                 mid = self.app_settings.get('bilibili_mid', '529362421')
                 fav_url = f'https://space.bilibili.com/{mid}/favlist?fid={fid}&ftype=create&spm_id_from=333.788.0.0'
                 open_url(fav_url)
-
-            # 弹出本轮目标（非阻塞，60秒自动提交）
-            self._prompt_round_goal()
 
             self.break_start = None
             self._transition_to('idle')
@@ -7194,12 +7312,37 @@ class RestReminderWidget(QWidget):
         dialog._score_slider = score_slider
         return dialog
 
+    def _get_today_goal(self):
+        """读取今日目标文本（. goal_store 或 daily_log 的 daily_goal）"""
+        try:
+            if self.goal_text:
+                return self.goal_text
+            d = goal_store.load()
+            if d.get('date') == datetime.now().date().isoformat():
+                self.goal_text = d.get('goal', '')
+                return self.goal_text
+            # 从 daily_log 补回
+            daily = LocalSync._load()
+            dg = daily.get('daily_goal', {})
+            if dg:
+                self.goal_text = dg.get('description', '')
+                return self.goal_text
+        except Exception as e:
+            log.error(f'[目标] 读取失败: {e}')
+        return ''
+
     def _prompt_review(self):
         """快速复盘弹窗：学科+标签+评分1-100（阻塞，60秒自动提交）"""
         try:
             if not self._pending_review:
                 return
-            dialog = self._build_review_dialog('📝 快速复盘', '这小时学了什么？')
+            # ★ 获取当日目标，供对照
+            goal = self._get_today_goal()
+            if goal:
+                prompt = f'这小时学了什么？\n🎯 今日目标：{goal}'
+            else:
+                prompt = '这小时学了什么？'
+            dialog = self._build_review_dialog('📝 快速复盘', prompt)
             if dialog.exec_():
                 subject = dialog._subject_val[0]
                 label = dialog._label_val[0]
@@ -7218,7 +7361,12 @@ class RestReminderWidget(QWidget):
 
     def _catchup_review(self):
         """补录复盘：托盘菜单入口"""
-        dialog = self._build_review_dialog('📝 补录复盘', '刚才（漏掉的）那小时学得怎么样？')
+        goal = self._get_today_goal()
+        if goal:
+            prompt = f'刚才（漏掉的）那小时学得怎么样？\n🎯 今日目标：{goal}'
+        else:
+            prompt = '刚才（漏掉的）那小时学得怎么样？'
+        dialog = self._build_review_dialog('📝 补录复盘', prompt)
         if dialog.exec_():
             subject = dialog._subject_val[0]
             label = dialog._label_val[0]
@@ -7905,6 +8053,8 @@ class RestReminderWidget(QWidget):
     def quit_app(self):
         try:
             self._save_active_state()
+            # 确保防抖挂起的设置立即落盘
+            LocalSync.flush_pending_settings()
             self.tray_icon.hide()
             if hasattr(self, 'floating_ball'):
                 self.floating_ball.hide()

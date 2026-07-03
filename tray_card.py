@@ -58,7 +58,13 @@ class TrayCardWidget(QWidget):
         self.break_minutes = 0
         self.autostart_enabled = False
         self.reminder_mode = 'video'
-        self.version = 'v3.3'
+        # 默认版本号占位，实际由 rest_reminder._update_tray_card 传入；
+        # 未传时尝试从 rest_reminder 导入 VERSION，失败则用占位
+        try:
+            from rest_reminder import VERSION as _ver
+            self.version = _ver
+        except Exception:
+            self.version = 'v0.0.0'
 
         self._fade_anim = None
         self._build_ui()
