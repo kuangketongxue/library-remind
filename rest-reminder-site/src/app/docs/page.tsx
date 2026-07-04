@@ -384,9 +384,21 @@ python rest_reminder.py`}
             <div className="space-y-6">
               <div className="changelog-entry latest pl-6">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-bold">v6.1.8</span>
+                  <span className="text-sm font-bold">v6.1.9</span>
                   <span className="text-xs text-[var(--fg-dim)]">2026-07-04</span>
                   <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">最新</span>
+                </div>
+                <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
+                  <li>浮球 popup 飞书日程显示修复：root 重建 bug + 高度增大到 240</li>
+                  <li>新增版本更新检查：启动后自动检测 GitHub 最新 release，有新版弹窗提示</li>
+                  <li>修复 threading 模块未导入导致后台任务崩溃（影响 AI 报告 + 版本检查）</li>
+                </ul>
+              </div>
+
+              <div className="changelog-entry pl-6">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-bold">v6.1.8</span>
+                  <span className="text-xs text-[var(--fg-dim)]">2026-07-04</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
                   <li>修复浮球 popup 关闭后再打开卡片空白</li>

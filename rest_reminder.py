@@ -61,6 +61,7 @@ import traceback
 import base64
 import hashlib
 import copy
+import threading
 import backup
 
 
@@ -104,7 +105,7 @@ if os.path.isdir(_PRO_DIR) and _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v6.1.6'
+VERSION = 'v6.1.9'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=500_000, backupCount=7, encoding='utf-8')
@@ -704,11 +705,11 @@ class FloatingBall(QWidget):
 
         popup = getattr(mw, '_info_popup', None)
         if popup is None:
-            # ★ 首次创建：构建整个 widget 树
+            # ★ 首次创建：构建整个 widget 树（仅执行一次，之后复用）
             popup = QWidget(None)
             popup.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint)
             popup.setAttribute(Qt.WA_TranslucentBackground)
-            popup.setFixedSize(260, 220)
+            popup.setFixedSize(260, 240)
             popup._drag_pos = None
             popup._user_dragged = False
 
@@ -717,116 +718,107 @@ class FloatingBall(QWidget):
             popup.installEventFilter(drag_filter)
             popup._drag_filter = drag_filter
 
-        root = QFrame(popup)
-        root.setGeometry(4, 4, 252, 192)
-        root.setObjectName('infoRoot')
-        root.setStyleSheet("""
-            QFrame#infoRoot {
-                background-color: rgba(20, 20, 24, 235);
-                border: 1px solid rgba(212, 175, 55, 0.15);
-                border-radius: 12px;
-            }
-            QLabel { background: transparent; }
-        """)
+            root = QFrame(popup)
+            root.setGeometry(4, 4, 252, 212)
+            root.setObjectName('infoRoot')
+            root.setStyleSheet("""
+                QFrame#infoRoot {
+                    background-color: rgba(20, 20, 24, 235);
+                    border: 1px solid rgba(212, 175, 55, 0.15);
+                    border-radius: 12px;
+                }
+                QLabel { background: transparent; }
+            """)
 
-        layout = QVBoxLayout(root)
-        layout.setContentsMargins(12, 10, 12, 10)
-        layout.setSpacing(4)
+            layout = QVBoxLayout(root)
+            layout.setContentsMargins(12, 10, 12, 10)
+            layout.setSpacing(4)
 
-        # ── 顶部行：标题 + 右上角关闭按钮 ──
-        top_row = QHBoxLayout()
-        top_row.setContentsMargins(0, 0, 0, 0)
-        title_lbl = QLabel('精力管理')
-        title_lbl.setFont(QFont('Microsoft YaHei', 9))
-        title_lbl.setStyleSheet('color: #777;')
-        popup._title_lbl = title_lbl
-        top_row.addWidget(title_lbl)
-        top_row.addStretch()
+            # ── 顶部行：标题 + 右上角关闭按钮 ──
+            top_row = QHBoxLayout()
+            top_row.setContentsMargins(0, 0, 0, 0)
+            title_lbl = QLabel('精力管理')
+            title_lbl.setFont(QFont('Microsoft YaHei', 9))
+            title_lbl.setStyleSheet('color: #777;')
+            popup._title_lbl = title_lbl
+            top_row.addWidget(title_lbl)
+            top_row.addStretch()
 
-        close_btn = QPushButton('✕')
-        close_btn.setFixedSize(22, 22)
-        close_btn.setCursor(Qt.PointingHandCursor)
-        close_btn.setToolTip('关闭')
-        close_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent; border: none;
-                color: #555; font-size: 14px; font-weight: bold;
-                border-radius: 11px;
-            }
-            QPushButton:hover {
-                background: rgba(255,80,80,0.20); color: #ff6b6b;
-            }
-        """)
-        close_btn.clicked.connect(popup.hide)
-        top_row.addWidget(close_btn)
-        layout.addLayout(top_row)
+            close_btn = QPushButton('✕')
+            close_btn.setFixedSize(22, 22)
+            close_btn.setCursor(Qt.PointingHandCursor)
+            close_btn.setToolTip('关闭')
+            close_btn.setStyleSheet("""
+                QPushButton {
+                    background: transparent; border: none;
+                    color: #555; font-size: 14px; font-weight: bold;
+                    border-radius: 11px;
+                }
+                QPushButton:hover {
+                    background: rgba(255,80,80,0.20); color: #ff6b6b;
+                }
+            """)
+            close_btn.clicked.connect(popup.hide)
+            top_row.addWidget(close_btn)
+            layout.addLayout(top_row)
 
-        # 计时器（居中放大，一目了然）
-        popup._timer_lbl = QLabel('')
-        popup._timer_lbl.setFont(QFont('Consolas, "SF Mono", monospace', 22, QFont.Bold))
-        popup._timer_lbl.setStyleSheet('color: #d4af37; background: rgba(212,168,83,0.10); border-radius: 8px; padding: 6px 12px;')
-        popup._timer_lbl.setAlignment(Qt.AlignCenter)
-        popup._timer_lbl.setFixedHeight(36)
-        layout.addWidget(popup._timer_lbl)
+            # 计时器（居中放大，一目了然）
+            popup._timer_lbl = QLabel('')
+            popup._timer_lbl.setFont(QFont('Consolas, "SF Mono", monospace', 22, QFont.Bold))
+            popup._timer_lbl.setStyleSheet('color: #d4af37; background: rgba(212,168,83,0.10); border-radius: 8px; padding: 6px 12px;')
+            popup._timer_lbl.setAlignment(Qt.AlignCenter)
+            popup._timer_lbl.setFixedHeight(36)
+            layout.addWidget(popup._timer_lbl)
 
-        # 学习时长 + 轮次（同一行，紧凑）
-        info_row = QHBoxLayout()
-        info_row.setContentsMargins(0, 0, 0, 0)
-        popup._study_lbl = QLabel('')
-        popup._study_lbl.setFont(QFont('Microsoft YaHei', 8))
-        popup._study_lbl.setStyleSheet('color: #78B450;')
-        info_row.addWidget(popup._study_lbl, 0, Qt.AlignLeft)
-        popup._round_lbl = QLabel('')
-        popup._round_lbl.setFont(QFont('Microsoft YaHei', 8))
-        popup._round_lbl.setStyleSheet('color: #888;')
-        info_row.addWidget(popup._round_lbl, 0, Qt.AlignRight)
-        layout.addLayout(info_row)
+            # 学习时长 + 轮次（同一行，紧凑）
+            info_row = QHBoxLayout()
+            info_row.setContentsMargins(0, 0, 0, 0)
+            popup._study_lbl = QLabel('')
+            popup._study_lbl.setFont(QFont('Microsoft YaHei', 8))
+            popup._study_lbl.setStyleSheet('color: #78B450;')
+            info_row.addWidget(popup._study_lbl, 0, Qt.AlignLeft)
+            popup._round_lbl = QLabel('')
+            popup._round_lbl.setFont(QFont('Microsoft YaHei', 8))
+            popup._round_lbl.setStyleSheet('color: #888;')
+            info_row.addWidget(popup._round_lbl, 0, Qt.AlignRight)
+            layout.addLayout(info_row)
 
-        # 目标（一行，小字，tooltip 显示完整内容）
-        popup._goal_lbl = QPushButton('')
-        popup._goal_lbl.setFont(QFont('Microsoft YaHei', 8))
-        popup._goal_lbl.setCursor(Qt.PointingHandCursor)
-        popup._goal_lbl.setStyleSheet('''
-            QPushButton {
-                background: transparent; border: none;
-                color: #d4a853; text-align: left;
-                padding: 1px 0;
-            }
-            QPushButton:hover { color: #f0c060; text-decoration: underline; }
-            QPushButton:pressed { color: #b8901f; }
-        ''')
-        popup._goal_lbl.setToolTip('点击设置今日目标')
-        popup._goal_lbl.clicked.connect(self._on_goal_label_clicked)
-        layout.addWidget(popup._goal_lbl)
+            # 目标（一行，小字，tooltip 显示完整内容）
+            popup._goal_lbl = QPushButton('')
+            popup._goal_lbl.setFont(QFont('Microsoft YaHei', 8))
+            popup._goal_lbl.setCursor(Qt.PointingHandCursor)
+            popup._goal_lbl.setStyleSheet('''
+                QPushButton {
+                    background: transparent; border: none;
+                    color: #d4a853; text-align: left;
+                    padding: 1px 0;
+                }
+                QPushButton:hover { color: #f0c060; text-decoration: underline; }
+                QPushButton:pressed { color: #b8901f; }
+            ''')
+            popup._goal_lbl.setToolTip('点击设置今日目标')
+            popup._goal_lbl.clicked.connect(self._on_goal_label_clicked)
+            layout.addWidget(popup._goal_lbl)
 
-        # 飞书日程（摘要行，允许换行；不可见时用 spacer 占位避免空白）
-        popup._cal_lbl = QLabel('')
-        popup._cal_lbl.setFont(QFont('Microsoft YaHei', 8))
-        popup._cal_lbl.setStyleSheet('color: #6a8cbb;')
-        popup._cal_lbl.setWordWrap(True)
-        popup._cal_lbl.setVisible(False)
-        layout.addWidget(popup._cal_lbl)
+            # 飞书日程（摘要行，允许换行；启用时始终显示）
+            popup._cal_lbl = QLabel('')
+            popup._cal_lbl.setFont(QFont('Microsoft YaHei', 8))
+            popup._cal_lbl.setStyleSheet('color: #6a8cbb;')
+            popup._cal_lbl.setWordWrap(True)
+            layout.addWidget(popup._cal_lbl)
 
-        # 开始/暂停按钮
-        popup._action_btn = QPushButton()
-        popup._action_btn.setFixedHeight(28)
-        popup._action_btn.setCursor(Qt.PointingHandCursor)
-        popup._action_btn.setStyleSheet('QPushButton { background: #3b82f6; color: #fff; border: none; border-radius: 6px; font-size: 11px; font-weight: bold; } QPushButton:hover { background: #2563eb; }')
-        popup._action_btn.clicked.connect(self._on_popup_btn_clicked)
-        layout.addWidget(popup._action_btn)
+            # 开始/暂停按钮
+            popup._action_btn = QPushButton()
+            popup._action_btn.setFixedHeight(28)
+            popup._action_btn.setCursor(Qt.PointingHandCursor)
+            popup._action_btn.setStyleSheet('QPushButton { background: #3b82f6; color: #fff; border: none; border-radius: 6px; font-size: 11px; font-weight: bold; } QPushButton:hover { background: #2563eb; }')
+            popup._action_btn.clicked.connect(self._on_popup_btn_clicked)
+            layout.addWidget(popup._action_btn)
 
-        mw._info_popup = popup
+            mw._info_popup = popup
 
-        # ★ 每次显示都刷新默认文字，避免复用旧 popup 时内容空白
-        popup._timer_lbl.setText('⚡ 60:00')
-        popup._study_lbl.setText('📚 0.0h')
-        popup._round_lbl.setText('第1轮')
-        popup._goal_lbl.setText('🎯 未设目标')
-        popup._action_btn.setText('▶ 开始学习')
-
-        # ★ 应用/刷新主题样式（应对主题切换）
+        # ★ 每次显示都刷新文字 + 主题 + 日程
         self._apply_popup_theme(popup)
-        # ★ 每次只更新文字，不重建 widget
         self._update_popup_text()
 
         # 定位：如果用户曾手动拖动过卡片，记住位置；否则默认定位到浮球左边
@@ -3508,6 +3500,9 @@ class RestReminderWidget(QWidget):
 
         # 启动时静默检查成就（解锁历史已达标但未触发的）
         QTimer.singleShot(2000, lambda: self._check_achievements(silent=True))
+
+        # 启动时静默检查版本更新（后台线程，有新版才弹窗）
+        QTimer.singleShot(3000, lambda: self._check_update(silent=True))
 
     def init_ui(self):
         self.setWindowTitle(f'休息提醒 {VERSION}')
@@ -6399,10 +6394,81 @@ class RestReminderWidget(QWidget):
         layout.addWidget(close_btn)
         dialog.exec_()
 
-    def _check_update(self):
-        """检查更新（打开官网查看最新版本）"""
-        open_url('https://crazy-rest-reminder.pages.dev')
-        self.tray_icon.showMessage('检查更新', '请在浏览器中查看最新版本', QSystemTrayIcon.Information, 3000)
+    def _check_update(self, silent=False):
+        """检查 GitHub 最新版本，有新版时弹窗提示；silent=True 不弹窗仅静默检查"""
+        release_url = 'https://api.github.com/repos/kuangketongxue/library-remind/releases/latest'
+        def _do_check():
+            try:
+                resp = requests.get(release_url, timeout=10,
+                                    headers={'User-Agent': 'RestReminder'})
+                resp.raise_for_status()
+                data = resp.json()
+                latest_tag = data.get('tag_name', '').strip()
+                release_page = data.get('html_url', 'https://github.com/kuangketongxue/library-remind/releases')
+                if not latest_tag:
+                    return
+                latest_ver = latest_tag.lstrip('v')
+                local_ver = VERSION.lstrip('v')
+                # 简单数值比较：major.minor.patch
+                def ver_tuple(v):
+                    parts = []
+                    for p in v.split('.'):
+                        try:
+                            parts.append(int(p))
+                        except ValueError:
+                            break
+                    return tuple(parts) if parts else (0,)
+                if ver_tuple(latest_ver) > ver_tuple(local_ver):
+                    # 有新版，回到主线程弹窗
+                    QTimer.singleShot(0, lambda: self._show_update_dialog(latest_tag, release_page))
+                elif not silent:
+                    QTimer.singleShot(0, lambda: self.tray_icon.showMessage(
+                        '检查更新', f'当前已是最新版本 {VERSION}', QSystemTrayIcon.Information, 3000))
+            except Exception as e:
+                log.debug(f'[_check_update] 检查失败: {e}')
+                if not silent:
+                    QTimer.singleShot(0, lambda: open_url('https://crazy-rest-reminder.pages.dev'))
+        threading.Thread(target=_do_check, daemon=True).start()
+
+    def _show_update_dialog(self, latest_tag, release_page):
+        """弹窗提示有新版本可用"""
+        try:
+            if sip.isdeleted(self):
+                return
+        except Exception:
+            return
+        dialog = QDialog(self)
+        dialog.setWindowFlags(Qt.Dialog | Qt.WindowStaysOnTopHint)
+        dialog.setWindowTitle('发现新版本')
+        dialog.setFixedSize(360, 180)
+        dialog.setStyleSheet(f"""
+            QDialog {{
+                background-color: {THEMES.get(self._current_theme, THEMES['dark'])['bg_card']};
+                border: 1px solid {THEMES.get(self._current_theme, THEMES['dark'])['border']};
+                border-radius: 12px;
+            }}
+            QLabel {{ background: transparent; color: #e8e6e1; }}
+            QPushButton {{ background: #d4af37; color: #0d0d12; border: none; border-radius: 6px;
+                          font-size: 13px; font-weight: bold; padding: 8px 16px; }}
+            QPushButton:hover {{ background: #e8c44a; }}
+        """)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(8)
+        title = QLabel(f'🎉 新版本 {latest_tag} 已发布')
+        title.setFont(QFont('Microsoft YaHei', 12, QFont.Bold))
+        title.setStyleSheet('color: #d4af37; background: transparent;')
+        layout.addWidget(title)
+        desc = QLabel(f'当前版本：{VERSION}\n点击下方按钮前往下载页面更新')
+        desc.setFont(QFont('Microsoft YaHei', 9))
+        desc.setStyleSheet('color: #aaa; background: transparent;')
+        layout.addWidget(desc)
+        layout.addStretch()
+        btn = QPushButton('前往更新')
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.clicked.connect(lambda: [open_url(release_page), dialog.accept()])
+        layout.addWidget(btn, 0, Qt.AlignCenter)
+        dialog.exec_()
 
     # ── 环境检查辅助方法 ──
     def _refresh_env_check(self):
