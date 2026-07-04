@@ -113,6 +113,7 @@ sensenova_vision.py
 rest-reminder-site/public/RestReminder.exe
 rest-reminder-site/.firecrawl/
 rest-reminder-site/out/
+rest-reminder-site/.wrangler/
 
 # WorkBuddy 工作区数据
 .workbuddy/
@@ -122,3 +123,13 @@ cleanup.bat
 *.png
 release-notes.md
 screenshot.ps1
+
+# PyInstaller 产物
+RestReminder.exe
+*.spec.bak
+
+# 成就本地数据
+.achievements.json
+
+# CodeBuddy 本地配置
+.codebuddy/

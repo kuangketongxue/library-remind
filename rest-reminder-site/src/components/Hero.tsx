@@ -19,7 +19,7 @@ export default function Hero() {
           <span className="text-[11px] font-semibold text-[var(--accent)] bg-[var(--accent-soft)] px-3 py-1 rounded-full border border-[var(--border-accent)]">
             开源免费 · MIT 协议
           </span>
-          <span className="text-xs text-[var(--fg-dim)]">v6.1.7</span>
+          <span className="text-xs text-[var(--fg-dim)]">v6.1.8</span>
         </motion.div>
 
         <motion.h1

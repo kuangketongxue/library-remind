@@ -521,6 +521,35 @@ def _apply_theme_stylesheet(theme_name):
     """
 
 
+class _InfoDragFilter(QWidget):
+    """浮球 popup 拖动事件过滤器：整卡可拖，但按钮保持可点击"""
+    def __init__(self, popup):
+        super().__init__(popup)
+        self.popup = popup
+        self.drag_pos = None
+
+    def eventFilter(self, obj, event):
+        t = event.type()
+        if t == QEvent.MouseButtonPress:
+            if event.button() == Qt.LeftButton:
+                child = self.popup.childAt(event.pos())
+                if isinstance(child, QPushButton):
+                    return False
+                self.drag_pos = event.globalPos() - self.popup.frameGeometry().topLeft()
+                return True
+        elif t == QEvent.MouseMove:
+            if self.drag_pos is not None and event.buttons() == Qt.LeftButton:
+                self.popup.move(event.globalPos() - self.drag_pos)
+                return True
+        elif t == QEvent.MouseButtonRelease:
+            if event.button() == Qt.LeftButton:
+                if self.drag_pos is not None:
+                    self.popup._user_dragged = True
+                self.drag_pos = None
+                return True
+        return False
+
+
 class FloatingBall(QWidget):
     """浮球（⏰ 60×60）— 点击弹出 info 浮层，右键菜单，休息时显示环形进度条"""
     def __init__(self, main_window):
@@ -679,38 +708,11 @@ class FloatingBall(QWidget):
             popup = QWidget(None)
             popup.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint)
             popup.setAttribute(Qt.WA_TranslucentBackground)
-            popup.setFixedSize(260, 200)
+            popup.setFixedSize(260, 220)
             popup._drag_pos = None
             popup._user_dragged = False
 
-            # ★ 拖动事件过滤器：整卡可拖，但按钮保持可点击
-            class _InfoDragFilter(QWidget):
-                def __init__(self, popup):
-                    super().__init__(popup)
-                    self.popup = popup
-                    self.drag_pos = None
-
-                def eventFilter(self, obj, event):
-                    t = event.type()
-                    if t == QEvent.MouseButtonPress:
-                        if event.button() == Qt.LeftButton:
-                            child = self.popup.childAt(event.pos())
-                            if isinstance(child, QPushButton):
-                                return False
-                            self.drag_pos = event.globalPos() - self.popup.frameGeometry().topLeft()
-                            return True
-                    elif t == QEvent.MouseMove:
-                        if self.drag_pos is not None and event.buttons() == Qt.LeftButton:
-                            self.popup.move(event.globalPos() - self.drag_pos)
-                            return True
-                    elif t == QEvent.MouseButtonRelease:
-                        if event.button() == Qt.LeftButton:
-                            if self.drag_pos is not None:
-                                self.popup._user_dragged = True
-                            self.drag_pos = None
-                            return True
-                    return False
-
+            # ★ 拖动事件过滤器：用模块级 _InfoDragFilter，整卡可拖但按钮可点击
             drag_filter = _InfoDragFilter(popup)
             popup.installEventFilter(drag_filter)
             popup._drag_filter = drag_filter
@@ -797,7 +799,7 @@ class FloatingBall(QWidget):
         popup._goal_lbl.clicked.connect(self._on_goal_label_clicked)
         layout.addWidget(popup._goal_lbl)
 
-        # 飞书日程（摘要行，允许换行）
+        # 飞书日程（摘要行，允许换行；不可见时用 spacer 占位避免空白）
         popup._cal_lbl = QLabel('')
         popup._cal_lbl.setFont(QFont('Microsoft YaHei', 8))
         popup._cal_lbl.setStyleSheet('color: #6a8cbb;')
@@ -903,7 +905,7 @@ class FloatingBall(QWidget):
                 elapsed = int((datetime.now() - mw.break_start).total_seconds() / 60)
                 timer_text = f'☕ {elapsed}m'
             else:
-                timer_text = f'续航 {mw._activity_interval:02d}:00'
+                timer_text = f'🔋 续航 {mw._activity_interval:02d}:00'
 
             study = f'📚 {mw.study_hours_today:.1f}h'
         except Exception as e:
@@ -5026,7 +5028,8 @@ class RestReminderWidget(QWidget):
         theme_icon.setStyleSheet('background: transparent;')
         theme_header.addWidget(theme_icon)
         theme_title = QLabel('主题切换')
-        theme_title.setStyleSheet('color: #e8e6e1; font-size: 13px; font-weight: bold; font-family: "Microsoft YaHei"; background: transparent;')
+        _t = THEMES[self._current_theme]
+        theme_title.setStyleSheet(f'color: {_t["text_primary"]}; font-size: 13px; font-weight: bold; font-family: "Microsoft YaHei"; background: transparent;')
         theme_header.addWidget(theme_title)
         theme_header.addStretch()
         theme_hint = QLabel('切换后需重启应用')
@@ -7923,8 +7926,8 @@ class RestReminderWidget(QWidget):
                         if ach['check'](check_data):
                             earned[ach['id']] = datetime.now().isoformat()
                             new_achievements.append(ach)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        log.warning(f'[成就] 检查失败 {ach.get("id","?")}: {type(e).__name__}: {e}')
 
             if new_achievements:
                 achievements_store.save({'earned': earned})
@@ -8085,6 +8088,15 @@ class RestReminderWidget(QWidget):
         # 停止飞书日程管理器
         if hasattr(self, "_calendar_mgr"):
             self._calendar_mgr.stop()
+        # 清理后台 QThread（报告/邮件 worker），避免 Qt 强杀残留
+        for attr in ('_report_worker', '_mail_worker'):
+            w = getattr(self, attr, None)
+            if w is not None:
+                try:
+                    w.quit()
+                    w.wait(2000)
+                except Exception as e:
+                    log.warning(f'[closeEvent] 清理 {attr} 失败: {type(e).__name__}: {e}')
         # 清理临时文件
         _TempFileManager.cleanup()
 
@@ -8103,6 +8115,15 @@ class RestReminderWidget(QWidget):
             self._save_active_state()
             # 确保防抖挂起的设置立即落盘
             LocalSync.flush_pending_settings()
+            # 清理后台 QThread（与 closeEvent 一致）
+            for attr in ('_report_worker', '_mail_worker'):
+                w = getattr(self, attr, None)
+                if w is not None:
+                    try:
+                        w.quit()
+                        w.wait(2000)
+                    except Exception as e:
+                        log.warning(f'[quit_app] 清理 {attr} 失败: {type(e).__name__}: {e}')
             self.tray_icon.hide()
             if hasattr(self, 'floating_ball'):
                 self.floating_ball.hide()

@@ -384,9 +384,21 @@ python rest_reminder.py`}
             <div className="space-y-6">
               <div className="changelog-entry latest pl-6">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-bold">v6.1.7</span>
+                  <span className="text-sm font-bold">v6.1.8</span>
                   <span className="text-xs text-[var(--fg-dim)]">2026-07-04</span>
                   <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">最新</span>
+                </div>
+                <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
+                  <li>修复浮球 popup 关闭后再打开卡片空白</li>
+                  <li>文档站 /docs 全面改版：Claude.ai 风格三栏布局</li>
+                  <li>导航链接修复 + 硬编码颜色统一 + 死代码清理</li>
+                </ul>
+              </div>
+
+              <div className="changelog-entry pl-6">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-bold">v6.1.7</span>
+                  <span className="text-xs text-[var(--fg-dim)]">2026-07-04</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
                   <li>修复 import copy 缺失导致设置保存崩溃</li>

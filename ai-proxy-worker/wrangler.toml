@@ -1,7 +1,0 @@
-name = "rest-reminder-ai-proxy"
-main = "worker.js"
-compatibility_date = "2024-01-01"
-
-# Secrets 通过 wrangler secret put 设置，不写在这里
-# wrangler secret put SENSENOVA_KEY
-# wrangler secret put AGNES_KEY

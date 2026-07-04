@@ -21,7 +21,7 @@ CHANGELOG.md            — 更新日志
 - 普通休息后打开收藏夹：`https://space.bilibili.com/529362421/favlist?fid=3648313921&ftype=create&spm_id_from=333.788.0.0`
 - 每 3 轮后（第 3/6/9...轮）打开护眼视频：`https://www.bilibili.com/video/BV14Y4y1N7PW/?spm_id_from=333.1387.favlist.content.click`
 - 休息期间弹出复盘 1-100分（学科 + 标签 + 评分）
-- 状态机：idle → running → resting → idle（循环）
+- 状态机：idle → running → paused → resting → idle（4 态循环）
 - **已删除**：电脑使用 3 小时周期、活动密度感知/空闲自动暂停、随机视频选择、双柱图、饼图
 - **20-20-20 护眼**：每20分钟轻量浮窗，不打断学习
 

@@ -77,7 +77,7 @@ export default function Download() {
           >
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
               <a
-                href="https://github.com/kuangketongxue/library-remind/releases"
+                href="https://github.com/kuangketongxue/library-remind/releases/latest"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 bg-white text-[#b5651d] font-semibold px-8 py-3.5 rounded-full text-base hover:bg-[var(--fg)] hover:shadow-lg transition-all"
@@ -94,7 +94,7 @@ export default function Download() {
               </a>
             </div>
             <p className="text-white/70 text-sm">
-              支持 Windows 10/11 · v6.1.7 · MIT 开源
+              支持 Windows 10/11 · v6.1.8 · MIT 开源 · 若 GitHub 访问慢可联系作者获取直链
             </p>
           </motion.div>
         </div>

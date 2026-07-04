@@ -11,7 +11,7 @@ Python 3.14+ / PyQt5 / requests / psutil / Win32 API (ctypes)
 rest_reminder.py              — 主程序（~8127行，含所有 UI + 逻辑）
 storage.py                    — 统一 JSON 存储层（JSONStore 类）
 RestReminder.spec             — PyInstaller 配置（含 hiddenimports=['storage','tray_card','feishu_calendar']）
-产品规格-v4.3.md              — ⚠️ 历史规格，最后更新 v4.4 (2026-06-22)，与当前 v6.1.6 脱节
+产品规格-v4.3.md              — ⚠️ 历史规格，最后更新 v4.4 (2026-06-22)，与当前 v6.1.8 脱节
 ```
 
 ## AI 学习分析
