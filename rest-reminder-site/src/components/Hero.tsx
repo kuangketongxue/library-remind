@@ -19,12 +19,11 @@ export default function Hero() {
         playsInline
         preload="auto"
         poster="/hero-banner.png"
-        onCanPlay={(e) => (e.currentTarget.style.opacity = "1")}
         onError={(e) => {
           // 视频加载失败或解码错误 → 隐藏 video，让 CSS fallback 背景接管
           e.currentTarget.style.display = "none";
         }}
-        className="absolute inset-0 w-full h-full object-cover -z-10 transition-opacity duration-700 opacity-0"
+        className="absolute inset-0 w-full h-full object-cover -z-10"
       >
         <source src="/promo_video.mp4" type="video/mp4" />
         {/* 不支持 mp4 的极小比例浏览器（IE 已死）自动降级到 poster */}
@@ -38,8 +37,8 @@ export default function Hero() {
             "radial-gradient(circle at 50% 30%, rgba(212,168,83,0.10) 0%, transparent 55%), radial-gradient(circle at 50% 70%, rgba(212,168,83,0.06) 0%, transparent 60%)",
         }}
       />
-      {/* Dark overlay — 始终压在视频/Fallback 之上，保证文字可读 */}
-      <div className="absolute inset-0 bg-black/60 -z-[5]" />
+      {/* Dark overlay — 压低到 35% 保证文字可读的同时视频本身可见 */}
+      <div className="absolute inset-0 bg-black/35 -z-[5]" />
 
       {/* Subtle top glow */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] rounded-full bg-[radial-gradient(circle,rgba(245,158,11,0.05)_0%,transparent_60%)] pointer-events-none" />
