@@ -57,6 +57,43 @@ export default function DocsPage() {
             Rest Reminder 完整使用指南，从快速上手到高级功能。
           </p>
 
+          {/* ── 产品简介 ── */}
+          <section className="mb-16" id="简介">
+            <h2 className="text-2xl font-bold mb-1 font-display">Rest Reminder 是什么</h2>
+            <p className="text-[var(--fg-dim)] text-sm mb-6">一款免费开源的 Windows 桌面久坐提醒工具</p>
+
+            <div className="docs-card mb-6">
+              <p className="text-sm text-[var(--fg)] leading-relaxed mb-3">
+                <strong>Rest Reminder</strong> 是一款专为长时间学习/工作设计的桌面护眼助手。它会在你专注 60 分钟后自动提醒你休息，帮你养成科学的用眼习惯，保护视力健康。
+              </p>
+              <p className="text-sm text-[var(--fg)] leading-relaxed mb-3">
+                核心功能包括：<strong>60 分钟专注循环</strong>（学习→倒计时→休息→B 站视频）、<strong>20-20-20 护眼提醒</strong>（每 20 分钟看远处 20 秒）、<strong>学习时长追踪</strong>（连续打卡 + 成就系统）、<strong>AI 学习分析</strong>（日报/周报/月报）。
+              </p>
+              <p className="text-sm text-[var(--fg-dim)] leading-relaxed">
+                48MB 轻量安装，数据完全本地存储，MIT 开源协议，永久免费。
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="docs-card text-center">
+                <div className="text-2xl font-bold text-[var(--accent)] mb-1">48MB</div>
+                <div className="text-xs text-[var(--fg-dim)]">轻量安装</div>
+              </div>
+              <div className="docs-card text-center">
+                <div className="text-2xl font-bold text-[var(--accent)] mb-1">60min</div>
+                <div className="text-xs text-[var(--fg-dim)]">专注循环</div>
+              </div>
+              <div className="docs-card text-center">
+                <div className="text-2xl font-bold text-[var(--accent)] mb-1">17</div>
+                <div className="text-xs text-[var(--fg-dim)]">成就徽章</div>
+              </div>
+              <div className="docs-card text-center">
+                <div className="text-2xl font-bold text-[var(--accent)] mb-1">MIT</div>
+                <div className="text-xs text-[var(--fg-dim)]">开源协议</div>
+              </div>
+            </div>
+          </section>
+
           {/* ── 快速开始 ── */}
           <section className="mb-16" id="快速开始">
             <h2 className="text-2xl font-bold mb-1 font-display">快速开始</h2>

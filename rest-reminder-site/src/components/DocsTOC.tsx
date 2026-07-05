@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 
 const tocItems = [
+  { id: "简介", label: "产品简介" },
   { id: "快速开始", label: "快速开始" },
   { id: "下载运行", label: "下载运行" },
   { id: "设定目标", label: "设定目标" },
