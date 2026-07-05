@@ -9,7 +9,7 @@ export default function Navbar() {
           <span className="font-semibold text-[15px] font-display tracking-tight text-white">Rest Reminder</span>
         </Link>
 
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-5">
           <a href="/docs" className="text-[13px] text-white/70 hover:text-white transition-colors hidden md:block">
             文档
           </a>
@@ -22,6 +22,16 @@ export default function Navbar() {
             className="text-[13px] text-white/70 hover:text-white transition-colors hidden sm:block"
           >
             GitHub
+          </a>
+          <a
+            href="/docs#搜索"
+            className="hidden md:flex items-center gap-1.5 text-[12px] text-white/50 bg-white/8 border border-white/10 rounded-lg px-3 py-1.5 hover:bg-white/12 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8" /><path strokeLinecap="round" d="M21 21l-4.35-4.35" />
+            </svg>
+            搜索
+            <kbd className="text-[10px] text-white/40 bg-white/6 rounded px-1 py-0.5 ml-1">Ctrl K</kbd>
           </a>
           <a href="#download" className="btn-primary px-4 py-1.5 text-[13px]">
             免费下载

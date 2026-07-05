@@ -1,6 +1,7 @@
 "use client";
 
 import DocsNav from "@/components/DocsNav";
+import DocsTOC from "@/components/DocsTOC";
 
 export default function DocsPage() {
   return (
@@ -10,7 +11,7 @@ export default function DocsPage() {
         <DocsNav />
 
         {/* 内容区 */}
-        <div className="docs-main" style={{ maxWidth: "960px" }}>
+        <div className="docs-main" style={{ maxWidth: "800px" }}>
           {/* Breadcrumb */}
           <nav className="flex items-center gap-2 text-xs text-[var(--fg-dim)] mb-6">
             <a href="/" className="hover:text-[var(--fg)] transition-colors">首页</a>
@@ -19,6 +20,35 @@ export default function DocsPage() {
             </svg>
             <span className="text-[var(--fg)]">文档</span>
           </nav>
+
+          {/* 搜索框 */}
+          <div className="mb-8" id="搜索">
+            <div className="relative">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--fg-muted)]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="8" /><path strokeLinecap="round" d="M21 21l-4.35-4.35" />
+              </svg>
+              <input
+                id="doc-search-input"
+                type="text"
+                placeholder="搜索文档…"
+                className="w-full pl-10 pr-4 py-2.5 text-sm bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--fg)] placeholder:text-[var(--fg-muted)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition-colors"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const q = (e.target as HTMLInputElement).value.trim().toLowerCase();
+                    if (!q) return;
+                    const sections = document.querySelectorAll("section[id]");
+                    for (const s of sections) {
+                      if (s.textContent?.toLowerCase().includes(q)) {
+                        s.scrollIntoView({ behavior: "smooth", block: "start" });
+                        break;
+                      }
+                    }
+                  }
+                }}
+              />
+              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-[var(--fg-muted)] bg-[var(--bg)] border border-[var(--border)] rounded px-1.5 py-0.5">Enter</kbd>
+            </div>
+          </div>
 
           <h1 className="text-3xl font-extrabold tracking-tight mb-2 font-display">
             文档
@@ -878,6 +908,9 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
             </a>
           </nav>
         </div>
+
+        {/* 右侧快速导航 */}
+        <DocsTOC />
 
       </div>
     </main>
