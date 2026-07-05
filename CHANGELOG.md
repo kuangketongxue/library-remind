@@ -2,6 +2,29 @@
 
 所有重要版本更新记录。
 
+## v6.2.3 (2026-07-06) — 官网功能完善
+
+### 📧 Contact 页
+- 新增 `/contact` 页面：邮箱 + 微信二维码 + GitHub Issue 模板链接
+- 替代原来无效的 mailto 链接
+
+### 📋 GitHub Issue 模板
+- 新增 bug_report.md / feature_request.md / partnership.md 3 个模板
+- 用户提交 Issue 时自动选择类型
+
+### 📚 文档页产品简介
+- docs 页面新增「Rest Reminder 是什么」介绍段
+- 4 个数据卡片（48MB / 60min / 17 徽章 / MIT）
+- 右侧 TOC 新增「产品简介」锚点
+
+### 🧭 导航栏 + Footer 更新
+- Navbar 新增「联系我们」链接
+- Footer "联系我们" 栏改为指向 Contact 页
+
+### 📖 README badges
+- 新增 Stars + Platform badges
+- 新增 Contact 链接
+
 ## v6.2.2 (2026-07-06) — 官网全面改版
 
 ### 🎨 官网视觉升级
