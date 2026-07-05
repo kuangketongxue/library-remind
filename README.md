@@ -10,14 +10,20 @@
 <a href="https://github.com/kuangketongxue/library-remind/releases/latest">
   <img src="https://img.shields.io/github/v/release/kuangketongxue/library-remind?style=for-the-badge" alt="Release">
 </a>
+<a href="https://github.com/kuangketongxue/library-remind/stargazers">
+  <img src="https://img.shields.io/github/stars/kuangketongxue/library-remind?style=for-the-badge&color=yellow" alt="Stars">
+</a>
 <a href="https://github.com/kuangketongxue/library-remind/blob/main/LICENSE">
   <img src="https://img.shields.io/badge/license-MIT-blue?style=for-the-badge" alt="License">
 </a>
 <a href="https://www.python.org/downloads/">
   <img src="https://img.shields.io/badge/python-3.14%2B-yellow?style=for-the-badge" alt="Python">
 </a>
+<a href="#">
+  <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey?style=for-the-badge" alt="Platform">
+</a>
 
-[📥 Download](https://github.com/kuangketongxue/library-remind/releases/latest) · [🌐 Website](https://crazy-rest-reminder.pages.dev/) · [💬 Issues](https://github.com/kuangketongxue/library-remind/issues) · [中文](README.zh.md) · [日本語](README.ja.md)
+[📥 Download](https://github.com/kuangketongxue/library-remind/releases/latest) · [🌐 Website](https://crazy-rest-reminder.pages.dev/) · [📧 Contact](https://crazy-rest-reminder.pages.dev/contact) · [💬 Issues](https://github.com/kuangketongxue/library-remind/issues) · [中文](README.zh.md) · [日本語](README.ja.md)
 
 <a href="https://starcharts.cc/kuangketongxue/library-remind">
   <img src="https://starcharts.cc/kuangketongxue/library-remind/star-history.svg?bg=0c0c10&hideIssues=true" alt="Star History" height="180">

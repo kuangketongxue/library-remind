@@ -80,8 +80,8 @@ export default function Footer() {
                 联系我们
               </h4>
               <ul className="space-y-2.5">
+                <li><a href="/contact" className="text-sm text-[var(--fg-dim)] hover:text-[var(--accent)] transition-colors">联系方式</a></li>
                 <li><a href="https://github.com/kuangketongxue/library-remind/issues" target="_blank" rel="noopener noreferrer" className="text-sm text-[var(--fg-dim)] hover:text-[var(--accent)] transition-colors">问题反馈</a></li>
-                <li><a href="mailto:kuangketongxue@gmail.com?subject=Rest%20Reminder%20商务合作" className="text-sm text-[var(--fg-dim)] hover:text-[var(--accent)] transition-colors">商务合作</a></li>
                 <li><a href="https://github.com/kuangketongxue/library-remind" target="_blank" rel="noopener noreferrer" className="text-sm text-[var(--fg-dim)] hover:text-[var(--accent)] transition-colors">GitHub</a></li>
               </ul>
             </div>

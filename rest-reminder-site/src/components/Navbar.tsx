@@ -16,6 +16,9 @@ export default function Navbar() {
           <a href="/pricing" className="text-[13px] text-white/70 hover:text-white transition-colors hidden md:block">
             定价
           </a>
+          <a href="/contact" className="text-[13px] text-white/70 hover:text-white transition-colors hidden md:block">
+            联系我们
+          </a>
           <a href="https://github.com/kuangketongxue/library-remind"
             target="_blank"
             rel="noopener noreferrer"
