@@ -6,17 +6,17 @@ export default function Navbar() {
       <div className="max-w-6xl mx-auto flex items-center justify-between h-16 px-6">
         <Link href="/" className="flex items-center gap-2.5">
           <img src="/rest-reminder-logo.png" alt="Rest Reminder" className="w-8 h-8 rounded-md" />
-          <span className="font-semibold text-[15px] font-display tracking-tight">Rest Reminder</span>
+          <span className="font-semibold text-[15px] font-display tracking-tight text-white">Rest Reminder</span>
         </Link>
 
         <div className="flex items-center gap-6">
-          <a href="/docs" className="text-[13px] text-[var(--fg-dim)] hover:text-[var(--fg)] transition-colors hidden md:block">
+          <a href="/docs" className="text-[13px] text-white/70 hover:text-white transition-colors hidden md:block">
             文档
           </a>
           <a href="https://github.com/kuangketongxue/library-remind"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[13px] text-[var(--fg-dim)] hover:text-[var(--fg)] transition-colors hidden sm:block"
+            className="text-[13px] text-white/70 hover:text-white transition-colors hidden sm:block"
           >
             GitHub
           </a>
