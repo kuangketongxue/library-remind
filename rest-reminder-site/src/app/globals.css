@@ -3,19 +3,19 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 :root {
-  --bg: #ffffff;
-  --fg: #1a1a1a;
-  --fg-dim: #6b6b6b;
-  --fg-muted: #9b9b9b;
+  --bg: #fdf6f0;
+  --fg: #2d2420;
+  --fg-dim: #7a6e66;
+  --fg-muted: #a89e96;
   --accent: #c9836e;
   --accent-bright: #d4a373;
-  --accent-soft: rgba(201, 131, 110, 0.08);
-  --accent-glow: rgba(201, 131, 110, 0.15);
-  --surface: #f7f6f3;
-  --surface-hover: #eeede8;
-  --surface-raised: #ffffff;
-  --border: #e5e4df;
-  --border-light: #f0efeb;
+  --accent-soft: rgba(201, 131, 110, 0.10);
+  --accent-glow: rgba(201, 131, 110, 0.18);
+  --surface: #f5ece3;
+  --surface-hover: #ede2d6;
+  --surface-raised: #fff9f5;
+  --border: #e0d5ca;
+  --border-light: #efe8df;
   --font-display: 'Plus Jakarta Sans', -apple-system, system-ui, sans-serif;
   --font-body: 'Plus Jakarta Sans', -apple-system, system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace;
