@@ -528,9 +528,37 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
             <div className="space-y-6">
               <div className="changelog-entry latest pl-6">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-bold">v6.2.0</span>
+                  <span className="text-sm font-bold">v6.2.2</span>
                   <span className="text-xs text-[var(--fg-dim)]">2026-07-06</span>
                   <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">最新</span>
+                </div>
+                <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
+                  <li>官网全面改版：暖奶油色背景 + WorkBuddy 风格 Footer + 三栏文档布局</li>
+                  <li>导航栏新增「定价」链接 + 搜索按钮</li>
+                  <li>Footer 重设计：Hero CTA + 4 栏导航（服务条款/文档指引/产品下载/联系我们）</li>
+                  <li>文档页三栏布局：左侧导航 + 中间内容 + 右侧快速导航（滚动高亮）</li>
+                  <li>文档页顶部搜索框（Enter 跳转匹配章节）</li>
+                  <li>Navbar 文字适配深色背景（白色）</li>
+                  <li>知识库清理：删除 7 个过期文件 + 新增 7 条经验记录</li>
+                </ul>
+              </div>
+
+              <div className="changelog-entry pl-6">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-bold">v6.2.1</span>
+                  <span className="text-xs text-[var(--fg-dim)]">2026-07-06</span>
+                </div>
+                <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
+                  <li>页面背景从纯白改为暖奶油色（#fdf6f0），长时间浏览不伤眼</li>
+                  <li>CTA 横幅深棕渐变，白字清晰可见</li>
+                  <li>底部粘性 CTA 栏适配暖色背景</li>
+                </ul>
+              </div>
+
+              <div className="changelog-entry pl-6">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-bold">v6.2.0</span>
+                  <span className="text-xs text-[var(--fg-dim)]">2026-07-06</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
                   <li>修复 9 处 QFont CSS 字符串导致的主界面文字乱码（Georgia/Consolas 等字体失效回退）</li>
