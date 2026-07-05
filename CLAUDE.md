@@ -79,6 +79,10 @@ pyinstaller RestReminder.spec
 - **popup UI 缩进陷阱**：`if widget is None:` 块只包含 widget 创建，UI 子控件（root QFrame 等）必须也在块内，否则每次 show 重建整棵树（2026-07-04）
 - **import 遗漏检测**：grep `threading\.` 等调用点后必须验证对应 import 存在；crash.log 是第一发现入口（2026-07-04）
 - **尊重用户指定的文件/方案**：用户说"图标用 cute_icon.png"就用 png，不要自作主张改为 .ico（具体指令不替换方案）
+- **QFont 不接受 CSS 逗号分隔**：`QFont('Georgia, "Noto Serif SC", serif')` 整个字符串被当作一个字体名 → 匹配失败 → moji-bake。只传单一主字体名，fallback 留给 Qt 字体链接表（2026-07-06）
+- **PyInstaller frozen 模式数据文件路径**：`os.path.dirname(__file__)` 在 frozen 模式下指向 temp 解压目录，不是 `sys._MEIPASS`。数据文件用 `sys._MEIPASS`，脚本用 `__file__`（2026-07-06）
+- **Hero 背景视频不要 opacity-0 等加载**：弱网/WARP 下 onCanPlay 不触发 → 黑屏。直接设可见 + poster 占位 + onError 降级（2026-07-06）
+- **AI 调用必须有本地 fallback**：所有外部 API 超时时返回降级内容（本地数据/缓存），不要把错误甩到 UI（2026-07-06）
 
 ## 禁止事项
 - 不创建庆祝/确认类临时文件
