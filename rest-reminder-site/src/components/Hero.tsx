@@ -37,8 +37,8 @@ export default function Hero() {
             "radial-gradient(circle at 50% 30%, rgba(212,168,83,0.10) 0%, transparent 55%), radial-gradient(circle at 50% 70%, rgba(212,168,83,0.06) 0%, transparent 60%)",
         }}
       />
-      {/* Dark overlay — 压低到 35% 保证文字可读的同时视频本身可见 */}
-      <div className="absolute inset-0 bg-black/35 -z-[5]" />
+      {/* Dark overlay — 50% 保证文字可读 + 视频内容可见 */}
+      <div className="absolute inset-0 bg-black/50 -z-[5]" />
 
       {/* Subtle top glow */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] rounded-full bg-[radial-gradient(circle,rgba(245,158,11,0.05)_0%,transparent_60%)] pointer-events-none" />
@@ -48,20 +48,22 @@ export default function Hero() {
           <span className="text-[11px] font-semibold text-[var(--accent)] bg-[var(--accent-soft)] px-3 py-1 rounded-full border border-[var(--border-accent)]">
             开源免费 · MIT 协议
           </span>
-          <span className="text-xs text-[var(--fg-dim)]">v6.2.0</span>
+          <span className="text-xs text-white/70">v6.2.0</span>
         </motion.div>
 
         <motion.h1
           {...fade(0.1)}
           className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-[-0.03em] leading-[1.08] mb-5 font-display"
+          style={{ color: '#fff', textShadow: '0 2px 12px rgba(0,0,0,0.5)' }}
         >
           久坐伤眼？<br />
-          <span className="text-[var(--accent)]">自动提醒你休息</span>
+          <span style={{ color: '#d4a853', textShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>自动提醒你休息</span>
         </motion.h1>
 
         <motion.p
           {...fade(0.2)}
-          className="text-base md:text-lg text-[var(--fg-dim)] max-w-xl mx-auto leading-relaxed mb-8"
+          className="text-base md:text-lg max-w-xl mx-auto leading-relaxed mb-8"
+          style={{ color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 6px rgba(0,0,0,0.4)' }}
         >
           48MB 轻量桌面挂件，60 分钟专注循环。右下角浮球实时倒计时，到点弹出护眼视频，AI 自动生成学习报告。
         </motion.p>
