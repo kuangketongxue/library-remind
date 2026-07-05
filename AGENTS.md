@@ -10,7 +10,7 @@ Python 3.14+ / PyQt5 / requests / psutil / Win32 API (ctypes)
 ```
 rest_reminder.py        — 主程序（~8200行，含所有 UI + 逻辑）
 storage.py              — 统一 JSON 存储层（JSONStore 类）
-tray_card.py            — 系统托盘卡片（请辨倒计时）
+tray_card.py            — 浮动托盘卡片组件（替代原生 QMenu）
 feishu_calendar.py      — 飞书日程集成
 RestReminder.spec       — PyInstaller 配置（hiddenimports=['storage','tray_card','feishu_calendar']）
 CHANGELOG.md            — 更新日志
@@ -82,4 +82,3 @@ taskkill /F /IM python.exe
 - CLAUDE.md — AI 开发规则 + 踩坑记录
 - docs/ARCHITECTURE.md — 架构/状态机/设计系统
 - CHANGELOG.md — 更新日志
-- 产品规格-v4.3.md — v4.3 完整产品规格
