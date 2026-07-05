@@ -22,6 +22,7 @@ export default function RootLayout({
   return (
     <html lang="zh" className="h-full antialiased">
       <body className="min-h-full flex flex-col bg-[var(--bg)] text-[var(--fg)]">
+        <Navbar />
         <div className="pt-16 flex-1 flex flex-col">
           {children}
         </div>

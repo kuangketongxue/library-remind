@@ -3185,7 +3185,9 @@ def _create_app_icon():
     只提供单一大图时 Qt 自动缩放可能发虚，因此显式加入常用尺寸。
     """
     from PyQt5.QtGui import QPixmap
-    icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cute_icon.png')
+    # frozen 模式下数据文件在 sys._MEIPASS，开发模式在 __file__ 同目录
+    _data_dir = sys._MEIPASS if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
+    icon_path = os.path.join(_data_dir, 'cute_icon.png')
     if os.path.exists(icon_path):
         source = QPixmap(icon_path)
         if not source.isNull():
@@ -4096,7 +4098,7 @@ class RestReminderWidget(QWidget):
         cal_refresh_btn.setFixedSize(52, 28)
         cal_refresh_btn.setCursor(Qt.PointingHandCursor)
         cal_refresh_btn.setToolTip('手动刷新日程')
-        cal_refresh_btn.setStyleSheet('QPushButton { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); border-radius: 6px; font-size: 12px; color: #f0f0f0; font-weight: bold; } QPushButton:hover { background: rgba(212,168,83,0.22); color: #fff; border-color: rgba(212,168,83,0.4); }')
+        cal_refresh_btn.setStyleSheet('QPushButton { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); border-radius: 6px; font-size: 12px; color: #f5f5f5; font-weight: bold; } QPushButton:hover { background: rgba(212,168,83,0.22); color: #fff; border-color: rgba(212,168,83,0.4); } QPushButton:pressed { background: rgba(212,168,83,0.35); }')
         cal_refresh_btn.clicked.connect(self._manual_refresh_calendar)
         cal_title_row.addWidget(cal_refresh_btn)
         cal_layout.addLayout(cal_title_row)
