@@ -85,6 +85,8 @@ pyinstaller RestReminder.spec
 - **Hero 背景视频不要 opacity-0 等加载**：弱网/WARP 下 onCanPlay 不触发 → 黑屏。直接设可见 + poster 占位 + onError 降级（2026-07-06）
 - **AI 调用必须有本地 fallback**：所有外部 API 超时时返回降级内容（本地数据/缓存），不要把错误甩到 UI（2026-07-06）
 - **改 CSS 背景色必须排查硬编码颜色**：改 `--bg` 变量后，用 grep 扫 `rgba(255,255,255` / `bg-white` / 旧 surface 色值，逐一确认新背景上对比度（2026-07-06）
+- **深色背景文字用显式白色**：navbar/dark overlay/CTA banner 的文字必须 `text-white`，不依赖 `var(--fg)`（2026-07-06）
+- **Next.js 预渲染不能传 onClick**：`"use client"` 页面的交互组件如果预渲染报错，提取为独立 client component 文件（2026-07-06）
 
 ## 禁止事项
 - 不创建庆祝/确认类临时文件
