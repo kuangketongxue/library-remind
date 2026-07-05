@@ -10,7 +10,37 @@ const fade = (delay = 0) => ({
 
 export default function Hero() {
   return (
-    <section className="relative min-h-[92vh] flex flex-col items-center justify-center px-6 pt-24 pb-16 text-center">
+    <section className="relative min-h-[92vh] flex flex-col items-center justify-center px-6 pt-24 pb-16 text-center overflow-hidden">
+      {/* Promo video — auto-play muted loop, fallback to static poster on error/loading */}
+      <video
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="auto"
+        poster="/hero-banner.png"
+        onCanPlay={(e) => (e.currentTarget.style.opacity = "1")}
+        onError={(e) => {
+          // 视频加载失败或解码错误 → 隐藏 video，让 CSS fallback 背景接管
+          e.currentTarget.style.display = "none";
+        }}
+        className="absolute inset-0 w-full h-full object-cover -z-10 transition-opacity duration-700 opacity-0"
+      >
+        <source src="/promo_video.mp4" type="video/mp4" />
+        {/* 不支持 mp4 的极小比例浏览器（IE 已死）自动降级到 poster */}
+      </video>
+      {/* Golden radial pulse fallback — 视频加载失败或迟迟未到时不至于黑屏 */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 -z-[6] pointer-events-none"
+        style={{
+          background:
+            "radial-gradient(circle at 50% 30%, rgba(212,168,83,0.10) 0%, transparent 55%), radial-gradient(circle at 50% 70%, rgba(212,168,83,0.06) 0%, transparent 60%)",
+        }}
+      />
+      {/* Dark overlay — 始终压在视频/Fallback 之上，保证文字可读 */}
+      <div className="absolute inset-0 bg-black/60 -z-[5]" />
+
       {/* Subtle top glow */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] rounded-full bg-[radial-gradient(circle,rgba(245,158,11,0.05)_0%,transparent_60%)] pointer-events-none" />
 
@@ -19,7 +49,7 @@ export default function Hero() {
           <span className="text-[11px] font-semibold text-[var(--accent)] bg-[var(--accent-soft)] px-3 py-1 rounded-full border border-[var(--border-accent)]">
             开源免费 · MIT 协议
           </span>
-          <span className="text-xs text-[var(--fg-dim)]">v6.1.9</span>
+          <span className="text-xs text-[var(--fg-dim)]">v6.2.0</span>
         </motion.div>
 
         <motion.h1

@@ -8,7 +8,7 @@ Python 3.14+ / PyQt5 / requests / psutil / Win32 API (ctypes)
 
 ## 关键文件
 ```
-rest_reminder.py              — 主程序（~8127行，含所有 UI + 逻辑）
+rest_reminder.py              — 主程序（~8200行，含所有 UI + 逻辑）
 storage.py                    — 统一 JSON 存储层（JSONStore 类）
 RestReminder.spec             — PyInstaller 配置（含 hiddenimports=['storage','tray_card','feishu_calendar']）
 产品规格-v4.3.md              — ⚠️ 历史规格，最后更新 v4.4 (2026-06-22)，与当前 v6.1.8 脱节
@@ -76,6 +76,8 @@ pyinstaller RestReminder.spec
 - **Win11 任务栏图标 WS_EX_APPWINDOW**：`FramelessWindowHint + WindowStaysOnTopHint` 会丢失任务栏图标。修复：`showEvent` 中用 `ctypes.windll.user32` 设 `WS_EX_APPWINDOW`、去 `WS_EX_TOOLWINDOW`（2026-06-29）
 - **飞书日程 CalendarManager 初始化顺序**：`CalendarManager` 必须在 `init_ui()` 前初始化，因为 `_build_general_tab` 会读 `_calendar_enabled`（2026-06-29）
 - **pythonw 下 PATH 不完整**：`lark-cli` 找不到时，需用 `shutil.which` 或绝对路径 `%APPDATA%\npm\lark-cli.cmd`，不能依赖 PATH（2026-06-29）
+- **popup UI 缩进陷阱**：`if widget is None:` 块只包含 widget 创建，UI 子控件（root QFrame 等）必须也在块内，否则每次 show 重建整棵树（2026-07-04）
+- **import 遗漏检测**：grep `threading\.` 等调用点后必须验证对应 import 存在；crash.log 是第一发现入口（2026-07-04）
 - **尊重用户指定的文件/方案**：用户说"图标用 cute_icon.png"就用 png，不要自作主张改为 .ico（具体指令不替换方案）
 
 ## 禁止事项

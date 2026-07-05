@@ -38,11 +38,15 @@ A Windows desktop widget that reminds you to take breaks during long study sessi
 | **60-min Focus Cycle** | Study → 5-min mindfulness countdown → 5-min break → auto-open Bilibili |
 | **5-Tab Dashboard** | Today / AI Report / Trends / Settings / About |
 | **Review Logging** | Subject + tags + score (1-100) after each session |
-| **🤖 AI Analysis** | Daily / weekly / monthly / quarterly / yearly reports |
+| **🤖 AI Analysis** | Daily / weekly / monthly / quarterly / yearly reports. Auto-fallback to local wisdom quotes when network timeout — never blocks the UI |
+| **Feishu Calendar** | Sync schedule to popup (via npm lark-cli) |
 | **Trend Charts** | Study hours bar chart + time-of-day score heatmap |
 | **20-20-20 Eye Care** | Gentle overlay every 20 minutes |
 | **Tray + Floating Ball** | Background resident, one-click control |
 | **Auto-start** | Launch on system login |
+| **Achievements + Streaks** | 17 badges to keep you motivated |
+| **Email Reports** | Scheduled weekly / monthly digests to your inbox |
+| **GitHub Backup** | One-click backup + restore to a private repo |
 
 ## 🚀 Quick Start
 
@@ -57,13 +61,15 @@ _launch.bat
 ## 📁 Project Structure
 
 ```
-├── rest_reminder.py        # Main app (~4737 lines)
+├── rest_reminder.py        # Main app (~4750 lines)
 ├── storage.py              # Unified JSON storage layer
 ├── tray_card.py            # Floating tray card widget
+├── feishu_calendar.py      # Feishu / Lark calendar integration
+├── backup.py               # GitHub backup / restore
 ├── vendor/                 # Bundled dependencies
 ├── RestReminder.spec       # PyInstaller config
 ├── docs/ARCHITECTURE.md    # Architecture docs
-├── rest-reminder-site/     # Website (Next.js)
+├── rest-reminder-site/     # Website (Next.js) — includes pricing / privacy / rules / terms
 └── README.zh.md            # 中文版
 └── README.ja.md            # 日本語版
 ```

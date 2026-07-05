@@ -61,6 +61,33 @@ const navSections = [
       { href: "/docs#故障排除", label: "故障排除" },
     ],
   },
+  {
+    icon: "🛡",
+    label: "法律与政策",
+    defaultOpen: false,
+    items: [
+      { href: "/privacy", label: "隐私政策" },
+      { href: "/terms", label: "用户协议" },
+      { href: "/rules", label: "管理规则和公约" },
+    ],
+  },
+  {
+    icon: "👨‍💻",
+    label: "开发者",
+    defaultOpen: false,
+    items: [
+      { href: "/docs#开发指南", label: "开发指南" },
+      { href: "/docs#claude-code", label: "Claude Code 接入指南" },
+    ],
+  },
+  {
+    icon: "💰",
+    label: "定价",
+    defaultOpen: false,
+    items: [
+      { href: "/pricing", label: "定价计费" },
+    ],
+  },
 ];
 
 export default function DocsNav() {

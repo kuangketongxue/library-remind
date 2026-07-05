@@ -2,6 +2,26 @@
 
 所有重要版本更新记录。
 
+## v6.2.0 (2026-07-06)
+
+### 🐛 主界面文字乱码修复
+- **根因**：9 处 `QFont()` 调用把 CSS 风格逗号分隔串（如 `'Georgia, "Noto Serif SC", serif'` 或 `'Consolas, "SF Mono", monospace'`）当作字体名单名字传入。QFont 不认识这种分隔，整个字符串匹配失败回退到系统默认字体 → 中文字符 moji-bake / 方块 / emoji 不渲染
+- **修复**：所有 `QFont` 调用改为只用单一主字体名（`Georgia` / `Consolas` / `Microsoft YaHei` / `Segoe UI Emoji`），fallback 留给 Qt 字体链接表自动处理。涉及 rest-reminder.py L776/L3642/L4029/L4425/L4555/L5034/L5992/L6215/L6346 共 9 处
+- **扫描**：同步扫描整棵项目其他潜在乱码元凶（JSON 读写编码、subprocess stdout 解码、邮件 MIME、HTML charset、BOM）—— 全部确认为 UTF-8 无误
+
+### 🔧 飞书日历 lark-cli 路径亡址修复
+- **根因**：`C:\Users\binlo\.workbuddy\` 已被删除，但 `.settings.json` 里 `lark_cli_path` 仍指向该亡址，导致"未安装 lark-cli 或不在 PATH"错误
+- **修复**：改为 npm 全局路径 `C:\Users\binlo\AppData\Roaming\npm\lark-cli.cmd`（已验证 v1.0.65 可用）
+
+### 🤖 AI 服务超时 fallback 修复
+- **根因**：内置 Cloudflare Worker 代理（`crazy-rest-reminder.pages.dev`）在大陆经常 30 秒超时，`_call_ai()` 直接 return `ok=False` + 错误字符串 → UI 显示"所有 AI 服务暂时不可用"错误 toast，review 报告不可用
+- **修复**：所有上游都失败时，从本地 `.wisdom_quotes.json`（9 条狂客智慧语录）fallback 一条内容继续显示。**用户体验：超时 → 显示本地金句，不再弹窗报错**
+- 注：链路通畅瞬间仍能拿到真实 AI 输出
+
+### 📄 官网新增法律合规页面
+- 新增 `pricing`（定价）、`privacy`（隐私政策）、`rules`（社区规则）、`terms`（服务条款）4 个独立页面
+- 为后续合规上架准备基础框架
+
 ## v6.1.9 (2026-07-04)
 
 ### 🎯 浮球 popup 飞书日程显示修复

@@ -1,27 +1,6 @@
 "use client";
 
 import DocsNav from "@/components/DocsNav";
-import DocsTOC, { type TocItem } from "@/components/DocsTOC";
-
-const tocItems: TocItem[] = [
-  { id: "快速开始", label: "快速开始", level: 2 },
-  { id: "下载运行", label: "1. 下载运行", level: 3 },
-  { id: "设定目标", label: "2. 设定目标", level: 3 },
-  { id: "开始学习", label: "3. 开始学习", level: 3 },
-  { id: "复盘追踪", label: "4. 复盘追踪", level: 3 },
-  { id: "界面预览", label: "界面预览", level: 2 },
-  { id: "功能说明", label: "功能说明", level: 2 },
-  { id: "专注循环", label: "60 分钟专注循环", level: 3 },
-  { id: "护眼提醒", label: "20-20-20 护眼提醒", level: 3 },
-  { id: "学习追踪", label: "学习时长追踪与打卡", level: 3 },
-  { id: "趋势分析", label: "趋势分析", level: 3 },
-  { id: "ai分析", label: "AI 学习分析", level: 3 },
-  { id: "使用技巧", label: "使用技巧", level: 3 },
-  { id: "设置详解", label: "设置详解", level: 2 },
-  { id: "更新日志", label: "更新日志", level: 2 },
-  { id: "常见问题", label: "常见问题", level: 2 },
-  { id: "故障排除", label: "故障排除", level: 2 },
-];
 
 export default function DocsPage() {
   return (
@@ -30,8 +9,8 @@ export default function DocsPage() {
         {/* 左侧导航 */}
         <DocsNav />
 
-        {/* 中间内容 */}
-        <div className="docs-main">
+        {/* 内容区 */}
+        <div className="docs-main" style={{ maxWidth: "960px" }}>
           {/* Breadcrumb */}
           <nav className="flex items-center gap-2 text-xs text-[var(--fg-dim)] mb-6">
             <a href="/" className="hover:text-[var(--fg)] transition-colors">首页</a>
@@ -376,6 +355,141 @@ python rest_reminder.py`}
             </div>
           </section>
 
+          {/* ── 开发指南 ── */}
+          <section className="mb-16" id="开发指南">
+            <h2 className="text-2xl font-bold mb-1 font-display">开发指南</h2>
+            <p className="text-[var(--fg-dim)] text-sm mb-6">从源码构建和二次开发 Rest Reminder</p>
+
+            <div className="space-y-5">
+              <div className="docs-card">
+                <h3 className="text-sm font-semibold mb-2">环境要求</h3>
+                <ul className="text-[var(--fg-dim)] text-sm leading-relaxed space-y-1 list-disc list-inside">
+                  <li><strong>Python 3.14+</strong> — 核心依赖，必须使用 3.14 或更高版本</li>
+                  <li><strong>PyQt5</strong> — GUI 框架（项目 vendor/ 目录已内嵌兼容版本）</li>
+                  <li><strong>Windows 10/11</strong> — 使用 Win32 API（ctypes），仅支持 Windows</li>
+                </ul>
+              </div>
+
+              <div className="docs-card">
+                <h3 className="text-sm font-semibold mb-2">快速启动</h3>
+                <pre className="bg-[var(--surface)] rounded-lg p-4 text-xs font-mono text-[#b5651d] overflow-x-auto">
+{`git clone https://github.com/kuangketongxue/library-remind.git
+cd library-remind
+C:\\Python314\\python.exe rest_reminder.py --silent`}
+                </pre>
+                <p className="text-[var(--fg-dim)] text-xs mt-3 leading-relaxed">
+                  注意：必须使用完整路径 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">C:\Python314\python.exe</code>，PATH 中的 python 可能指向其他版本，导致 ImportError。
+                </p>
+              </div>
+
+              <div className="docs-card">
+                <h3 className="text-sm font-semibold mb-2">项目结构</h3>
+                <div className="space-y-2">
+                  <div className="flex gap-3">
+                    <span className="text-xs font-mono text-[var(--accent)] shrink-0 w-44">rest_reminder.py</span>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">主程序，约 8200 行，包含所有 UI 和业务逻辑</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="text-xs font-mono text-[var(--accent)] shrink-0 w-44">storage.py</span>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">统一 JSON 存储层（JSONStore 类）</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="text-xs font-mono text-[var(--accent)] shrink-0 w-44">tray_card.py</span>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">系统托盘卡片组件</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="text-xs font-mono text-[var(--accent)] shrink-0 w-44">feishu_calendar.py</span>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">飞书日程集成模块</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="text-xs font-mono text-[var(--accent)] shrink-0 w-44">vendor/</span>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">内嵌 PyQt5 等依赖（按 Python 3.14 ABI 编译）</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="text-xs font-mono text-[var(--accent)] shrink-0 w-44">CLAUDE.md / AGENTS.md</span>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">AI 开发规则和踩坑记录</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="docs-card">
+                <h3 className="text-sm font-semibold mb-2">状态机</h3>
+                <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
+                  程序基于四态循环状态机：<code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">idle → running → paused → resting → idle</code>。所有状态转换逻辑集中在主循环的 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">_tick()</code> 方法中。新增状态时需同步更新 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">_BTN_CONFIG</code>、对应的 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">_handle_*</code> 方法、以及主循环路由分支。
+                </p>
+              </div>
+
+              <div className="docs-card">
+                <h3 className="text-sm font-semibold mb-2">构建 EXE</h3>
+                <pre className="bg-[var(--surface)] rounded-lg p-4 text-xs font-mono text-[#b5651d] overflow-x-auto">
+{`pyinstaller RestReminder.spec`}
+                </pre>
+                <p className="text-[var(--fg-dim)] text-xs mt-3 leading-relaxed">
+                  spec 文件已配置好 hiddenimports 和 icon。构建产物在 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">dist/</code> 目录，约 48MB。
+                </p>
+              </div>
+
+              <div className="docs-card">
+                <h3 className="text-sm font-semibold mb-2">代码规范</h3>
+                <ul className="text-[var(--fg-dim)] text-sm leading-relaxed space-y-1 list-disc list-inside">
+                  <li>改完代码后先 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">py_compile</code> 检查语法，再启动验证</li>
+                  <li>所有数据文件使用 JSONStore 统一读写，不直接 open/write</li>
+                  <li>PyQt 数值 API 只接受 int，float 必须显式 int() 转换</li>
+                  <li><code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">from PyQt5 import sip</code>（不能用 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">import sip</code>，3.14 不兼容）</li>
+                  <li>except 块必须有 log，不允许 bare <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">pass</code></li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          {/* ── Claude Code 接入指南 ── */}
+          <section className="mb-16" id="claude-code">
+            <h2 className="text-2xl font-bold mb-1 font-display">Claude Code 接入指南</h2>
+            <p className="text-[var(--fg-dim)] text-sm mb-6">使用 Claude Code 高效开发 Rest Reminder</p>
+
+            <div className="space-y-5">
+              <div className="docs-card">
+                <h3 className="text-sm font-semibold mb-2">项目配置</h3>
+                <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
+                  项目已配置 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">CLAUDE.md</code> 和 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">AGENTS.md</code>，Claude Code 打开项目目录后会自动加载开发规则、踩坑记录和关键配置位置。无需额外配置。
+                </p>
+              </div>
+
+              <div className="docs-card">
+                <h3 className="text-sm font-semibold mb-2">开发工作流</h3>
+                <ol className="text-[var(--fg-dim)] text-sm leading-relaxed list-decimal list-inside space-y-2">
+                  <li>杀掉旧进程：<code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">taskkill /F /IM python.exe</code></li>
+                  <li>语法检查：<code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">C:\Python314\python.exe -c "import py_compile; py_compile.compile('rest_reminder.py')"</code></li>
+                  <li>启动程序：<code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">C:\Python314\python.exe rest_reminder.py --silent</code></li>
+                  <li>验证进程：<code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">tasklist | findstr python.exe</code></li>
+                  <li>检查崩溃日志：<code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">type crash.log</code></li>
+                </ol>
+              </div>
+
+              <div className="docs-card">
+                <h3 className="text-sm font-semibold mb-2">注意事项</h3>
+                <div className="space-y-2">
+                  <div className="flex gap-3">
+                    <span className="text-xs font-mono text-[var(--accent)] shrink-0">Python 版本</span>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">必须用 3.14，PATH 中的 python 可能是其他版本</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="text-xs font-mono text-[var(--accent)] shrink-0">crash.log</span>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">第一调试入口，改完代码先看这里</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="text-xs font-mono text-[var(--accent)] shrink-0">多实例</span>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">Win32 Named Mutex 防护，崩溃自动释放</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="text-xs font-mono text-[var(--accent)] shrink-0">UI 修改</span>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">状态机改动需同步 _BTN_CONFIG + _handle_* + 路由分支</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* ── 更新日志 ── */}
           <section className="mb-16" id="更新日志">
             <h2 className="text-2xl font-bold mb-1 font-display">更新日志</h2>
@@ -384,9 +498,22 @@ python rest_reminder.py`}
             <div className="space-y-6">
               <div className="changelog-entry latest pl-6">
                 <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-bold">v6.2.0</span>
+                  <span className="text-xs text-[var(--fg-dim)]">2026-07-06</span>
+                  <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">最新</span>
+                </div>
+                <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
+                  <li>修复 9 处 QFont CSS 字符串导致的主界面文字乱码（Georgia/Consolas 等字体失效回退）</li>
+                  <li>修复飞书日历 lark-cli 路径亡址（指向已删 .workbuddy/ 目录）</li>
+                  <li>AI 服务超时时自动 fallback 本地智慧语录（不再显示错误 toast，review 报告始终可用）</li>
+                  <li>官网新增 pricing / privacy / rules / terms 法律合规 4 个独立页面</li>
+                </ul>
+              </div>
+
+              <div className="changelog-entry pl-6">
+                <div className="flex items-center gap-2 mb-1">
                   <span className="text-sm font-bold">v6.1.9</span>
                   <span className="text-xs text-[var(--fg-dim)]">2026-07-04</span>
-                  <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">最新</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
                   <li>浮球 popup 飞书日程显示修复：root 重建 bug + 高度增大到 240</li>
@@ -752,8 +879,6 @@ python rest_reminder.py`}
           </nav>
         </div>
 
-        {/* 右侧 TOC */}
-        <DocsTOC items={tocItems} />
       </div>
     </main>
   );

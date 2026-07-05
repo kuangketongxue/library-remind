@@ -105,7 +105,7 @@ if os.path.isdir(_PRO_DIR) and _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v6.1.9'
+VERSION = 'v6.2.0'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=500_000, backupCount=7, encoding='utf-8')
@@ -533,8 +533,9 @@ class _InfoDragFilter(QWidget):
         t = event.type()
         if t == QEvent.MouseButtonPress:
             if event.button() == Qt.LeftButton:
-                child = self.popup.childAt(event.pos())
-                if isinstance(child, QPushButton):
+                widget_at = QApplication.widgetAt(event.globalPos())
+                log.info(f'[DRAG] Press widget={widget_at}, type={type(widget_at).__name__}')
+                if isinstance(widget_at, QPushButton):
                     return False
                 self.drag_pos = event.globalPos() - self.popup.frameGeometry().topLeft()
                 return True
@@ -544,6 +545,10 @@ class _InfoDragFilter(QWidget):
                 return True
         elif t == QEvent.MouseButtonRelease:
             if event.button() == Qt.LeftButton:
+                widget_at = QApplication.widgetAt(event.globalPos())
+                log.info(f'[DRAG] Release widget={widget_at}, type={type(widget_at).__name__}')
+                if isinstance(widget_at, QPushButton):
+                    return False
                 if self.drag_pos is not None:
                     self.popup._user_dragged = True
                 self.drag_pos = None
@@ -701,6 +706,10 @@ class FloatingBall(QWidget):
         # 如果已显示就隐藏，否则创建（首次）或显示
         if hasattr(mw, '_info_popup') and mw._info_popup.isVisible():
             mw._info_popup.hide()
+            # 停止 popup 刷新定时器
+            rt = getattr(mw._info_popup, '_refresh_timer', None)
+            if rt:
+                rt.stop()
             return
 
         popup = getattr(mw, '_info_popup', None)
@@ -764,7 +773,7 @@ class FloatingBall(QWidget):
 
             # 计时器（居中放大，一目了然）
             popup._timer_lbl = QLabel('')
-            popup._timer_lbl.setFont(QFont('Consolas, "SF Mono", monospace', 22, QFont.Bold))
+            popup._timer_lbl.setFont(QFont('Consolas', 22, QFont.Bold))
             popup._timer_lbl.setStyleSheet('color: #d4af37; background: rgba(212,168,83,0.10); border-radius: 8px; padding: 6px 12px;')
             popup._timer_lbl.setAlignment(Qt.AlignCenter)
             popup._timer_lbl.setFixedHeight(36)
@@ -820,6 +829,12 @@ class FloatingBall(QWidget):
         # ★ 每次显示都刷新文字 + 主题 + 日程
         self._apply_popup_theme(popup)
         self._update_popup_text()
+
+        # popup 可见时每秒刷新计时器文字
+        if not hasattr(popup, '_refresh_timer'):
+            popup._refresh_timer = QTimer(popup)
+            popup._refresh_timer.timeout.connect(self._update_popup_text)
+        popup._refresh_timer.start(1000)
 
         # 定位：如果用户曾手动拖动过卡片，记住位置；否则默认定位到浮球左边
         if not getattr(popup, '_user_dragged', False) or popup.pos() == QPoint(0, 0):
@@ -948,6 +963,7 @@ class FloatingBall(QWidget):
 
     def _on_popup_btn_clicked(self):
         """popup 按钮点击：开始/暂停切换"""
+        log.info('[POPUP-BTN] CLICKED signal received!')
         mw = self.main_window
         log.info(f'[popup-btn] clicked, state={mw.timer_state}, day_ended={mw._day_ended}')
         if mw.timer_state == 'running':
@@ -2928,8 +2944,22 @@ def _call_ai(prompt, model=None):
         except (requests.exceptions.RequestException, ValueError, json.JSONDecodeError) as e:
             errors.append((name, str(e)))
 
-    detail = ' | '.join(f'{n}: {m}' for n, m in errors)
-    return {'ok': False, 'error': f'所有 AI 服务不可用。{detail}', 'errors': errors}
+    # 所有上游都失败（超时/断墙/JSON异常）：fallback 本地智慧语录，而不是把错误甩到 UI
+    try:
+        local_quotes = quotes_store.get('', [])
+    except Exception:
+        local_quotes = []
+    if not local_quotes:
+        local_quotes = [q[0] if isinstance(q, (list, tuple)) else q for q in WISDOM_QUOTES]
+    pick = random.choice(local_quotes) if local_quotes else '耐心本身就是门槛'
+    log.warning(f'[AI] 所有 AI 服务不可用，已 fallback 本地智慧语录。详情: {" | ".join(f"{n}: {m}" for n, m in errors)}')
+    return {
+        'ok': True,
+        'content': f'{pick}',
+        'provider': '本地智慧语录（AI 上游暂时不可用）',
+        'fallback': True,
+        'upstream_errors': [f'{n}: {m}' for n, m in errors],
+    }
 
 
 def _test_ai_provider(url, model, api_key):
@@ -3609,7 +3639,7 @@ class RestReminderWidget(QWidget):
         top_layout.setContentsMargins(16, 8, 12, 8)
 
         title = QLabel('休息提醒')
-        title.setFont(QFont('Georgia, "Noto Serif SC", serif', 15, QFont.Bold))
+        title.setFont(QFont('Georgia', 15, QFont.Bold))
         title.setStyleSheet('color: #e8e4dc;')
         top_layout.addWidget(title)
 
@@ -3996,7 +4026,7 @@ class RestReminderWidget(QWidget):
 
         # 大标题
         h1 = QLabel('今日')
-        h1.setFont(QFont('Georgia, "Noto Serif SC", serif', 20, QFont.Bold))
+        h1.setFont(QFont('Georgia', 20, QFont.Bold))
         h1.setStyleSheet(f'color: {THEMES[self._current_theme]["text_primary"]};')
         layout.addWidget(h1)
         sub = QLabel(self._today_subtitle())
@@ -4392,7 +4422,7 @@ class RestReminderWidget(QWidget):
         layout.setSpacing(10)
 
         h1 = QLabel('AI 学习报告')
-        h1.setFont(QFont('Georgia, "Noto Serif SC", serif', 20, QFont.Bold))
+        h1.setFont(QFont('Georgia', 20, QFont.Bold))
         layout.addWidget(h1)
         sub = QLabel('智能分析你的学习节奏和专注模式')
         sub.setStyleSheet('color: #666; font-size: 13px;')
@@ -4522,7 +4552,7 @@ class RestReminderWidget(QWidget):
         # 标题行
         title_row = QHBoxLayout()
         h1 = QLabel('学习趋势')
-        h1.setFont(QFont('Georgia, "Noto Serif SC", serif', 20, QFont.Bold))
+        h1.setFont(QFont('Georgia', 20, QFont.Bold))
         title_row.addWidget(h1)
         title_row.addStretch()
         layout.addLayout(title_row)
@@ -5001,7 +5031,7 @@ class RestReminderWidget(QWidget):
         layout.setSpacing(12)
 
         h1 = QLabel('设置')
-        h1.setFont(QFont('Georgia, "Noto Serif SC", serif', 20, QFont.Bold))
+        h1.setFont(QFont('Georgia', 20, QFont.Bold))
         layout.addWidget(h1)
         sub = QLabel('管理计时器、提醒方式和基础设置')
         sub.setStyleSheet('color: #666; font-size: 13px;')
@@ -5959,7 +5989,7 @@ class RestReminderWidget(QWidget):
         brand_col = QVBoxLayout()
         brand_col.setSpacing(2)
         name_lbl = QLabel('休息提醒')
-        name_lbl.setFont(QFont('Georgia, "Noto Serif SC", serif', 22, QFont.Bold))
+        name_lbl.setFont(QFont('Georgia', 22, QFont.Bold))
         name_lbl.setStyleSheet('color: #e8e6e1; background: transparent;')
         brand_col.addWidget(name_lbl)
         tagline = QLabel('专注计时 · 休息提醒 · AI 学习分析')
@@ -6182,7 +6212,7 @@ class RestReminderWidget(QWidget):
         # ── 成就收藏 ──
         ach_title_row = QHBoxLayout()
         ach_h = QLabel('🏅 成就')
-        ach_h.setFont(QFont('Georgia, "Noto Serif SC", serif', 14, QFont.Bold))
+        ach_h.setFont(QFont('Georgia', 14, QFont.Bold))
         ach_title_row.addWidget(ach_h)
         ach_title_row.addStretch()
         ach_count = QLabel('')
@@ -6313,7 +6343,7 @@ class RestReminderWidget(QWidget):
                     layout.setSpacing(10)
 
                     title = QLabel(f'{a["icon"]} {a["name"]}')
-                    title.setFont(QFont('Georgia, "Noto Serif SC", serif', 16, QFont.Bold))
+                    title.setFont(QFont('Georgia', 16, QFont.Bold))
                     title.setStyleSheet('color: #e8e6e1; background: transparent;')
                     layout.addWidget(title)
 
