@@ -13,6 +13,9 @@ export default function Navbar() {
           <a href="/docs" className="text-[13px] text-white/70 hover:text-white transition-colors hidden md:block">
             文档
           </a>
+          <a href="/pricing" className="text-[13px] text-white/70 hover:text-white transition-colors hidden md:block">
+            定价
+          </a>
           <a href="https://github.com/kuangketongxue/library-remind"
             target="_blank"
             rel="noopener noreferrer"
