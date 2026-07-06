@@ -1,74 +1,87 @@
 "use client";
 
-import { motion } from "framer-motion";
-
-const fade = (delay = 0) => ({
-  initial: { opacity: 0, y: 16 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] as const },
-});
+import { useState, useEffect, useRef } from "react";
 
 export default function Hero() {
+  const [videoReady, setVideoReady] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    // 如果视频已经在缓冲（cached），readyState >= 2
+    if (v.readyState >= 2) {
+      setVideoReady(true);
+      return;
+    }
+    const onCanPlay = () => setVideoReady(true);
+    const onError = () => setVideoReady(false);
+    v.addEventListener("canplay", onCanPlay);
+    v.addEventListener("error", onError);
+    return () => {
+      v.removeEventListener("canplay", onCanPlay);
+      v.removeEventListener("error", onError);
+    };
+  }, []);
+
   return (
     <section className="relative min-h-[92vh] flex flex-col items-center justify-center px-6 pt-24 pb-16 text-center overflow-hidden">
-      {/* Promo video — auto-play muted loop, fallback to static poster on error/loading */}
+      {/* Static poster — always visible, instant load */}
+      <img
+        src="/hero-banner.png"
+        alt=""
+        aria-hidden="true"
+        className="absolute inset-0 w-full h-full object-cover -z-10"
+      />
+
+      {/* Video overlay — fades in on top of poster when ready */}
       <video
+        ref={videoRef}
         autoPlay
         muted
         loop
         playsInline
         preload="auto"
-        poster="/hero-banner.png"
-        onError={(e) => {
-          // 视频加载失败或解码错误 → 隐藏 video，让 CSS fallback 背景接管
-          e.currentTarget.style.display = "none";
-        }}
-        className="absolute inset-0 w-full h-full object-cover -z-10"
+        className={`absolute inset-0 w-full h-full object-cover -z-[9] transition-opacity duration-1000 ${
+          videoReady ? "opacity-100" : "opacity-0"
+        }`}
       >
         <source src="/promo_video.mp4" type="video/mp4" />
-        {/* 不支持 mp4 的极小比例浏览器（IE 已死）自动降级到 poster */}
       </video>
-      {/* Golden radial pulse fallback — 视频加载失败或迟迟未到时不至于黑屏 */}
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 -z-[6] pointer-events-none"
-        style={{
-          background:
-            "radial-gradient(circle at 50% 30%, rgba(212,168,83,0.10) 0%, transparent 55%), radial-gradient(circle at 50% 70%, rgba(212,168,83,0.06) 0%, transparent 60%)",
-        }}
-      />
-      {/* Dark overlay — 50% 保证文字可读 + 视频内容可见 */}
+
+      {/* Dark overlay — 50% ensures text readability */}
       <div className="absolute inset-0 bg-black/50 -z-[5]" />
 
       {/* Subtle top glow */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] rounded-full bg-[radial-gradient(circle,rgba(245,158,11,0.05)_0%,transparent_60%)] pointer-events-none" />
 
       <div className="relative z-10 max-w-3xl mx-auto">
-        <motion.div {...fade(0)} className="inline-flex items-center gap-2 mb-5">
+        <div className="inline-flex items-center gap-2 mb-5">
           <span className="text-[11px] font-semibold text-[var(--accent)] bg-[var(--accent-soft)] px-3 py-1 rounded-full border border-[var(--border-accent)]">
             开源免费 · MIT 协议
           </span>
-          <span className="text-xs text-white/70">v6.2.0</span>
-        </motion.div>
+          <span className="text-xs text-white/70">v6.2.6</span>
+        </div>
 
-        <motion.h1
-          {...fade(0.1)}
-          className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-[-0.03em] leading-[1.08] mb-5 font-display"
-          style={{ color: '#fff', textShadow: '0 2px 12px rgba(0,0,0,0.5)' }}
+        <h1
+          className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-[-0.03em] leading-[1.08] mb-5 font-display animate-[fadeInUp_0.6s_ease-out]"
+          style={{ color: "#fff", textShadow: "0 2px 12px rgba(0,0,0,0.5)" }}
         >
-          久坐伤眼？<br />
-          <span style={{ color: '#d4a853', textShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>自动提醒你休息</span>
-        </motion.h1>
+          久坐伤眼？
+          <br />
+          <span style={{ color: "#d4a853", textShadow: "0 2px 8px rgba(0,0,0,0.4)" }}>
+            自动提醒你休息
+          </span>
+        </h1>
 
-        <motion.p
-          {...fade(0.2)}
-          className="text-base md:text-lg max-w-xl mx-auto leading-relaxed mb-8"
-          style={{ color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 6px rgba(0,0,0,0.4)' }}
+        <p
+          className="text-base md:text-lg max-w-xl mx-auto leading-relaxed mb-8 animate-[fadeInUp_0.6s_ease-out_0.1s_both]"
+          style={{ color: "rgba(255,255,255,0.85)", textShadow: "0 1px 6px rgba(0,0,0,0.4)" }}
         >
           48MB 轻量桌面挂件，60 分钟专注循环。右下角浮球实时倒计时，到点弹出护眼视频，AI 自动生成学习报告。
-        </motion.p>
+        </p>
 
-        <motion.div {...fade(0.3)} className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-12">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-12 animate-[fadeInUp_0.6s_ease-out_0.2s_both]">
           <a href="#download" className="btn-primary px-8 py-3.5 text-sm inline-flex items-center justify-center gap-2">
             ↓ 免费下载
           </a>
@@ -80,33 +93,25 @@ export default function Hero() {
           >
             GitHub 开源 →
           </a>
-        </motion.div>
+        </div>
 
-        <motion.div {...fade(0.4)} className="flex items-center justify-center gap-8 text-left">
+        <div className="flex items-center justify-center gap-8 text-left animate-[fadeInUp_0.6s_ease-out_0.3s_both]">
           <div>
             <div className="text-xl font-bold font-display text-[var(--accent)]">48MB</div>
-            <div className="text-xs text-[var(--fg-dim)] mt-0.5">轻量安装</div>
+            <div className="text-xs text-white/60 mt-0.5">轻量安装</div>
           </div>
-          <div className="w-px h-8 bg-[var(--border)]" />
+          <div className="w-px h-8 bg-white/20" />
           <div>
             <div className="text-xl font-bold font-display text-[var(--accent)]">60min</div>
-            <div className="text-xs text-[var(--fg-dim)] mt-0.5">自动循环</div>
+            <div className="text-xs text-white/60 mt-0.5">自动循环</div>
           </div>
-          <div className="w-px h-8 bg-[var(--border)]" />
+          <div className="w-px h-8 bg-white/20" />
           <div>
             <div className="text-xl font-bold font-display text-[var(--accent)]">MIT</div>
-            <div className="text-xs text-[var(--fg-dim)] mt-0.5">开源协议</div>
+            <div className="text-xs text-white/60 mt-0.5">开源协议</div>
           </div>
-        </motion.div>
-      </div>
-
-      {/* Hero screenshot */}
-      <motion.div {...fade(0.35)} className="relative z-10 mt-16 w-full max-w-4xl mx-auto">
-        <div className="relative rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--surface)] shadow-2xl"
-             style={{ boxShadow: '0 25px 60px rgba(0,0,0,0.35)' }}>
-          <img src="/hero-banner.png" alt="Rest Reminder" className="w-full h-auto block" />
         </div>
-      </motion.div>
+      </div>
     </section>
   );
 }
