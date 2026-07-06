@@ -20,7 +20,26 @@ jobs:
         run: |
           cd rest-reminder-site
           npm ci
-          npx next build
+          npm run build  # 自动执行 fix-routes.js
+
+      - name: Verify build output
+        run: |
+          echo "=== 验证构建产物 ==="
+          # 检查所有页面的 index.html 是否存在
+          for page in contact docs pricing privacy terms rules; do
+            if [ ! -f "rest-reminder-site/out/$page/index.html" ]; then
+              echo "❌ 缺少 rest-reminder-site/out/$page/index.html"
+              exit 1
+            fi
+            echo "✓ $page/index.html"
+          done
+          # 检查首页
+          if [ ! -f "rest-reminder-site/out/index.html" ]; then
+            echo "❌ 缺少 rest-reminder-site/out/index.html"
+            exit 1
+          fi
+          echo "✓ index.html"
+          echo "=== 验证通过 ==="
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/pages-action@v1
@@ -29,3 +48,25 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           projectName: crazy-rest-reminder
           directory: rest-reminder-site/out
+
+      - name: Verify deployment
+        run: |
+          echo "=== 验证部署 ==="
+          sleep 10  # 等待 Cloudflare 部署生效
+          # 测试所有关键页面
+          for page in "" contact docs pricing privacy terms rules; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "https://crazy-rest-reminder.pages.dev/$page")
+            if [ "$code" != "200" ]; then
+              echo "❌ /$page 返回 $code"
+              exit 1
+            fi
+            echo "✓ /$page → $code"
+          done
+          # 测试 AI 代理
+          code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "https://crazy-rest-reminder.pages.dev/api/ai-proxy" -H "Content-Type: application/json" -d '{"model":"auto","messages":[{"role":"user","content":"test"}]}')
+          if [ "$code" != "200" ]; then
+            echo "❌ /api/ai-proxy 返回 $code"
+            exit 1
+          fi
+          echo "✓ /api/ai-proxy → $code"
+          echo "=== 部署验证通过 ==="
