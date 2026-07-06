@@ -93,7 +93,7 @@ pyinstaller RestReminder.spec
 - **Cloudflare Pages Functions 部署**：修改 `functions/` 下代码后必须 `wrangler pages deploy` 重新部署，GitHub Actions 只部署静态文件。部署后立即 curl 测试，405/404 则等 30 秒重新部署（2026-07-06）
 - **Next.js 静态导出路由问题**：`output: 'export'` 生成 `contact.html`，但 Cloudflare Pages 需要 `contact/index.html`。构建后必须运行 `fix-routes.js` 脚本复制文件到正确位置（2026-07-06）
 - **官网部署后必须验证**：部署后立即 curl 测试所有关键页面（`/` `/contact` `/docs` `/pricing` `/privacy` `/terms` `/rules`）和 AI 代理（`/api/ai-proxy`），任何 404/405 立即重新部署（2026-07-06）
-- **Cloudflare Pages 部署必须用 `wrangler pages deploy .`**：用 `pages-action` 只部署静态文件，Worker 会丢失。必须从项目根目录运行 `wrangler pages deploy .` 确保 Functions 一起部署（2026-07-06）
+- **Cloudflare Pages 部署必须用 `wrangler pages deploy .`**：用 `pages-action` 只部署静态文件，Worker 会丢失。必须从项目根目录运行 `wrangler pages deploy .` 确保 Functions 一起部署。不能用 `wrangler pages deploy out`，否则 Worker 丢失（2026-07-06）
 
 ## 禁止事项
 - 不创建庆祝/确认类临时文件
