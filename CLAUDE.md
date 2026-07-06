@@ -91,7 +91,7 @@ pyinstaller RestReminder.spec
 - **跨项目 learnings 不混放**：不同项目的 .learnings/ 必须分别记录到各自目录，不能跨项目写入（2026-07-06）
 - **发布时必须同步 VERSION 常量**：git tag / CHANGELOG / VERSION 三者必须一致，VERSION 是运行时显示的版本（2026-07-06）
 - **Windows 自启动路径必须加引号**：注册表 `HKCU\...\Run` 的路径如果含空格/中文，必须用双引号包裹，否则 Windows 解析失败。优先调用 app 内置 `set_autostart()`（2026-07-06）
-- **Cloudflare Pages 部署**：`cd rest-reminder-site && npm run build && wrangler pages deploy . --project-name=crazy-rest-reminder --branch=main`。必须用 `wrangler pages deploy .`（不能用 `pages-action` 或 `wrangler pages deploy out`，否则 Worker 丢失）。构建后 `fix-routes.js` 自动修复路由。部署后 curl 测试所有页面 + AI 代理（2026-07-06）
+- **Cloudflare Pages 部署**：`cd rest-reminder-site && npm run build && wrangler pages deploy out --project-name=crazy-rest-reminder --branch=main`。必须用 `wrangler pages deploy out`（JS/CSS 在 out/ 里）。构建后 `fix-routes.js` 自动修复路由。部署后 curl 测试所有页面 + AI 代理（2026-07-06）
 
 ## 禁止事项
 - 不创建庆祝/确认类临时文件
