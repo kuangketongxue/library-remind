@@ -565,9 +565,23 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
             <div className="space-y-6">
               <div className="changelog-entry latest pl-6">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-bold">v6.2.5</span>
+                  <span className="text-sm font-bold">v6.2.6</span>
                   <span className="text-xs text-[var(--fg-dim)]">2026-07-06</span>
                   <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">最新</span>
+                </div>
+                <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
+                  <li>公告弹窗文字颜色修复：CSS 变量→显式亮色，暗背景上清晰可读</li>
+                  <li>浏览器图标修复：favicon 换为 512x512 logo，解决黑球问题</li>
+                  <li>Contact 页面 framer-motion SSR 修复：内容不再透明不可见</li>
+                  <li>Contact 页面使用 Gmail/WeChat 官方品牌图标</li>
+                  <li>新增官网公告弹窗：首次访问弹出更新通知</li>
+                </ul>
+              </div>
+
+              <div className="changelog-entry pl-6">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-bold">v6.2.5</span>
+                  <span className="text-xs text-[var(--fg-dim)]">2026-07-06</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
                   <li>AI 报告降级修复：服务不可用时显示本地数据摘要（学习时长/轮次/复盘）而非随机金句</li>
