@@ -17,7 +17,7 @@ RestReminder.spec             — PyInstaller 配置（含 hiddenimports=['stora
 
 ## AI 学习分析
 - **无需付费**：AI 报告直接可用
-- **架构**：任意 OpenAI 兼容 API + Cloudflare Worker 代理（`ai-proxy-worker/`）
+- **架构**：任意 OpenAI 兼容 API + Cloudflare Worker 代理（`rest-reminder-site/functions/api/ai-proxy.js`）
 - **provider 模型**：`ai_providers` 列表，priority 排序，fallback 链式尝试
 - **TTS 语音**：StepFun `stepaudio-2.5-tts`（`api.stepfun.com/v1/audio/speech`），异步线程播放
 - **功能**：日报/周报/月报/季报/年报
@@ -89,6 +89,9 @@ pyinstaller RestReminder.spec
 - **Next.js 预渲染不能传 onClick**：`"use client"` 页面的交互组件如果预渲染报错，提取为独立 client component 文件（2026-07-06）
 - **跨项目 learnings 不混放**：不同项目的 .learnings/ 必须分别记录到各自目录，不能跨项目写入（2026-07-06）
 - **发布时必须同步 VERSION 常量**：git tag / CHANGELOG / VERSION 三者必须一致，VERSION 是运行时显示的版本（2026-07-06）
+- **Windows 自启动路径必须加引号**：注册表 `HKCU\...\Run` 的路径如果含空格/中文，必须用双引号包裹，否则 Windows 解析失败。优先调用 app 内置 `set_autostart()`（2026-07-06）
+- **Cloudflare Pages Functions 部署**：修改 `functions/` 下代码后必须 `wrangler pages deploy` 重新部署，GitHub Actions 只部署静态文件。部署后立即 curl 测试，405/404 则等 30 秒重新部署（2026-07-06）
+- **Next.js 静态导出路由问题**：`output: 'export'` 生成 `contact.html`，但 Cloudflare Pages 需要 `contact/index.html`。构建后必须运行 `fix-routes.js` 脚本复制文件到正确位置（2026-07-06）
 
 ## 禁止事项
 - 不创建庆祝/确认类临时文件
