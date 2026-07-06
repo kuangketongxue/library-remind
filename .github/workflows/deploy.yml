@@ -16,6 +16,9 @@ jobs:
         with:
           node-version: 20
 
+      - name: Install wrangler
+        run: npm install -g wrangler
+
       - name: Build website
         run: |
           cd rest-reminder-site
@@ -25,7 +28,6 @@ jobs:
       - name: Verify build output
         run: |
           echo "=== 验证构建产物 ==="
-          # 检查所有页面的 index.html 是否存在
           for page in contact docs pricing privacy terms rules; do
             if [ ! -f "rest-reminder-site/out/$page/index.html" ]; then
               echo "❌ 缺少 rest-reminder-site/out/$page/index.html"
@@ -33,7 +35,6 @@ jobs:
             fi
             echo "✓ $page/index.html"
           done
-          # 检查首页
           if [ ! -f "rest-reminder-site/out/index.html" ]; then
             echo "❌ 缺少 rest-reminder-site/out/index.html"
             exit 1
@@ -42,18 +43,16 @@ jobs:
           echo "=== 验证通过 ==="
 
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/pages-action@v1
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: crazy-rest-reminder
-          directory: rest-reminder-site/out
+        run: |
+          cd rest-reminder-site
+          wrangler pages deploy . --project-name=crazy-rest-reminder --branch=main
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
       - name: Verify deployment
         run: |
           echo "=== 验证部署 ==="
-          sleep 10  # 等待 Cloudflare 部署生效
-          # 测试所有关键页面
+          sleep 15  # 等待 Cloudflare 部署生效
           for page in "" contact docs pricing privacy terms rules; do
             code=$(curl -s -o /dev/null -w "%{http_code}" "https://crazy-rest-reminder.pages.dev/$page")
             if [ "$code" != "200" ]; then
@@ -62,7 +61,6 @@ jobs:
             fi
             echo "✓ /$page → $code"
           done
-          # 测试 AI 代理
           code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "https://crazy-rest-reminder.pages.dev/api/ai-proxy" -H "Content-Type: application/json" -d '{"model":"auto","messages":[{"role":"user","content":"test"}]}')
           if [ "$code" != "200" ]; then
             echo "❌ /api/ai-proxy 返回 $code"
