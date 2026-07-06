@@ -87,6 +87,7 @@ pyinstaller RestReminder.spec
 - **改 CSS 背景色必须排查硬编码颜色**：改 `--bg` 变量后，用 grep 扫 `rgba(255,255,255` / `bg-white` / 旧 surface 色值，逐一确认新背景上对比度（2026-07-06）
 - **深色背景文字用显式白色**：navbar/dark overlay/CTA banner 的文字必须 `text-white`，不依赖 `var(--fg)`（2026-07-06）
 - **Next.js 预渲染不能传 onClick**：`"use client"` 页面的交互组件如果预渲染报错，提取为独立 client component 文件（2026-07-06）
+- **framer-motion 在 Next.js 静态导出时 SSR 动画不执行**：`initial={{ opacity: 0 }}` 在静态 HTML 中保持透明，页面内容不可见。改用 CSS `@keyframes` + `animation` 替代（2026-07-06）
 - **跨项目 learnings 不混放**：不同项目的 .learnings/ 必须分别记录到各自目录，不能跨项目写入（2026-07-06）
 - **发布时必须同步 VERSION 常量**：git tag / CHANGELOG / VERSION 三者必须一致，VERSION 是运行时显示的版本（2026-07-06）
 - **Windows 自启动路径必须加引号**：注册表 `HKCU\...\Run` 的路径如果含空格/中文，必须用双引号包裹，否则 Windows 解析失败。优先调用 app 内置 `set_autostart()`（2026-07-06）
