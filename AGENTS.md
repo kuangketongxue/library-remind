@@ -41,13 +41,18 @@ CHANGELOG.md            — 更新日志
 ## 运行和验证
 ```bash
 # 启动主程序（必须用 Python 3.14，vendor 内 .pyd 按其 ABI 编译）
-C:\Python314\python.exe rest_reminder.py --silent
+# 自动启动/后台运行用 pythonw.exe（无控制台窗口）
+C:\Python314\pythonw.exe rest_reminder.py --silent
+
+# 前台调试用 python.exe
+C:\Python314\python.exe rest_reminder.py
 
 # 验证进程
-tasklist | findstr "python.exe"
+tasklist | findstr "python"
 
 # 杀掉进程
 taskkill /F /IM python.exe
+taskkill /F /IM pythonw.exe
 ```
 
 ## 关键踩坑
@@ -56,7 +61,7 @@ taskkill /F /IM python.exe
 - **`python` 命令陷阱**：PATH 里 `python` 可能解析到其他版本，启动会报 `ImportError: cannot import name 'sip'`，必须用 `C:\Python314\python.exe`
 - **_md_to_html 是模块级函数**：不在任何类中，`RestReminderWidget` 和 `FloatingBall` 都可直接调用
 - **Edit 工具中文 TSX**：含中文的 TSX 文件 Edit 静默失败 → 改用 Write 工具全量重写
-- **CF Pages 部署**：`npx wrangler pages deploy out --project-name=crazy-rest-reminder`（需要 `CLOUDFLARE_API_TOKEN` 环境变量；不是 `wrangler deploy`；不是 CloudStudio）
+- **CF Pages 部署**：`cd rest-reminder-site && npm run build && wrangler pages deploy out --project-name=crazy-rest-reminder --branch=main`（含 Functions 部署；需要 `CLOUDFLARE_API_TOKEN` 环境变量；GitHub Actions 只部署静态文件，Functions 需手动 wrangler 部署；构建后自动运行 fix-routes.js 修复 Cloudflare Pages 路由）
 - **浮球 popup 空白**：`_show_info_popup()` 默认文字刷新在 `if popup is None:` 块内，关闭后再点击浮球打开时跳过刷新。默认文字 + `_update_popup_text()` 必须移到块外，每次显示都执行
 - **Next.js 构建缓存**：`.next` 缓存导致 Turbopack 报错时行号与实际文件不符 → `rm -rf .next out node_modules/.cache` 清缓存重建
 - **git push 认证**：WARP 环境下用 `git config credential.helper store` + `~/.git-credentials` 文件
