@@ -7,13 +7,11 @@ export default function ContactPage() {
         <h1 className="text-3xl font-extrabold tracking-tight mb-2 font-display">联系我们</h1>
         <p className="text-[var(--fg-dim)] mb-12">无论你是用户、开发者还是合作伙伴，我们都欢迎你的来信。</p>
 
-        {/* 邮箱 */}
+        {/* 邮箱 — Gmail 图标 */}
         <div className="docs-card p-8 mb-8 animate-[fadeInUp_0.5s_ease-out_0.1s_both]">
           <div className="flex items-center gap-4 mb-6">
             <div className="w-12 h-12 rounded-xl bg-[var(--accent-soft)] flex items-center justify-center">
-              <svg className="w-6 h-6 text-[var(--accent)]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-              </svg>
+              <img src="/gmail.svg" alt="Gmail" className="w-6 h-6" />
             </div>
             <div>
               <h3 className="text-lg font-bold">邮箱</h3>
@@ -31,11 +29,11 @@ export default function ContactPage() {
           </a>
         </div>
 
-        {/* 微信 */}
+        {/* 微信 — WeChat 图标 */}
         <div className="docs-card p-8 mb-8 animate-[fadeInUp_0.5s_ease-out_0.2s_both]">
           <div className="flex items-center gap-4 mb-6">
             <div className="w-12 h-12 rounded-xl bg-[var(--accent-soft)] flex items-center justify-center">
-              <span className="text-xl">💬</span>
+              <img src="/wechat.svg" alt="微信" className="w-6 h-6" />
             </div>
             <div>
               <h3 className="text-lg font-bold">微信</h3>
@@ -48,7 +46,7 @@ export default function ContactPage() {
           </div>
         </div>
 
-        {/* GitHub */}
+        {/* GitHub — 保持现有真实图标 */}
         <div className="docs-card p-8 mb-8 animate-[fadeInUp_0.5s_ease-out_0.3s_both]">
           <div className="flex items-center gap-4 mb-6">
             <div className="w-12 h-12 rounded-xl bg-[var(--accent-soft)] flex items-center justify-center">
