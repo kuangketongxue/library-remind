@@ -1,27 +1,14 @@
 "use client";
 
-import { motion } from "framer-motion";
-
 export default function ContactPage() {
   return (
     <main className="flex-1">
-      <div className="max-w-3xl mx-auto px-6 py-20">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <h1 className="text-3xl font-extrabold tracking-tight mb-2 font-display">联系我们</h1>
-          <p className="text-[var(--fg-dim)] mb-12">无论你是用户、开发者还是合作伙伴，我们都欢迎你的来信。</p>
-        </motion.div>
+      <div className="max-w-3xl mx-auto px-6 py-20 animate-[fadeInUp_0.5s_ease-out]">
+        <h1 className="text-3xl font-extrabold tracking-tight mb-2 font-display">联系我们</h1>
+        <p className="text-[var(--fg-dim)] mb-12">无论你是用户、开发者还是合作伙伴，我们都欢迎你的来信。</p>
 
-        {/* 邮箱 — 最重要的联系方式 */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-          className="docs-card p-8 mb-8"
-        >
+        {/* 邮箱 */}
+        <div className="docs-card p-8 mb-8 animate-[fadeInUp_0.5s_ease-out_0.1s_both]">
           <div className="flex items-center gap-4 mb-6">
             <div className="w-12 h-12 rounded-xl bg-[var(--accent-soft)] flex items-center justify-center">
               <svg className="w-6 h-6 text-[var(--accent)]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
@@ -42,15 +29,10 @@ export default function ContactPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
             </svg>
           </a>
-        </motion.div>
+        </div>
 
-        {/* 微信 — 国内用户首选 */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="docs-card p-8 mb-8"
-        >
+        {/* 微信 */}
+        <div className="docs-card p-8 mb-8 animate-[fadeInUp_0.5s_ease-out_0.2s_both]">
           <div className="flex items-center gap-4 mb-6">
             <div className="w-12 h-12 rounded-xl bg-[var(--accent-soft)] flex items-center justify-center">
               <span className="text-xl">💬</span>
@@ -64,15 +46,10 @@ export default function ContactPage() {
             <img src="/wechat-pay.jpg" alt="微信二维码" className="w-32 h-32 rounded-lg border border-[var(--border)]" />
             <p className="text-sm text-[var(--fg-dim)]">添加后可以直接发消息咨询，回复更快</p>
           </div>
-        </motion.div>
+        </div>
 
         {/* GitHub */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.3 }}
-          className="docs-card p-8 mb-8"
-        >
+        <div className="docs-card p-8 mb-8 animate-[fadeInUp_0.5s_ease-out_0.3s_both]">
           <div className="flex items-center gap-4 mb-6">
             <div className="w-12 h-12 rounded-xl bg-[var(--accent-soft)] flex items-center justify-center">
               <svg className="w-6 h-6 text-[var(--accent)]" fill="currentColor" viewBox="0 0 24 24">
@@ -110,17 +87,12 @@ export default function ContactPage() {
               🤝 商务合作
             </a>
           </div>
-        </motion.div>
+        </div>
 
         {/* 回复时间 */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.4 }}
-          className="text-center text-sm text-[var(--fg-muted)] mt-12"
-        >
+        <div className="text-center text-sm text-[var(--fg-muted)] mt-12 animate-[fadeInUp_0.5s_ease-out_0.4s_both]">
           <p>通常 24 小时内回复 · 紧急问题请走 GitHub Issues</p>
-        </motion.div>
+        </div>
       </div>
     </main>
   );
