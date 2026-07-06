@@ -565,9 +565,47 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
             <div className="space-y-6">
               <div className="changelog-entry latest pl-6">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-bold">v6.2.2</span>
+                  <span className="text-sm font-bold">v6.2.5</span>
                   <span className="text-xs text-[var(--fg-dim)]">2026-07-06</span>
                   <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">最新</span>
+                </div>
+                <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
+                  <li>AI 报告降级修复：服务不可用时显示本地数据摘要（学习时长/轮次/复盘）而非随机金句</li>
+                  <li>Cloudflare Worker 重部署：AI 代理恢复正常</li>
+                  <li>关终端不再退出应用：改用 pythonw.exe 后台启动</li>
+                  <li>官网 Contact 等页面 404 修复：添加 fix-routes.js 构建后脚本</li>
+                  <li>CI/CD 部署验证：自动测试所有页面和 AI 代理</li>
+                </ul>
+              </div>
+
+              <div className="changelog-entry pl-6">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-bold">v6.2.4</span>
+                  <span className="text-xs text-[var(--fg-dim)]">2026-07-06</span>
+                </div>
+                <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
+                  <li>AI 报告反幻觉修复：禁止编造老师姓名、学校、科目细节等虚构内容</li>
+                  <li>所有结论必须引用具体数字</li>
+                </ul>
+              </div>
+
+              <div className="changelog-entry pl-6">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-bold">v6.2.3</span>
+                  <span className="text-xs text-[var(--fg-dim)]">2026-07-06</span>
+                </div>
+                <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
+                  <li>新增 /contact 联系页面：邮箱 + 微信二维码 + GitHub Issue 模板</li>
+                  <li>新增 bug_report / feature_request / partnership 3 个 Issue 模板</li>
+                  <li>文档页新增产品简介段 + 4 个数据卡片</li>
+                  <li>导航栏新增「联系我们」链接</li>
+                </ul>
+              </div>
+
+              <div className="changelog-entry pl-6">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-bold">v6.2.2</span>
+                  <span className="text-xs text-[var(--fg-dim)]">2026-07-06</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
                   <li>官网全面改版：暖奶油色背景 + WorkBuddy 风格 Footer + 三栏文档布局</li>
