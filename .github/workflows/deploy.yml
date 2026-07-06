@@ -45,6 +45,8 @@ jobs:
       - name: Deploy to Cloudflare Pages
         run: |
           cd rest-reminder-site
+          # 必须从项目根目录部署，确保 Functions 一起部署
+          # 不能用 wrangler pages deploy out，否则 Worker 会丢失
           wrangler pages deploy . --project-name=crazy-rest-reminder --branch=main
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
