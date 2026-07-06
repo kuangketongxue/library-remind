@@ -83,6 +83,7 @@ pyinstaller RestReminder.spec
 - **QFont 不接受 CSS 逗号分隔**：`QFont('Georgia, "Noto Serif SC", serif')` 整个字符串被当作一个字体名 → 匹配失败 → moji-bake。只传单一主字体名，fallback 留给 Qt 字体链接表（2026-07-06）
 - **PyInstaller frozen 模式数据文件路径**：`os.path.dirname(__file__)` 在 frozen 模式下指向 temp 解压目录，不是 `sys._MEIPASS`。数据文件用 `sys._MEIPASS`，脚本用 `__file__`（2026-07-06）
 - **Hero 背景视频不要 opacity-0 等加载**：弱网/WARP 下 onCanPlay 不触发 → 黑屏。直接设可见 + poster 占位 + onError 降级（2026-07-06）
+- **HTML5 视频 autoplay 被浏览器阻止**：即使是 muted 视频，Chrome/Safari 也会阻止自动播放。必须用 JS `v.play()` + try/catch 强制播放，用户首次点击页面解锁（2026-07-06）
 - **AI 调用必须有本地 fallback**：所有外部 API 超时时返回降级内容（本地数据/缓存），不要把错误甩到 UI（2026-07-06）
 - **改 CSS 背景色必须排查硬编码颜色**：改 `--bg` 变量后，用 grep 扫 `rgba(255,255,255` / `bg-white` / 旧 surface 色值，逐一确认新背景上对比度（2026-07-06）
 - **深色背景文字用显式白色**：navbar/dark overlay/CTA banner 的文字必须 `text-white`，不依赖 `var(--fg)`（2026-07-06）
