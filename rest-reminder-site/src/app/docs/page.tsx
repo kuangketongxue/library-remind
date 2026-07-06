@@ -570,11 +570,11 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                   <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">最新</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                  <li>公告弹窗文字颜色修复：CSS 变量→显式亮色，暗背景上清晰可读</li>
-                  <li>浏览器图标修复：favicon 换为 512x512 logo，解决黑球问题</li>
+                  <li>浏览器图标修复：favicon 换为 256x256 cute_icon.png</li>
                   <li>Contact 页面 framer-motion SSR 修复：内容不再透明不可见</li>
                   <li>Contact 页面使用 Gmail/WeChat 官方品牌图标</li>
-                  <li>新增官网公告弹窗：首次访问弹出更新通知</li>
+                  <li>Hero 背景视频修复：静态图兜底 + 视频立即 autoPlay</li>
+                  <li>公告弹窗每次访问弹出，文字颜色修复</li>
                 </ul>
               </div>
 

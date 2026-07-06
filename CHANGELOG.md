@@ -2,21 +2,17 @@
 
 所有重要版本更新记录。
 
-## v6.2.6 (2026-07-06) — 官网界面优化 + 图标修复
+## v6.2.6 (2026-07-06) — 官网全面修复
 
 ### 🐛 Bug 修复
-- **浏览器标签页图标**：favicon 从 512x512 大 logo 换回 256x256 cute_icon.png（37KB），修复浏览器显示通用文档图标问题
-
-### 🎨 界面优化
-- **公告弹窗文字可读性**：弹窗文字颜色从 CSS 变量（暗背景上太暗）改为显式亮色（白色标题、#ccc 正文、#bbb 列表）
-- **浏览器标签页图标**：favicon 从 128x128 小图换为 512x512 logo，解决浏览器显示黑球问题
-
-### 🐛 Bug 修复
-- **Contact 页面内容不可见**：framer-motion `initial={{ opacity: 0 }}` 在 Next.js 静态导出时不执行动画，内容永远透明。改用 CSS `@keyframes fadeInUp`
+- **浏览器标签页图标**：favicon 换为 256x256 cute_icon.png（37KB），修复显示通用文档图标问题
+- **Contact 页面内容不可见**：framer-motion `initial={{ opacity: 0 }}` 在 Next.js 静态导出时不执行动画。改用 CSS `@keyframes fadeInUp`
 - **Contact 页面图标**：邮箱和微信图标从通用 SVG/emoji 改为官方品牌图标（Gmail 红色信封 M、WeChat 绿色对话气泡）
+- **Hero 背景视频不播放**：视频 10MB 加载慢导致背景空白。改为 hero-banner.png 静态兜底 + 视频立即 autoPlay
+- **公告弹窗文字看不清**：CSS 变量在暗背景上太暗。改为显式亮色（白色标题、#ccc 正文）
 
 ### 📢 新功能
-- **官网公告弹窗**：首次访问自动弹出公告，显示 v6.2.5 更新内容。localStorage 记住关闭状态，不重复弹出
+- **官网公告弹窗**：每次访问自动弹出公告，显示近期重要更新
 
 ## v6.2.5 (2026-07-06) — AI 报告降级修复 + Worker 重部署 + 官网修复
 
