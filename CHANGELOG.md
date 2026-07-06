@@ -2,6 +2,13 @@
 
 所有重要版本更新记录。
 
+## v6.2.5 (2026-07-06) — AI 报告降级修复 + Worker 重部署
+
+### 🐛 Bug 修复
+- **AI 报告显示金句而非数据**：`_call_ai()` 所有上游失败时 fallback 返回 `{'ok': True}` + 随机金句，导致 `generate_report()` 误判成功直接显示金句。修复为返回 `{'ok': False}`，让报告走本地数据摘要路径（学习时长、轮次、复盘记录等）
+- **Cloudflare Worker 未部署**：`/api/ai-proxy` 返回 404，AI 服务完全不可用。重新部署 Cloudflare Pages Functions 恢复 AI 代理
+- **关终端导致应用退出**：Python 进程前台启动，终端关闭时被杀。改用 `Start-Process -WindowStyle Hidden` 完全脱离终端
+
 ## v6.2.4 (2026-07-06) — AI 报告反幻觉修复
 
 ### 🐛 Bug 修复

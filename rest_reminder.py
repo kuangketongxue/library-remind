@@ -105,7 +105,7 @@ if os.path.isdir(_PRO_DIR) and _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v6.2.4'
+VERSION = 'v6.2.5'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=500_000, backupCount=7, encoding='utf-8')
@@ -2944,21 +2944,12 @@ def _call_ai(prompt, model=None):
         except (requests.exceptions.RequestException, ValueError, json.JSONDecodeError) as e:
             errors.append((name, str(e)))
 
-    # 所有上游都失败（超时/断墙/JSON异常）：fallback 本地智慧语录，而不是把错误甩到 UI
-    try:
-        local_quotes = quotes_store.get('', [])
-    except Exception:
-        local_quotes = []
-    if not local_quotes:
-        local_quotes = [q[0] if isinstance(q, (list, tuple)) else q for q in WISDOM_QUOTES]
-    pick = random.choice(local_quotes) if local_quotes else '耐心本身就是门槛'
-    log.warning(f'[AI] 所有 AI 服务不可用，已 fallback 本地智慧语录。详情: {" | ".join(f"{n}: {m}" for n, m in errors)}')
+    # 所有上游都失败（超时/断墙/JSON异常）：返回失败让 generate_report 走本地降级报告
+    log.warning(f'[AI] 所有 AI 服务不可用。详情: {" | ".join(f"{n}: {m}" for n, m in errors)}')
     return {
-        'ok': True,
-        'content': f'{pick}',
-        'provider': '本地智慧语录（AI 上游暂时不可用）',
-        'fallback': True,
-        'upstream_errors': [f'{n}: {m}' for n, m in errors],
+        'ok': False,
+        'error': f'AI 服务不可用：{" | ".join(f"{n}: {m}" for n, m in errors)}',
+        'errors': [f'{n}: {m}' for n, m in errors],
     }
 
 
