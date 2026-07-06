@@ -2,22 +2,16 @@
 
 import { useState, useEffect } from "react";
 
-const ANNOUNCEMENT_KEY = "rest-reminder-announcement-v1";
-
 export default function AnnouncementModal() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    const seen = localStorage.getItem(ANNOUNCEMENT_KEY);
-    if (!seen) {
-      const t = setTimeout(() => setOpen(true), 800);
-      return () => clearTimeout(t);
-    }
+    const t = setTimeout(() => setOpen(true), 800);
+    return () => clearTimeout(t);
   }, []);
 
   const dismiss = () => {
     setOpen(false);
-    localStorage.setItem(ANNOUNCEMENT_KEY, "1");
   };
 
   if (!open) return null;

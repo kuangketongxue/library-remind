@@ -1,28 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useRef } from "react";
 
 export default function Hero() {
-  const [videoReady, setVideoReady] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    // 如果视频已经在缓冲（cached），readyState >= 2
-    if (v.readyState >= 2) {
-      setVideoReady(true);
-      return;
-    }
-    const onCanPlay = () => setVideoReady(true);
-    const onError = () => setVideoReady(false);
-    v.addEventListener("canplay", onCanPlay);
-    v.addEventListener("error", onError);
-    return () => {
-      v.removeEventListener("canplay", onCanPlay);
-      v.removeEventListener("error", onError);
-    };
-  }, []);
 
   return (
     <section className="relative min-h-[92vh] flex flex-col items-center justify-center px-6 pt-24 pb-16 text-center overflow-hidden">
@@ -34,7 +15,7 @@ export default function Hero() {
         className="absolute inset-0 w-full h-full object-cover -z-10"
       />
 
-      {/* Video overlay — fades in on top of poster when ready */}
+      {/* Video — visible immediately with autoplay, poster fallback on error */}
       <video
         ref={videoRef}
         autoPlay
@@ -42,9 +23,10 @@ export default function Hero() {
         loop
         playsInline
         preload="auto"
-        className={`absolute inset-0 w-full h-full object-cover -z-[9] transition-opacity duration-1000 ${
-          videoReady ? "opacity-100" : "opacity-0"
-        }`}
+        onError={(e) => {
+          e.currentTarget.style.display = "none";
+        }}
+        className="absolute inset-0 w-full h-full object-cover -z-[9]"
       >
         <source src="/promo_video.mp4" type="video/mp4" />
       </video>
