@@ -2915,7 +2915,7 @@ def _call_ai(prompt, model=None):
             body = {
                 'model': model_id,
                 'messages': [
-                    {'role': 'system', 'content': '你是专业的学习分析顾问。根据用户的学习复盘数据，生成深度、具体、有洞察力的分析报告。用中文回答。'},
+                    {'role': 'system', 'content': '你是专业的学习分析顾问。严格根据用户提供的学习数据生成分析报告。禁止编造数据中不存在的信息（如老师姓名、学校名称、具体科目内容等）。所有结论必须有数据支撑。用中文回答。'},
                     {'role': 'user', 'content': prompt},
                 ],
                 'max_tokens': 4096,
@@ -3100,6 +3100,7 @@ def generate_report(report_type, force_refresh=False):
 
         prompt = (
             f"你是专业的学习分析顾问。请根据以下详细数据生成一份有深度的{name}，字数不少于 400 字。\n"
+            f"【重要】只分析以下数据中明确包含的信息，禁止编造老师姓名、学校、科目细节等数据中没有的内容。所有结论必须引用具体数字。\n"
             f"时间范围：{data['date_range']}，共 {data['days']} 天。\n"
             f"\n"
             f"## 核心数据\n"
