@@ -75,6 +75,7 @@ taskkill /F /IM pythonw.exe
 2. 语法检查：`C:\Python314\python.exe -c "import py_compile; py_compile.compile('rest_reminder.py')"`
 3. 启动主程序：`C:\Python314\python.exe rest_reminder.py --silent`
 4. 验证新进程 PID 已出现，无 crash.log
+5. **官网部署后必须验证**：`curl -s -o /dev/null -w "%{http_code}" https://crazy-rest-reminder.pages.dev/contact` 返回 200
 
 ## 禁止事项
 - 不创建庆祝/确认类临时文件
