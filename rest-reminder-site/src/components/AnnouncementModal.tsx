@@ -1,14 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 
 export default function AnnouncementModal() {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
 
   useEffect(() => {
+    // 只在首页弹出
+    if (pathname !== "/") return;
     const t = setTimeout(() => setOpen(true), 800);
     return () => clearTimeout(t);
-  }, []);
+  }, [pathname]);
 
   const dismiss = () => {
     setOpen(false);
@@ -63,10 +67,10 @@ export default function AnnouncementModal() {
           </div>
 
           <div>
-            <p className="font-semibold text-white mb-1">3. v6.2.5 发布</p>
+            <p className="font-semibold text-white mb-1">3. v6.2.6 发布</p>
             <ul className="list-disc list-inside text-[#bbb] space-y-0.5 ml-2">
-              <li>关终端不再退出应用</li>
-              <li>修复多个启动和部署相关问题</li>
+              <li>官网背景视频修复、公告弹窗优化</li>
+              <li>修复多个界面和部署相关问题</li>
             </ul>
           </div>
         </div>

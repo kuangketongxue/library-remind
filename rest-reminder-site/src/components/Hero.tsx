@@ -1,37 +1,61 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 
 export default function Hero() {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [playing, setPlaying] = useState(false);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+
+    // 强制尝试播放（绕过浏览器 autoplay 限制）
+    const tryPlay = async () => {
+      try {
+        await v.play();
+        setPlaying(true);
+      } catch {
+        // autoplay 被阻止 → 保持 poster 可见，等用户交互后再播
+        setPlaying(false);
+      }
+    };
+
+    // 视频已缓存就直接播
+    if (v.readyState >= 2) {
+      tryPlay();
+    } else {
+      v.addEventListener("canplay", tryPlay, { once: true });
+    }
+
+    // 用户点击页面任意位置触发播放（解锁 autoplay 限制）
+    const unlock = () => {
+      if (!playing) tryPlay();
+    };
+    document.addEventListener("click", unlock, { once: true });
+
+    return () => {
+      v.removeEventListener("canplay", tryPlay);
+      document.removeEventListener("click", unlock);
+    };
+  }, []);
 
   return (
     <section className="relative min-h-[92vh] flex flex-col items-center justify-center px-6 pt-24 pb-16 text-center overflow-hidden">
-      {/* Static poster — always visible, instant load */}
-      <img
-        src="/hero-banner.png"
-        alt=""
-        aria-hidden="true"
-        className="absolute inset-0 w-full h-full object-cover -z-10"
-      />
-
-      {/* Video — visible immediately with autoplay, poster fallback on error */}
+      {/* Video — poster shows until video loads, then video covers it */}
       <video
         ref={videoRef}
         autoPlay
         muted
         loop
         playsInline
-        preload="auto"
-        onError={(e) => {
-          e.currentTarget.style.display = "none";
-        }}
-        className="absolute inset-0 w-full h-full object-cover -z-[9]"
+        poster="/hero-banner.png"
+        className="absolute inset-0 w-full h-full object-cover -z-10"
       >
         <source src="/promo_video.mp4" type="video/mp4" />
       </video>
 
-      {/* Dark overlay — 50% ensures text readability */}
+      {/* Dark overlay — ensures text readability */}
       <div className="absolute inset-0 bg-black/50 -z-[5]" />
 
       {/* Subtle top glow */}
