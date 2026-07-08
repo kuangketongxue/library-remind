@@ -567,9 +567,24 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
             <div className="space-y-6">
               <div className="changelog-entry latest pl-6">
                 <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-bold">v6.2.7</span>
+                  <span className="text-xs text-[var(--fg-dim)]">2026-07-09</span>
+                  <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">最新</span>
+                </div>
+                <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
+                  <li>桌面应用关于页按钮加 emoji（官网🌐、更新日志📋、检查更新🔄）</li>
+                  <li>官网新增 CN/EN/JP 三语言切换 + 日/夜模式</li>
+                  <li>Navbar/Footer GitHub 链接改为真实 cat SVG 图标</li>
+                  <li>新增唯一官方渠道声明横幅（防山寨/反诈提醒）</li>
+                  <li>AI 服务不可用提示优化 + 单实例 Mutex stale lock 修复</li>
+                  <li>官网 Hero 视频背景修复 + 公告弹窗逻辑修正</li>
+                </ul>
+              </div>
+
+              <div className="changelog-entry pl-6">
+                <div className="flex items-center gap-2 mb-1">
                   <span className="text-sm font-bold">v6.2.6</span>
                   <span className="text-xs text-[var(--fg-dim)]">2026-07-06</span>
-                  <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">最新</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
                   <li>浏览器图标修复：favicon 换为 256x256 cute_icon.png</li>
