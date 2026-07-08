@@ -2,6 +2,26 @@
 
 所有重要版本更新记录。
 
+## v6.2.7 (2026-07-09) — 桌面按钮优化 + 官网多语言/主题 + 唯一官方渠道声明
+
+### 🎨 桌面应用界面优化
+- **关于页按钮加 emoji**：官网🌐、更新日志📋、检查更新🔄，提升识别度
+- **GitHub 图标**：保持真实 SVG 渲染，确保图标清晰
+
+### 🌐 官网全面升级
+- **多语言支持**：新增 CN / EN / JP 三语言切换（localStorage 持久化）
+- **日/夜模式**：新增主题切换按钮，暗色主题覆盖全局 CSS 变量
+- **GitHub 真实图标**：Navbar / Footer 的 GitHub 链接从文字改为真实 cat SVG 图标
+- **唯一官方渠道声明**：Navbar 下方常驻 OfficialNotice 横幅（Warning + 表格 + 反诈提醒）
+
+### 🐛 Bug 修复
+- **AI 服务不可用提示优化**：default_proxy 增加最多 3 次自动重试；连接失败时提示更友好，不再展示原始 urllib3 堆栈
+- **今日 tab 记录显示 "-"**：`_Utils.md_to_html` bullet 检测统一用 `lstrip()`，修复带缩进 markdown 渲染异常
+- **单实例 Mutex stale lock**：`ERROR_ALREADY_EXISTS` 后增加 `WaitForSingleObject(handle, 0)` 判断，崩溃后 mutex 不再拦新实例
+- **官网 Hero 视频背景**：10MB 视频加载慢导致背景空白，改为 hero-banner.png 静态兜底 + 视频渐入
+- **公告弹窗逻辑**：移除 localStorage 记忆，每次访问弹出；检测路径仅首页(/)触发
+- **部署命令修正**：Cloudflare Pages 必须用 `wrangler pages deploy out` 部署构建产物
+
 ## v6.2.6 (2026-07-06) — 官网全面修复
 
 ### 🐛 Bug 修复

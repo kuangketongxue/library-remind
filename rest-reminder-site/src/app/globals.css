@@ -21,6 +21,22 @@
   --font-mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace;
 }
 
+.dark {
+  --bg: #0c0c10;
+  --fg: #e8e6e1;
+  --fg-dim: #a8a29e;
+  --fg-muted: #6b6560;
+  --accent: #d4a853;
+  --accent-bright: #e8bc6a;
+  --accent-soft: rgba(212, 168, 83, 0.10);
+  --accent-glow: rgba(212, 168, 83, 0.18);
+  --surface: #16161c;
+  --surface-hover: #1a1a24;
+  --surface-raised: #1e1e28;
+  --border: #252530;
+  --border-light: #2a2a36;
+}
+
 @theme inline {
   --color-background: var(--bg);
   --color-foreground: var(--fg);

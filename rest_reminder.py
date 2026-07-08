@@ -1585,11 +1585,21 @@ class SingleInstanceChecker:
             self._mutex_handle = kernel32.CreateMutexW(None, False, self._MUTEX_NAME)
             last_error = kernel32.GetLastError()
             if last_error == 183:  # ERROR_ALREADY_EXISTS
-                if self._mutex_handle:
-                    kernel32.CloseHandle(self._mutex_handle)
-                    self._mutex_handle = None
-                log.info('[单实例] Named Mutex 已存在，另一个实例正在运行')
-                return True
+                # Mutex 已存在，尝试立即获取以判断是否 stale（上一个实例已崩溃但 mutex 未释放）
+                WAIT_TIMEOUT = 258
+                wait_result = kernel32.WaitForSingleObject(self._mutex_handle, 0)
+                if wait_result == WAIT_TIMEOUT:
+                    # 另一个线程持有 mutex，确实在运行
+                    if self._mutex_handle:
+                        kernel32.CloseHandle(self._mutex_handle)
+                        self._mutex_handle = None
+                    log.info('[单实例] Named Mutex 被其他线程持有，另一个实例正在运行')
+                    return True
+                else:
+                    # 获取成功（mutex 是 stale 的，或上一个拥有者已崩溃）
+                    log.info('[单实例] Named Mutex 已存在但可获取，视为 stale，允许启动')
+                    atexit.register(self._cleanup_mutex)
+                    return False
             elif self._mutex_handle:
                 log.info('[单实例] Named Mutex 创建成功，本实例获锁')
                 atexit.register(self._cleanup_mutex)
@@ -2759,8 +2769,8 @@ class _Utils:
                 out.append(f'<h2 style="color:{t["accent"]};font-size:15px;font-weight:bold;margin:12px 0 6px;">{line[3:]}</h2>')
             elif line.startswith('### '):
                 out.append(f'<h3 style="color:{t["text_secondary"]};font-size:13px;font-weight:bold;margin:10px 0 4px;">{line[4:]}</h3>')
-            elif line.startswith('- '):
-                out.append(f'<li style="margin-left:16px;color:{t["text_secondary"]};line-height:1.8;">{line[2:]}</li>')
+            elif line.lstrip().startswith('- '):
+                out.append(f'<li style="margin-left:16px;color:{t["text_secondary"]};line-height:1.8;">{line.lstrip()[2:]}</li>')
             elif line.strip().startswith('> '):
                 out.append(f'<blockquote style="border-left:3px solid {t["accent"]};padding-left:10px;color:{t["text_secondary"]};margin:6px 0;">{line.strip()[2:]}</blockquote>')
             elif line.strip() == '---':
@@ -2768,8 +2778,8 @@ class _Utils:
             elif line.strip():
                 line = re.sub(r'\*\*(.+?)\*\*', r'<strong style="color:' + t["text_primary"] + r';">\1</strong>', line)
                 line = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'<em style="color:' + t["text_secondary"] + r';">\1</em>', line)
-                if re.match(r'^\*\s', line):
-                    line = '•' + line[1:]
+                if line.lstrip().startswith('* '):
+                    line = '•' + line.lstrip()[1:]
                 out.append(f'<p style="color:{t["text_secondary"]};line-height:1.7;margin:4px 0;">{line}</p>')
         _flush_table()
         if in_code:
@@ -2879,7 +2889,7 @@ def _init_ai_providers():
 
 
 def _call_ai(prompt, model=None):
-    """调用 AI API（按 ai_providers 配置遍历，OpenAI 兼容格式）"""
+    """调用 AI API（按 ai_providers 配置遍历，OpenAI 兼容格式，失败自动降级到本地报告）"""
 
     _init_ai_providers()  # 启动时初始化（幂等）
 
@@ -2902,53 +2912,73 @@ def _call_ai(prompt, model=None):
 
     errors = []
     for p in active:
-        try:
-            name = p.get('name', '未命名')
-            url = p['url']
-            model_id = model or p.get('model') or 'gpt-3.5-turbo'
-            raw_key = p.get('api_key', '')
-            api_key = _decrypt_key(raw_key) if raw_key else ''
-            if not api_key:
-                errors.append((name, 'API Key 解密失败'))
-                continue
+        max_retries = 3 if p.get('id') == 'default_proxy' else 1
+        retryable = (p.get('id') == 'default_proxy')
+        for attempt in range(max_retries):
+            try:
+                name = p.get('name', '未命名')
+                url = p['url']
+                model_id = model or p.get('model') or 'gpt-3.5-turbo'
+                raw_key = p.get('api_key', '')
+                api_key = _decrypt_key(raw_key) if raw_key else ''
+                if not api_key:
+                    errors.append((name, 'API Key 解密失败'))
+                    break
 
-            body = {
-                'model': model_id,
-                'messages': [
-                    {'role': 'system', 'content': '你是专业的学习分析顾问。严格根据用户提供的学习数据生成分析报告。禁止编造数据中不存在的信息（如老师姓名、学校名称、具体科目内容等）。所有结论必须有数据支撑。用中文回答。'},
-                    {'role': 'user', 'content': prompt},
-                ],
-                'max_tokens': 4096,
-                'temperature': 0.7,
-            }
-            headers = {**headers_base, 'Authorization': f'Bearer {api_key}'}
-            resp = requests.post(url, json=body, headers=headers, timeout=30)
+                body = {
+                    'model': model_id,
+                    'messages': [
+                        {'role': 'system', 'content': '你是专业的学习分析顾问。严格根据用户提供的学习数据生成分析报告。禁止编造数据中不存在的信息（如老师姓名、学校名称、具体科目内容等）。所有结论必须有数据支撑。用中文回答。'},
+                        {'role': 'user', 'content': prompt},
+                    ],
+                    'max_tokens': 4096,
+                    'temperature': 0.7,
+                }
+                headers = {**headers_base, 'Authorization': f'Bearer {api_key}'}
+                resp = requests.post(url, json=body, headers=headers, timeout=30)
 
-            if resp.status_code == 200:
-                data = resp.json()
-                msg = data.get('choices', [{}])[0].get('message', {})
-                content = msg.get('content', '').strip()
-                # 推理模型可能把 token 全用在 reasoning 上
-                if not content and msg.get('reasoning'):
-                    content = msg['reasoning'].strip()
-                if content:
-                    return {'ok': True, 'content': content, 'provider': name}
-                errors.append((name, '返回内容为空'))
-            else:
-                try:
-                    err_body = resp.json()
-                    err_msg = err_body.get('error', {}).get('message', '') or err_body.get('message', '') or resp.text[:200]
-                except Exception:
-                    err_msg = resp.text[:200]
-                errors.append((name, f'HTTP {resp.status_code}: {err_msg}'))
-        except (requests.exceptions.RequestException, ValueError, json.JSONDecodeError) as e:
-            errors.append((name, str(e)))
+                if resp.status_code == 200:
+                    data = resp.json()
+                    msg = data.get('choices', [{}])[0].get('message', {})
+                    content = msg.get('content', '').strip()
+                    # 推理模型可能把 token 全用在 reasoning 上
+                    if not content and msg.get('reasoning'):
+                        content = msg['reasoning'].strip()
+                    if content:
+                        return {'ok': True, 'content': content, 'provider': name}
+                    errors.append((name, '返回内容为空'))
+                    break
+                else:
+                    try:
+                        err_body = resp.json()
+                        err_msg = err_body.get('error', {}).get('message', '') or err_body.get('message', '') or resp.text[:200]
+                    except Exception:
+                        err_msg = resp.text[:200]
+                    errors.append((name, f'HTTP {resp.status_code}: {err_msg}'))
+                    break
+            except requests.exceptions.Timeout:
+                if attempt < max_retries - 1 and retryable:
+                    continue
+                errors.append((name, '连接超时（30秒），请检查网络或稍后重试'))
+                break
+            except requests.exceptions.ConnectionError as e:
+                if p.get('id') == 'default_proxy':
+                    errors.append((name, '内置免费 AI 当前不可用（连接失败）。请在「设置 → AI 服务」中添加自己的 API Key。'))
+                else:
+                    errors.append((name, f'连接失败: {e}'))
+                break
+            except (ValueError, json.JSONDecodeError) as e:
+                errors.append((name, f'响应解析失败: {e}'))
+                break
+            except Exception as e:
+                errors.append((name, str(e)))
+                break
 
-    # 所有上游都失败（超时/断墙/JSON异常）：返回失败让 generate_report 走本地降级报告
+    # 所有上游都失败（超时/断网/JSON异常）：返回失败让 generate_report 走本地降级报告
     log.warning(f'[AI] 所有 AI 服务不可用。详情: {" | ".join(f"{n}: {m}" for n, m in errors)}')
     return {
         'ok': False,
-        'error': f'AI 服务不可用：{" | ".join(f"{n}: {m}" for n, m in errors)}',
+        'error': '；'.join(f'{n}: {m}' for n, m in errors),
         'errors': [f'{n}: {m}' for n, m in errors],
     }
 
@@ -6002,10 +6032,10 @@ class RestReminderWidget(QWidget):
         btn_row.setSpacing(8)
         btn_row.setContentsMargins(0, 8, 0, 0)
         for text, slot, tip_color, icon_pm in [
-            ('官网', self._open_website, '#6a8cbb', None),
+            ('🌐 官网', self._open_website, '#6a8cbb', None),
             ('GitHub', self._open_github, '#78B450', _draw_github_logo(theme=self._current_theme)),
-            ('更新日志', self._show_changelog, '#d4a853', None),
-            ('检查更新', self._check_update, '#d97757', None),
+            ('📋 更新日志', self._show_changelog, '#d4a853', None),
+            ('🔄 检查更新', self._check_update, '#d97757', None),
         ]:
             btn = QPushButton(text)
             btn.setFixedHeight(32)
@@ -7480,10 +7510,10 @@ class RestReminderWidget(QWidget):
             # ★ 获取当日目标，供对照
             goal = self._get_today_goal()
             if goal:
-                prompt = f'这小时学了什么？\n🎯 今日目标：{goal}'
+                prompt = f'回顾这小时学了什么？\n🎯 今日目标：{goal}'
             else:
-                prompt = '这小时学了什么？'
-            dialog = self._build_review_dialog('📝 快速复盘', prompt)
+                prompt = '回顾这小时学了什么？'
+            dialog = self._build_review_dialog('📝 复盘本轮', prompt)
             if dialog.exec_():
                 subject = dialog._subject_val[0]
                 label = dialog._label_val[0]
@@ -7705,14 +7735,14 @@ class RestReminderWidget(QWidget):
         try:
             saved = [False]
             dialog = QDialog(self)
-            dialog.setWindowTitle('🎯 本轮目标')
+            dialog.setWindowTitle('🎯 下轮目标')
             dialog.setFixedSize(480, 300)
             dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
             layout = QVBoxLayout(dialog)
             layout.setContentsMargins(20, 16, 20, 16)
             layout.setSpacing(12)
 
-            layout.addWidget(QLabel(f'第{self._round_count + 1}轮：这轮学什么？'))
+            layout.addWidget(QLabel(f'第{self._round_count + 1}轮：下轮计划学什么？'))
 
             # 学科按钮（大按钮，金色选中态）
             layout.addWidget(QLabel('📚 学科：'))

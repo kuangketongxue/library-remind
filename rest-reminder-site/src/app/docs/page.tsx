@@ -2,8 +2,10 @@
 
 import DocsNav from "@/components/DocsNav";
 import DocsTOC from "@/components/DocsTOC";
+import { useI18n } from "@/lib/i18n";
 
 export default function DocsPage() {
+  const { t } = useI18n();
   return (
     <main className="flex-1">
       <div className="docs-layout">
@@ -14,11 +16,11 @@ export default function DocsPage() {
         <div className="docs-main" style={{ maxWidth: "800px" }}>
           {/* Breadcrumb */}
           <nav className="flex items-center gap-2 text-xs text-[var(--fg-dim)] mb-6">
-            <a href="/" className="hover:text-[var(--fg)] transition-colors">首页</a>
+            <a href="/" className="hover:text-[var(--fg)] transition-colors">{t("nav.docs")}</a>
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
-            <span className="text-[var(--fg)]">文档</span>
+            <span className="text-[var(--fg)]">{t("nav.docs")}</span>
           </nav>
 
           {/* 搜索框 */}
@@ -51,16 +53,16 @@ export default function DocsPage() {
           </div>
 
           <h1 className="text-3xl font-extrabold tracking-tight mb-2 font-display">
-            文档
+            {t("docs.title")}
           </h1>
           <p className="text-[var(--fg-dim)] mb-10">
-            Rest Reminder 完整使用指南，从快速上手到高级功能。
+            {t("docs.subtitle")}
           </p>
 
           {/* ── 产品简介 ── */}
           <section className="mb-16" id="简介">
-            <h2 className="text-2xl font-bold mb-1 font-display">Rest Reminder 是什么</h2>
-            <p className="text-[var(--fg-dim)] text-sm mb-6">一款免费开源的 Windows 桌面久坐提醒工具</p>
+            <h2 className="text-2xl font-bold mb-1 font-display">{t("docs.what_is")}</h2>
+            <p className="text-[var(--fg-dim)] text-sm mb-6">{t("docs.what_is_desc")}</p>
 
             <div className="docs-card mb-6">
               <p className="text-sm text-[var(--fg)] leading-relaxed mb-3">
@@ -96,22 +98,22 @@ export default function DocsPage() {
 
           {/* ── 快速开始 ── */}
           <section className="mb-16" id="快速开始">
-            <h2 className="text-2xl font-bold mb-1 font-display">快速开始</h2>
-            <p className="text-[var(--fg-dim)] text-sm mb-6">5 分钟上手 Rest Reminder</p>
+            <h2 className="text-2xl font-bold mb-1 font-display">{t("docs.quickstart_title")}</h2>
+            <p className="text-[var(--fg-dim)] text-sm mb-6">{t("docs.quickstart_desc")}</p>
 
             <div className="docs-callout mb-6">
-              <p className="text-sm font-semibold mb-2">隐私与数据安全</p>
+              <p className="text-sm font-semibold mb-2">{t("docs.privacy_card_title")}</p>
               <p className="text-xs text-[var(--fg-dim)] leading-relaxed">
-                所有数据仅存储在本地 JSON 文件，不上传任何服务器。无需注册账号，无需登录，MIT 开源可审计。
+                {t("docs.privacy_card_desc")}
               </p>
             </div>
 
             <div className="space-y-8">
               <div id="下载运行">
-                <h3 className="text-base font-semibold mb-3 font-display">1. 下载运行</h3>
+                <h3 className="text-base font-semibold mb-3 font-display">{t("docs.step1_title")}</h3>
                 <div className="docs-card mb-3">
                   <p className="text-[var(--fg-dim)] text-sm leading-relaxed mb-3">
-                    双击 _launch.vbs 启动程序。无需安装 Python，无需额外依赖。
+                    {t("docs.step1_desc")}
                   </p>
                   <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
                     如果从源码运行，确保已安装依赖：
@@ -127,9 +129,9 @@ python rest_reminder.py`}
               </div>
 
               <div id="设定目标">
-                <h3 className="text-base font-semibold mb-3 font-display">2. 设定今日目标</h3>
+                <h3 className="text-base font-semibold mb-3 font-display">{t("docs.step2_title")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                  启动后弹出目标设置对话框。输入今天主要学习内容（如"数学导数+英语阅读"），选择预计完成轮次。目标会显示在浮球信息面板中，提醒你当前进度。
+                  {t("docs.step2_desc")}
                 </p>
                 <div className="docs-card mt-3">
                   <p className="text-xs text-[var(--fg-dim)]">
@@ -139,9 +141,9 @@ python rest_reminder.py`}
               </div>
 
               <div id="开始学习">
-                <h3 className="text-base font-semibold mb-3 font-display">3. 开始学习</h3>
+                <h3 className="text-base font-semibold mb-3 font-display">{t("docs.step3_title")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                  程序默认以浮球形式驻留桌面右侧。点击浮球弹出信息面板，按 ▶ 开始学习 启动 60 分钟倒计时。
+                  {t("docs.step3_desc")}
                 </p>
                 <div className="docs-card mt-3">
                   <p className="text-sm font-semibold mb-2">计时流程</p>
@@ -161,9 +163,9 @@ python rest_reminder.py`}
               </div>
 
               <div id="复盘追踪">
-                <h3 className="text-base font-semibold mb-3 font-display">4. 复盘与追踪</h3>
+                <h3 className="text-base font-semibold mb-3 font-display">{t("docs.step4_title")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                  每小时学习结束后弹出复盘弹窗，为你提供一个反思和评估学习效果的机会。
+                  {t("docs.step4_desc")}
                 </p>
                 <div className="space-y-3 mt-3">
                   <div className="docs-card">
@@ -191,8 +193,8 @@ python rest_reminder.py`}
 
           {/* ── 界面预览 ── */}
           <section className="mb-16" id="界面预览">
-            <h2 className="text-2xl font-bold mb-1 font-display">界面预览</h2>
-            <p className="text-[var(--fg-dim)] text-sm mb-6">Rest Reminder 核心界面一览</p>
+            <h2 className="text-2xl font-bold mb-1 font-display">{t("docs.preview_title")}</h2>
+            <p className="text-[var(--fg-dim)] text-sm mb-6">{t("docs.preview_desc")}</p>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="docs-card overflow-hidden">
@@ -233,8 +235,8 @@ python rest_reminder.py`}
 
           {/* ── 功能说明 ── */}
           <section className="mb-16" id="功能说明">
-            <h2 className="text-2xl font-bold mb-1 font-display">功能说明</h2>
-            <p className="text-[var(--fg-dim)] text-sm mb-8">深入了解每个功能的设计细节</p>
+            <h2 className="text-2xl font-bold mb-1 font-display">{t("docs.features_title")}</h2>
+            <p className="text-[var(--fg-dim)] text-sm mb-8">{t("docs.features_desc")}</p>
 
             <div className="space-y-5">
               <div className="docs-card" id="专注循环">
@@ -361,8 +363,8 @@ python rest_reminder.py`}
 
           {/* ── 设置详解 ── */}
           <section className="mb-16" id="设置详解">
-            <h2 className="text-2xl font-bold mb-1 font-display">设置详解</h2>
-            <p className="text-[var(--fg-dim)] text-sm mb-6">每个选项的作用说明</p>
+            <h2 className="text-2xl font-bold mb-1 font-display">{t("docs.settings_title")}</h2>
+            <p className="text-[var(--fg-dim)] text-sm mb-6">{t("docs.settings_desc")}</p>
 
             <div className="space-y-3">
               <div className="docs-card">
@@ -424,8 +426,8 @@ python rest_reminder.py`}
 
           {/* ── 开发指南 ── */}
           <section className="mb-16" id="开发指南">
-            <h2 className="text-2xl font-bold mb-1 font-display">开发指南</h2>
-            <p className="text-[var(--fg-dim)] text-sm mb-6">从源码构建和二次开发 Rest Reminder</p>
+            <h2 className="text-2xl font-bold mb-1 font-display">{t("docs.dev_title")}</h2>
+            <p className="text-[var(--fg-dim)] text-sm mb-6">{t("docs.dev_desc")}</p>
 
             <div className="space-y-5">
               <div className="docs-card">
@@ -511,8 +513,8 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
 
           {/* ── Claude Code 接入指南 ── */}
           <section className="mb-16" id="claude-code">
-            <h2 className="text-2xl font-bold mb-1 font-display">Claude Code 接入指南</h2>
-            <p className="text-[var(--fg-dim)] text-sm mb-6">使用 Claude Code 高效开发 Rest Reminder</p>
+            <h2 className="text-2xl font-bold mb-1 font-display">{t("docs.claude_title")}</h2>
+            <p className="text-[var(--fg-dim)] text-sm mb-6">{t("docs.claude_desc")}</p>
 
             <div className="space-y-5">
               <div className="docs-card">
@@ -559,8 +561,8 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
 
           {/* ── 更新日志 ── */}
           <section className="mb-16" id="更新日志">
-            <h2 className="text-2xl font-bold mb-1 font-display">更新日志</h2>
-            <p className="text-[var(--fg-dim)] text-sm mb-6">最近几个重要版本</p>
+            <h2 className="text-2xl font-bold mb-1 font-display">{t("docs.changelog_title")}</h2>
+            <p className="text-[var(--fg-dim)] text-sm mb-6">{t("docs.changelog_desc")}</p>
 
             <div className="space-y-6">
               <div className="changelog-entry latest pl-6">
@@ -873,8 +875,8 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
 
           {/* ── 常见问题 ── */}
           <section className="mb-16" id="常见问题">
-            <h2 className="text-2xl font-bold mb-1 font-display">常见问题</h2>
-            <p className="text-[var(--fg-dim)] text-sm mb-6">遇到问题？看看这里有没有答案</p>
+            <h2 className="text-2xl font-bold mb-1 font-display">{t("docs.faq_title")}</h2>
+            <p className="text-[var(--fg-dim)] text-sm mb-6">{t("docs.faq_desc")}</p>
 
             <div className="space-y-4">
               <div className="docs-card">
@@ -950,8 +952,8 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
 
           {/* ── 故障排除 ── */}
           <section className="mb-16" id="故障排除">
-            <h2 className="text-2xl font-bold mb-1 font-display">故障排除</h2>
-            <p className="text-[var(--fg-dim)] text-sm mb-6">常见问题排查步骤</p>
+            <h2 className="text-2xl font-bold mb-1 font-display">{t("docs.troubleshoot_title")}</h2>
+            <p className="text-[var(--fg-dim)] text-sm mb-6">{t("docs.troubleshoot_desc")}</p>
 
             <div className="space-y-4">
               <div className="docs-card">

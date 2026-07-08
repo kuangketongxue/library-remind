@@ -1,140 +1,135 @@
 "use client";
 
 import DocsNav from "@/components/DocsNav";
+import { useI18n } from "@/lib/i18n";
 
 export default function PricingPage() {
+  const { t } = useI18n();
   return (
     <main className="flex-1">
       <div className="docs-layout">
         <DocsNav />
         <div className="docs-main" style={{ maxWidth: "960px" }}>
           <nav className="flex items-center gap-2 text-xs text-[var(--fg-dim)] mb-6">
-            <a href="/" className="hover:text-[var(--fg)] transition-colors">首页</a>
+            <a href="/" className="hover:text-[var(--fg)] transition-colors">{t("nav.docs")}</a>
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
-            <span className="text-[var(--fg)]">定价计费</span>
+            <span className="text-[var(--fg)]">{t("nav.pricing")}</span>
           </nav>
 
-          <h1 className="text-3xl font-extrabold tracking-tight mb-2 font-display">定价计费</h1>
-          <p className="text-[var(--fg-dim)] mb-10">最后更新：2026 年 7 月 4 日</p>
+          <h1 className="text-3xl font-extrabold tracking-tight mb-2 font-display">{t("pricing.title")}</h1>
+          <p className="text-[var(--fg-dim)] mb-10">{t("pricing.subtitle")}</p>
 
           <section className="mb-12">
-            <h2 className="text-xl font-bold mb-4 font-display">核心原则：永久免费</h2>
+            <h2 className="text-xl font-bold mb-4 font-display">{t("pricing.section_core")}</h2>
             <div className="docs-card" style={{ borderLeft: "3px solid var(--accent)" }}>
               <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                Rest Reminder 的所有功能<strong>永久免费</strong>，无订阅、无隐藏收费、无功能限制。从核心的休息提醒到高级的 AI 学习分析，所有功能对所有用户平等开放。
+                {t("pricing.core_desc")}
               </p>
             </div>
           </section>
 
           <section className="mb-12">
-            <h2 className="text-xl font-bold mb-4 font-display">免费功能一览</h2>
+            <h2 className="text-xl font-bold mb-4 font-display">{t("pricing.section_features")}</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">核心功能</h3>
+                <h3 className="text-sm font-semibold mb-2">Core</h3>
                 <ul className="text-[var(--fg-dim)] text-sm leading-relaxed space-y-1.5">
-                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 60 分钟专注循环</li>
-                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 5 分钟请辨倒计时</li>
-                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 5 分钟休息</li>
-                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> B 站收藏夹自动打开</li>
-                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 20-20-20 护眼提醒</li>
-                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 每 3 轮护眼视频</li>
+                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 60-min focus cycle</li>
+                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 5-min mindfulness countdown</li>
+                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 5-min break</li>
+                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> Auto-open Bilibili favorites</li>
+                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 20-20-20 eye care</li>
+                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> Eye-care video every 3 rounds</li>
                 </ul>
               </div>
 
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">学习追踪</h3>
+                <h3 className="text-sm font-semibold mb-2">Tracking</h3>
                 <ul className="text-[var(--fg-dim)] text-sm leading-relaxed space-y-1.5">
-                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 学习时长累计</li>
-                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 复盘评分系统</li>
-                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 连续打卡 + 里程碑</li>
-                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 趋势分析（周/月/季/年）</li>
-                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 7x24 学习热力图</li>
-                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 成就/徽章系统（17 个）</li>
+                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> Study time tracking</li>
+                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> Review scoring</li>
+                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> Streaks + milestones</li>
+                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> Trends (weekly/monthly/quarterly/yearly)</li>
+                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 7x24 heatmap</li>
+                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 17 achievements</li>
                 </ul>
               </div>
 
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">AI 功能</h3>
+                <h3 className="text-sm font-semibold mb-2">AI</h3>
                 <ul className="text-[var(--fg-dim)] text-sm leading-relaxed space-y-1.5">
-                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> AI 学习分析报告</li>
-                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 日报 / 周报 / 月报 / 季报 / 年报</li>
-                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 多 AI 提供商切换</li>
-                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 本地数据降级报告（无 Key 可用）</li>
-                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> TTS 语音播报</li>
+                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> AI learning reports</li>
+                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> Daily / weekly / monthly / quarterly / yearly</li>
+                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> Multi-provider switching</li>
+                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> Local fallback without API key</li>
+                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> TTS voice broadcast</li>
                 </ul>
               </div>
 
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">集成与扩展</h3>
+                <h3 className="text-sm font-semibold mb-2">Integrations</h3>
                 <ul className="text-[var(--fg-dim)] text-sm leading-relaxed space-y-1.5">
-                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 飞书日程集成</li>
-                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 环境白噪音</li>
-                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 主题切换（深色/浅色）</li>
-                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 全局快捷键</li>
-                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> 电池监控</li>
-                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> GitHub 自动备份</li>
+                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> Feishu Calendar</li>
+                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> Ambient noise</li>
+                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> Theme switching</li>
+                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> Global shortcuts</li>
+                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> Battery monitor</li>
+                  <li className="flex gap-2"><span className="text-[var(--accent)]">&#10003;</span> GitHub backup</li>
                 </ul>
               </div>
             </div>
           </section>
 
           <section className="mb-12">
-            <h2 className="text-xl font-bold mb-4 font-display">费用说明</h2>
+            <h2 className="text-xl font-bold mb-4 font-display">{t("pricing.section_plans")}</h2>
             <div className="space-y-4">
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">Rest Reminder 本身</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("pricing.plan_name")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                  <strong>完全免费</strong>。下载、安装、使用不收取任何费用。没有免费试用期，没有基础版/高级版区分，所有功能开箱即用。
+                  <strong>{t("pricing.plan_desc")}</strong>
                 </p>
               </div>
 
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">AI API 费用</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("pricing.ai_costs")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                  AI 学习分析功能使用用户自行配置的第三方 API（如 SenseNova、OpenAI 兼容接口等）。API 调用费用由第三方服务商收取，与 Rest Reminder 项目无关。项目内置了免费的 Cloudflare 代理 Key，用户无需自行购买 API Key 即可使用基础 AI 报告功能。
+                  {t("pricing.ai_desc")}
                 </p>
               </div>
 
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">无隐藏收费</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("pricing.no_hidden")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                  没有「后续收费」、没有「增值服务」、没有「内购」。项目由开发者个人维护，经费来源于个人和赞助，不向用户收取任何费用。
+                  {t("pricing.no_hidden_desc")}
                 </p>
               </div>
             </div>
           </section>
 
           <section className="mb-16">
-            <h2 className="text-xl font-bold mb-4 font-display">常见疑问</h2>
+            <h2 className="text-xl font-bold mb-4 font-display">{t("pricing.section_faq")}</h2>
             <div className="space-y-4">
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">为什么免费？</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("pricing.faq_why")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                  这是一个学生个人项目，最初是为了解决自己的学习效率问题而开发的。开源免费分享给更多人使用，让每个人都受益于科学的学习休息节奏。
+                  {t("pricing.faq_why_desc")}
                 </p>
               </div>
 
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">以后会收费吗？</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("pricing.faq_will")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                  不会。MIT 开源协议保证了任何人都可以永久免费使用。即使原始开发者停止维护，你仍然可以自由使用、修改和分发。
+                  {t("pricing.faq_will_desc")}
                 </p>
               </div>
 
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">如何支持项目？</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("pricing.faq_support")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                  如果你觉得 Rest Reminder 帮助了你，可以通过以下方式支持项目：
+                  {t("pricing.faq_support_desc")}
                 </p>
-                <ul className="text-[var(--fg-dim)] text-sm leading-relaxed mt-2 space-y-1 list-disc list-inside">
-                  <li>在 GitHub 上给项目点 Star</li>
-                  <li>提交 Issue 反馈问题或建议</li>
-                  <li>提交 PR 贡献代码或文档</li>
-                  <li>向同学朋友推荐</li>
-                  <li>赞助支持开发者（详见赞助页）</li>
-                </ul>
               </div>
             </div>
           </section>
@@ -145,8 +140,8 @@ export default function PricingPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
               <div>
-                <p className="text-[var(--fg-muted)] text-xs">上一页</p>
-                <p className="text-[var(--fg)] font-medium group-hover:text-[var(--accent)] transition-colors">管理规则和公约</p>
+                <p className="text-[var(--fg-muted)] text-xs">Previous</p>
+                <p className="text-[var(--fg)] font-medium group-hover:text-[var(--accent)] transition-colors">Community Rules</p>
               </div>
             </a>
             <a href="/docs" className="group flex items-center gap-3 text-sm sm:flex-row-reverse">
@@ -154,8 +149,8 @@ export default function PricingPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
               <div className="sm:text-right">
-                <p className="text-[var(--fg-muted)] text-xs">下一页</p>
-                <p className="text-[var(--fg)] font-medium group-hover:text-[var(--accent)] transition-colors">文档</p>
+                <p className="text-[var(--fg-muted)] text-xs">Next</p>
+                <p className="text-[var(--fg)] font-medium group-hover:text-[var(--accent)] transition-colors">Documentation</p>
               </div>
             </a>
           </nav>

@@ -1,29 +1,31 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useI18n } from "@/lib/i18n";
 
 const steps = [
   {
     num: "1",
-    title: "下载安装",
-    desc: "从 GitHub Releases 下载 RestReminder.exe，48MB 秒装",
+    titleKey: "download.step1",
+    descKey: "download.step1_desc",
     img: "/screenshot-download.png",
   },
   {
     num: "2",
-    title: "开始计时",
-    desc: "右下角出现浮球，点击弹出信息面板，60分钟自动循环",
+    titleKey: "download.step2",
+    descKey: "download.step2_desc",
     img: "/screenshot-main.png",
   },
   {
     num: "3",
-    title: "查看数据",
-    desc: "学习时长、连续打卡一目了然，AI 自动生成学习报告",
+    titleKey: "download.step3",
+    descKey: "download.step3_desc",
     img: "/screenshot-stats.png",
   },
 ];
 
 export default function Download() {
+  const { t } = useI18n();
   return (
     <>
       {/* Installation steps */}
@@ -36,7 +38,7 @@ export default function Download() {
             transition={{ duration: 0.6 }}
             className="text-center mb-14"
           >
-            <p className="text-[var(--fg-dim)] text-lg">3步开始使用</p>
+            <p className="text-[var(--fg-dim)] text-lg">{t("download.subtitle")}</p>
           </motion.div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -52,11 +54,11 @@ export default function Download() {
                 <div className="w-10 h-10 rounded-full bg-[var(--accent-soft)] text-[var(--accent)] text-sm font-bold flex items-center justify-center border border-[var(--border-accent)] mx-auto mb-4">
                   {s.num}
                 </div>
-                <h3 className="text-lg font-semibold mb-2">{s.title}</h3>
-                <p className="text-sm text-[var(--fg-dim)] mb-5">{s.desc}</p>
+                <h3 className="text-lg font-semibold mb-2">{t(s.titleKey)}</h3>
+                <p className="text-sm text-[var(--fg-dim)] mb-5">{t(s.descKey)}</p>
                 <img
                   src={s.img}
-                  alt={s.title}
+                  alt={t(s.titleKey)}
                   className="w-full max-w-[200px] mx-auto rounded-xl border border-[var(--border)] shadow-lg"
                   loading="lazy"
                 />
@@ -82,7 +84,7 @@ export default function Download() {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 bg-white text-[#b5651d] font-semibold px-8 py-3.5 rounded-full text-base hover:bg-[var(--fg)] hover:shadow-lg transition-all"
               >
-                ↓ 立即下载
+                {t("download.cta_download")}
               </a>
               <a
                 href="https://github.com/kuangketongxue/library-remind"
@@ -90,11 +92,11 @@ export default function Download() {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 border-2 border-white/40 text-white font-medium px-8 py-3.5 rounded-full text-base hover:border-white hover:bg-white/10 transition-all"
               >
-                查看 GitHub →
+                {t("download.cta_github")}
               </a>
             </div>
             <p className="text-white/70 text-sm">
-              支持 Windows 10/11 · v6.2.0 · MIT 开源 · 若 GitHub 访问慢可联系作者获取直链
+              {t("download.note")}
             </p>
           </motion.div>
         </div>

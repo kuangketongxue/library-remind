@@ -1,23 +1,25 @@
 "use client";
 
 import DocsNav from "@/components/DocsNav";
+import { useI18n } from "@/lib/i18n";
 
 export default function RulesPage() {
+  const { t } = useI18n();
   return (
     <main className="flex-1">
       <div className="docs-layout">
         <DocsNav />
         <div className="docs-main" style={{ maxWidth: "960px" }}>
           <nav className="flex items-center gap-2 text-xs text-[var(--fg-dim)] mb-6">
-            <a href="/" className="hover:text-[var(--fg)] transition-colors">首页</a>
+            <a href="/" className="hover:text-[var(--fg)] transition-colors">{t("nav.docs")}</a>
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
-            <span className="text-[var(--fg)]">管理规则和公约</span>
+            <span className="text-[var(--fg)]">{t("rules.title")}</span>
           </nav>
 
-          <h1 className="text-3xl font-extrabold tracking-tight mb-2 font-display">管理规则和公约</h1>
-          <p className="text-[var(--fg-dim)] mb-10">最后更新：2026 年 7 月 4 日</p>
+          <h1 className="text-3xl font-extrabold tracking-tight mb-2 font-display">{t("rules.title")}</h1>
+          <p className="text-[var(--fg-dim)] mb-10">{t("rules.subtitle")}</p>
 
           <section className="mb-12">
             <h2 className="text-xl font-bold mb-4 font-display">社区行为准则</h2>
@@ -46,7 +48,7 @@ export default function RulesPage() {
           </section>
 
           <section className="mb-12">
-            <h2 className="text-xl font-bold mb-4 font-display">Issue 规范</h2>
+            <h2 className="text-xl font-bold mb-4 font-display">{t("rules.section_issue")}</h2>
             <div className="space-y-4">
               <div className="docs-card">
                 <h3 className="text-sm font-semibold mb-2">提交前检查</h3>
@@ -81,7 +83,7 @@ export default function RulesPage() {
           </section>
 
           <section className="mb-12">
-            <h2 className="text-xl font-bold mb-4 font-display">Pull Request 规范</h2>
+            <h2 className="text-xl font-bold mb-4 font-display">{t("rules.section_pr")}</h2>
             <div className="space-y-4">
               <div className="docs-card">
                 <h3 className="text-sm font-semibold mb-2">提交前</h3>
@@ -114,7 +116,7 @@ export default function RulesPage() {
           </section>
 
           <section className="mb-12">
-            <h2 className="text-xl font-bold mb-4 font-display">违规处理</h2>
+            <h2 className="text-xl font-bold mb-4 font-display">{t("rules.section_violation")}</h2>
             <div className="docs-card">
               <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
                 对于严重违反本公约的行为（恶意骚扰、垃圾信息、恶意 PR 等），维护者有权关闭相关 Issue/PR，必要时封禁相关账户。所有处理决定由维护者酌情做出，旨在维护社区的健康发展。
@@ -123,7 +125,7 @@ export default function RulesPage() {
           </section>
 
           <section className="mb-16">
-            <h2 className="text-xl font-bold mb-4 font-display">版本号约定</h2>
+            <h2 className="text-xl font-bold mb-4 font-display">{t("rules.section_versioning")}</h2>
             <div className="docs-card">
               <p className="text-[var(--fg-dim)] text-sm leading-relaxed mb-2">项目采用语义化版本号（Semantic Versioning）：</p>
               <ul className="text-[var(--fg-dim)] text-sm leading-relaxed space-y-1 list-disc list-inside">

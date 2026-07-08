@@ -1,26 +1,28 @@
 "use client";
 
 import DocsNav from "@/components/DocsNav";
+import { useI18n } from "@/lib/i18n";
 
 export default function TermsPage() {
+  const { t } = useI18n();
   return (
     <main className="flex-1">
       <div className="docs-layout">
         <DocsNav />
         <div className="docs-main" style={{ maxWidth: "960px" }}>
           <nav className="flex items-center gap-2 text-xs text-[var(--fg-dim)] mb-6">
-            <a href="/" className="hover:text-[var(--fg)] transition-colors">首页</a>
+            <a href="/" className="hover:text-[var(--fg)] transition-colors">{t("nav.docs")}</a>
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
-            <span className="text-[var(--fg)]">用户协议</span>
+            <span className="text-[var(--fg)]">{t("terms.title")}</span>
           </nav>
 
-          <h1 className="text-3xl font-extrabold tracking-tight mb-2 font-display">用户协议</h1>
-          <p className="text-[var(--fg-dim)] mb-10">最后更新：2026 年 7 月 4 日</p>
+          <h1 className="text-3xl font-extrabold tracking-tight mb-2 font-display">{t("terms.title")}</h1>
+          <p className="text-[var(--fg-dim)] mb-10">{t("terms.subtitle")}</p>
 
           <section className="mb-12">
-            <h2 className="text-xl font-bold mb-4 font-display">开源许可</h2>
+            <h2 className="text-xl font-bold mb-4 font-display">{t("terms.section_license")}</h2>
             <div className="docs-card">
               <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
                 Rest Reminder 基于 <strong>MIT 开源协议</strong>发布。MIT 协议是最宽松的开源协议之一，允许你自由使用、复制、修改、合并、发布、分发、再授权和/或销售本软件的副本。
@@ -32,7 +34,7 @@ export default function TermsPage() {
           </section>
 
           <section className="mb-12">
-            <h2 className="text-xl font-bold mb-4 font-display">免责声明</h2>
+            <h2 className="text-xl font-bold mb-4 font-display">{t("terms.section_disclaimer")}</h2>
             <div className="space-y-4">
               <div className="docs-card">
                 <h3 className="text-sm font-semibold mb-2">软件按「现状」提供</h3>
@@ -58,7 +60,7 @@ export default function TermsPage() {
           </section>
 
           <section className="mb-12">
-            <h2 className="text-xl font-bold mb-4 font-display">使用限制</h2>
+            <h2 className="text-xl font-bold mb-4 font-display">{t("terms.section_limits")}</h2>
             <div className="space-y-4">
               <div className="docs-card">
                 <h3 className="text-sm font-semibold mb-2">平台限制</h3>
@@ -94,7 +96,7 @@ export default function TermsPage() {
           </section>
 
           <section className="mb-12">
-            <h2 className="text-xl font-bold mb-4 font-display">修改与更新</h2>
+            <h2 className="text-xl font-bold mb-4 font-display">{t("terms.section_changes")}</h2>
             <div className="docs-card">
               <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
                 开发者保留随时修改、更新或终止本软件的权利，无需事先通知。MIT 协议保证你已获取的版本可以永久使用和修改。建议通过 GitHub 关注更新。
@@ -103,7 +105,7 @@ export default function TermsPage() {
           </section>
 
           <section className="mb-16">
-            <h2 className="text-xl font-bold mb-4 font-display">联系方式</h2>
+            <h2 className="text-xl font-bold mb-4 font-display">{t("terms.section_contact")}</h2>
             <div className="docs-card">
               <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
                 如对本协议有任何疑问，请通过 GitHub Issues 提交，或发送邮件至 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">kuangketongxue@gmail.com</code>。

@@ -1,3 +1,19 @@
+> **⚠️ 警告 — 唯一官方渠道声明（请务必阅读）**
+>
+> 休息提醒是**完全免费、开源**的桌面应用，**不会向用户收取任何费用**。请仅通过下列官方渠道获取本软件：
+>
+> | 类别 | 唯一官方 |
+> |---|---|
+> | 官网 | [crazy-rest-reminder.pages.dev](https://crazy-rest-reminder.pages.dev) |
+> | 源码 | [github.com/kuangketongxue/library-remind](https://github.com/kuangketongxue/library-remind) |
+> | 下载 | [GitHub Releases](https://github.com/kuangketongxue/library-remind/releases/latest) |
+> | 作者 | [@kuangketongxue](https://github.com/kuangketongxue) |
+> | 举报山寨 | [GitHub Issues](https://github.com/kuangketongxue/library-remind/issues) |
+>
+> 任何向你收费、要求充值、或索要登录凭证的"休息提醒"网站或客户端**均为假冒**。如果你被诱导支付了费用，请立即停止操作并通过 [GitHub Issues](https://github.com/kuangketongxue/library-remind/issues) 反馈。
+
+---
+
 <div align="center">
 
 # 🖥️ 休息提醒
