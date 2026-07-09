@@ -2,6 +2,14 @@
 
 所有重要版本更新记录。
 
+## v6.2.8 (2026-07-10) — 修复无法退出 + 飞书日程获取失败
+
+### 🐛 Bug 修复
+- **程序无法退出**：`LocalSync.flush_pending_settings` 缺少 `@classmethod` 装饰器，导致 `quit_app` 调用时抛 TypeError，退出流程被 except 吞掉，程序永远卡死
+- **quit_app 双重保险**：`os._exit(0)` 移到 try/except 外层，即使 quit_app 内部异常也能强制退出
+- **飞书日程获取失败**：`feishu_calendar.py` 缺少 `import sys`，lark-cli 启动时 `sys.platform` 抛 NameError，日程全部获取失败
+- **周报线程泄漏**：`_check_weekly_report` 创建新 worker 前未清理旧 worker，可能导致线程堆叠
+
 ## v6.2.7 (2026-07-09) — 桌面按钮优化 + 官网多语言/主题 + 唯一官方渠道声明
 
 ### 🎨 桌面应用界面优化
