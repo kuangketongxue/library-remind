@@ -13,6 +13,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('feishuEnabled').checked = s.feishuEnabled || false;
     document.getElementById('mailEnabled').checked = s.mailEnabled || false;
     document.getElementById('mailTo').value = s.mailTo || '';
+    document.getElementById('bilibiliFavUrl').value = s.bilibiliFavUrl || '';
+    document.getElementById('bilibiliEyeUrl').value = s.bilibiliEyeUrl || '';
     document.getElementById('ghToken').value = s.ghToken || '';
     document.getElementById('ghRepo').value = s.ghRepo || '';
   });
@@ -180,6 +182,8 @@ function saveSettings() {
     feishuEnabled: document.getElementById('feishuEnabled').checked,
     mailEnabled: document.getElementById('mailEnabled').checked,
     mailTo: document.getElementById('mailTo').value.trim(),
+    bilibiliFavUrl: document.getElementById('bilibiliFavUrl').value.trim(),
+    bilibiliEyeUrl: document.getElementById('bilibiliEyeUrl').value.trim(),
     ghToken: document.getElementById('ghToken').value.trim(),
     ghRepo: document.getElementById('ghRepo').value.trim(),
   };

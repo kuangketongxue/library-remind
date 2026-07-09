@@ -9,8 +9,8 @@ const EYE_REST_INTERVAL_MINUTES = 20;
 const EYE_REST_EVERY_N_ROUNDS = 3;
 const DAILY_LIMIT_HOUR = 22;
 
-const BILIBILI_FAV_URL = 'https://space.bilibili.com/529362421/favlist?fid=3648313921&ftype=create&spm_id_from=333.788.0.0';
-const BILIBILI_EYE_URL = 'https://www.bilibili.com/video/BV14Y4y1N7PW/?spm_id_from=333.1387.favlist.content.click';
+const BILIBILI_FAV_DEFAULT = 'https://space.bilibili.com/529362421/favlist?fid=3648313921&ftype=create&spm_id_from=333.788.0.0';
+const BILIBILI_EYE_DEFAULT = 'https://www.bilibili.com/video/BV14Y4y1N7PW/?spm_id_from=333.1387.favlist.content.click';
 
 // ── 成就定义 ──
 const ACHIEVEMENTS = [
@@ -170,10 +170,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'submitReview': {
       saveReview(msg.score, msg.subject, msg.label).then(async () => {
         checkAchievements();
+        const s = await chrome.storage.local.get('settings');
+        const settings = s.settings || {};
         if (state.roundCount % EYE_REST_EVERY_N_ROUNDS === 0) {
-          chrome.tabs.create({ url: BILIBILI_EYE_URL });
+          chrome.tabs.create({ url: settings.bilibiliEyeUrl || BILIBILI_EYE_DEFAULT });
         } else {
-          chrome.tabs.create({ url: BILIBILI_FAV_URL });
+          chrome.tabs.create({ url: settings.bilibiliFavUrl || BILIBILI_FAV_DEFAULT });
         }
         state.timerState = 'idle';
         await saveState();
