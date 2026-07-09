@@ -35,6 +35,7 @@ body {
 .status-badge.running { background: rgba(120, 180, 80, 0.2); color: #78B450; }
 .status-badge.paused { background: rgba(212, 168, 83, 0.2); color: #d4a853; }
 .status-badge.resting { background: rgba(217, 119, 87, 0.2); color: #d97757; }
+.status-badge.review { background: rgba(212, 175, 55, 0.2); color: #d4af37; }
 
 .timer-display {
   font-size: 48px;
@@ -47,6 +48,7 @@ body {
 .timer-display.running { color: #78B450; }
 .timer-display.paused { color: #d4a853; }
 .timer-display.resting { color: #d97757; }
+.timer-display.review { color: #d4af37; }
 .timer-display.idle { color: #555; }
 
 .subtitle {
@@ -73,12 +75,17 @@ body {
   font-family: inherit;
 }
 
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .btn-primary {
   background: #d4af37;
   color: #0d0d12;
 }
-.btn-primary:hover { background: #e8c44a; }
-.btn-primary:active { background: #b8972e; }
+.btn-primary:hover:not(:disabled) { background: #e8c44a; }
+.btn-primary:active:not(:disabled) { background: #b8972e; }
 
 .btn-secondary {
   background: #222;
@@ -111,6 +118,15 @@ body {
   color: #666;
 }
 
+/* 22:00 倒计时 */
+.countdown-bar {
+  text-align: center;
+  font-size: 12px;
+  color: #666;
+  padding: 8px 0;
+  border-top: 1px solid #222;
+}
+
 /* 底部 */
 .footer {
   text-align: center;
@@ -124,3 +140,4 @@ body {
   font-size: 12px;
 }
 .footer a:hover { color: #888; }
+.sep { color: #333; margin: 0 6px; }

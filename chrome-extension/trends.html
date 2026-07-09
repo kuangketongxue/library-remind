@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>📊 复盘趋势</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  background: #0d0d12; color: #e8e6e1;
+  padding: 40px;
+}
+.container { max-width: 600px; margin: 0 auto; }
+h1 { font-size: 24px; margin-bottom: 24px; color: #d4af37; }
+.stats-row {
+  display: flex; gap: 12px; margin-bottom: 24px;
+}
+.stat-card {
+  flex: 1; background: #16161c; border-radius: 12px;
+  padding: 16px; text-align: center;
+}
+.stat-card .value { font-size: 28px; font-weight: 700; color: #d4af37; }
+.stat-card .label { font-size: 12px; color: #888; margin-top: 4px; }
+
+.chart-section {
+  background: #16161c; border-radius: 12px; padding: 20px; margin-bottom: 16px;
+}
+.chart-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #ccc; }
+.bar-chart { display: flex; align-items: flex-end; gap: 8px; height: 120px; }
+.bar-item { flex: 1; display: flex; flex-direction: column; align-items: center; }
+.bar {
+  width: 100%; border-radius: 4px 4px 0 0; min-height: 2px;
+  transition: height 0.3s;
+}
+.bar-label { font-size: 10px; color: #666; margin-top: 6px; }
+.bar-value { font-size: 11px; color: #aaa; margin-bottom: 4px; }
+
+.review-list { margin-top: 16px; }
+.review-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 0; border-bottom: 1px solid #222;
+}
+.review-item:last-child { border-bottom: none; }
+.review-round { color: #888; font-size: 13px; }
+.review-score { font-weight: 700; font-size: 16px; }
+.review-time { color: #666; font-size: 12px; }
+.score-high { color: #78B450; }
+.score-mid { color: #d4af37; }
+.score-low { color: #c95454; }
+.empty { color: #555; text-align: center; padding: 20px; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>📊 复盘趋势</h1>
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="value" id="totalRounds">0</div>
+      <div class="label">总轮次</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="avgScore">--</div>
+      <div class="label">平均评分</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="todayRounds">0</div>
+      <div class="label">今日轮次</div>
+    </div>
+  </div>
+
+  <div class="chart-section">
+    <div class="chart-title">近 7 天评分趋势</div>
+    <div class="bar-chart" id="barChart"></div>
+  </div>
+
+  <div class="chart-section">
+    <div class="chart-title">今日复盘记录</div>
+    <div class="review-list" id="reviewList"></div>
+  </div>
+</div>
+
+<script>
+async function loadTrends() {
+  // 获取统计数据
+  chrome.runtime.sendMessage({ action: 'getStats' }, async (res) => {
+    if (!res || !res.stats) return;
+    const { stats } = res;
+
+    document.getElementById('totalRounds').textContent = stats.totalRounds;
+    document.getElementById('avgScore').textContent = stats.avgScore || '--';
+
+    // 绘制柱状图
+    const chart = document.getElementById('barChart');
+    const maxScore = Math.max(...stats.days.map(d => d.avgScore || 0), 1);
+    chart.innerHTML = stats.days.map(d => {
+      const h = d.avgScore ? (d.avgScore / maxScore * 100) : 0;
+      const color = d.avgScore >= 80 ? '#78B450' : d.avgScore >= 50 ? '#d4af37' : '#c95454';
+      return `<div class="bar-item">
+        <div class="bar-value">${d.avgScore || '-'}</div>
+        <div class="bar" style="height:${h}%;background:${color}"></div>
+        <div class="bar-label">${d.label}</div>
+      </div>`;
+    }).join('');
+  });
+
+  // 今日复盘记录
+  const today = new Date().toISOString().slice(0, 10);
+  chrome.runtime.sendMessage({ action: 'getReviews', date: today }, (res) => {
+    const list = document.getElementById('reviewList');
+    if (!res || !res.reviews || res.reviews.length === 0) {
+      list.innerHTML = '<div class="empty">今天还没有复盘记录</div>';
+      return;
+    }
+    document.getElementById('todayRounds').textContent = res.reviews.length;
+    list.innerHTML = res.reviews.map(r => {
+      const cls = r.score >= 80 ? 'score-high' : r.score >= 50 ? 'score-mid' : 'score-low';
+      return `<div class="review-item">
+        <span class="review-round">第 ${r.round} 轮</span>
+        <span class="review-score ${cls}">${r.score}</span>
+        <span class="review-time">${r.time}</span>
+      </div>`;
+    }).join('');
+  });
+}
+
+document.addEventListener('DOMContentLoaded', loadTrends);
+</script>
+</body>
+</html>

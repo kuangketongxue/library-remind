@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>📝 复盘评分</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  background: #0d0d12; color: #e8e6e1;
+  display: flex; justify-content: center; align-items: center;
+  min-height: 100vh;
+}
+.card {
+  background: #16161c; border-radius: 16px; padding: 32px;
+  width: 400px; text-align: center;
+}
+h1 { font-size: 24px; margin-bottom: 8px; }
+.subtitle { color: #888; font-size: 14px; margin-bottom: 24px; }
+.score-display {
+  font-size: 64px; font-weight: 700; color: #d4af37;
+  margin: 16px 0; font-variant-numeric: tabular-nums;
+}
+input[type="range"] {
+  width: 100%; height: 8px; -webkit-appearance: none;
+  background: linear-gradient(to right, #c95454, #d4af37, #78B450);
+  border-radius: 4px; outline: none; margin: 16px 0;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 24px; height: 24px;
+  background: #fff; border-radius: 50%; cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+.btn {
+  width: 100%; padding: 14px; border: none; border-radius: 10px;
+  font-size: 16px; font-weight: 600; cursor: pointer;
+  background: #d4af37; color: #0d0d12; margin-top: 16px;
+  font-family: inherit; transition: background 0.15s;
+}
+.btn:hover { background: #e8c44a; }
+.btn:active { background: #b8972e; }
+.footer { margin-top: 16px; color: #555; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>📝 本轮复盘</h1>
+  <div class="subtitle" id="subtitle">第 1 轮学习</div>
+  <div class="score-display" id="scoreDisplay">50</div>
+  <input type="range" id="scoreSlider" min="1" max="100" value="50">
+  <button class="btn" id="submitBtn">提交评分</button>
+  <div class="footer">分数越高质量越好，点击提交后自动打开 B 站</div>
+</div>
+<script>
+chrome.runtime.sendMessage({ action: 'getState' }, (state) => {
+  document.getElementById('subtitle').textContent = `第 ${state.roundCount} 轮学习`;
+});
+
+const slider = document.getElementById('scoreSlider');
+const display = document.getElementById('scoreDisplay');
+
+slider.addEventListener('input', () => {
+  const v = parseInt(slider.value);
+  display.textContent = v;
+  if (v >= 80) display.style.color = '#78B450';
+  else if (v >= 50) display.style.color = '#d4af37';
+  else display.style.color = '#c95454';
+});
+
+document.getElementById('submitBtn').addEventListener('click', () => {
+  const score = parseInt(slider.value);
+  chrome.runtime.sendMessage({ action: 'submitReview', score }, (res) => {
+    if (res && res.ok) {
+      document.getElementById('submitBtn').textContent = '✓ 已提交';
+      document.getElementById('submitBtn').disabled = true;
+      document.getElementById('submitBtn').style.background = '#78B450';
+      setTimeout(() => window.close(), 1500);
+    }
+  });
+});
+</script>
+</body>
+</html>
