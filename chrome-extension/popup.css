@@ -1,0 +1,126 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 320px;
+  min-height: 200px;
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  background: #0d0d12;
+  color: #e8e6e1;
+}
+
+.container {
+  padding: 20px;
+}
+
+/* 状态区域 */
+.status-section {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.status-badge.idle { background: #333; color: #888; }
+.status-badge.running { background: rgba(120, 180, 80, 0.2); color: #78B450; }
+.status-badge.paused { background: rgba(212, 168, 83, 0.2); color: #d4a853; }
+.status-badge.resting { background: rgba(217, 119, 87, 0.2); color: #d97757; }
+
+.timer-display {
+  font-size: 48px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 2px;
+  margin: 8px 0;
+}
+
+.timer-display.running { color: #78B450; }
+.timer-display.paused { color: #d4a853; }
+.timer-display.resting { color: #d97757; }
+.timer-display.idle { color: #555; }
+
+.subtitle {
+  font-size: 13px;
+  color: #888;
+}
+
+/* 按钮 */
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.btn {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.btn-primary {
+  background: #d4af37;
+  color: #0d0d12;
+}
+.btn-primary:hover { background: #e8c44a; }
+.btn-primary:active { background: #b8972e; }
+
+.btn-secondary {
+  background: #222;
+  color: #888;
+  border: 1px solid #333;
+}
+.btn-secondary:hover { background: #333; color: #aaa; }
+
+/* 统计 */
+.stats {
+  display: flex;
+  justify-content: space-around;
+  padding: 12px 0;
+  border-top: 1px solid #222;
+}
+
+.stat-item {
+  text-align: center;
+}
+
+.stat-value {
+  display: block;
+  font-size: 20px;
+  font-weight: 700;
+  color: #d4af37;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: #666;
+}
+
+/* 底部 */
+.footer {
+  text-align: center;
+  padding-top: 8px;
+  border-top: 1px solid #222;
+}
+
+.footer a {
+  color: #555;
+  text-decoration: none;
+  font-size: 12px;
+}
+.footer a:hover { color: #888; }

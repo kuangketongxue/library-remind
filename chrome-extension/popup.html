@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- 状态显示 -->
+    <div class="status-section">
+      <div class="status-badge" id="statusBadge">待机</div>
+      <div class="timer-display" id="timerDisplay">60:00</div>
+      <div class="subtitle" id="subtitle">点击开始学习</div>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="actions">
+      <button class="btn btn-primary" id="mainBtn">▶ 开始学习</button>
+      <button class="btn btn-secondary" id="skipBtn" style="display:none">⏭ 跳到休息</button>
+    </div>
+
+    <!-- 今日统计 -->
+    <div class="stats">
+      <div class="stat-item">
+        <span class="stat-value" id="roundCount">0</span>
+        <span class="stat-label">轮次</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value" id="studyMinutes">0</span>
+        <span class="stat-label">学习(分)</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value" id="breakMinutes">0</span>
+        <span class="stat-label">休息(分)</span>
+      </div>
+    </div>
+
+    <!-- 底部链接 -->
+    <div class="footer">
+      <a href="#" id="optionsLink">设置</a>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

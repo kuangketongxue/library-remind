@@ -1,0 +1,88 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  background: #0d0d12;
+  color: #e8e6e1;
+  padding: 40px;
+}
+
+.container {
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+h1 {
+  font-size: 24px;
+  margin-bottom: 24px;
+  color: #d4af37;
+}
+
+h2 {
+  font-size: 16px;
+  margin-bottom: 12px;
+  color: #888;
+}
+
+.section {
+  background: #16161c;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #222;
+}
+.setting-row:last-child { border-bottom: none; }
+
+label {
+  font-size: 14px;
+  color: #ccc;
+}
+
+input[type="number"] {
+  width: 80px;
+  padding: 6px 10px;
+  background: #222;
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: #e8e6e1;
+  font-size: 14px;
+  text-align: center;
+}
+
+input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #d4af37;
+}
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  background: #222;
+  color: #ccc;
+  transition: background 0.15s;
+}
+.btn:hover { background: #333; }
+
+.btn-danger {
+  background: #3a1515;
+  color: #c95454;
+}
+.btn-danger:hover { background: #4a1f1f; }
+
+.footer {
+  text-align: center;
+  margin-top: 24px;
+  color: #555;
+  font-size: 12px;
+}
