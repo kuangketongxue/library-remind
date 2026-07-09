@@ -1153,6 +1153,7 @@ class LocalSync:
             # 保留 _pending_settings，下次定时器触发时重试
             log.error(f'[LocalSync] 设置保存失败，保留挂起数据待重试: {type(e).__name__}: {e}')
 
+    @classmethod
     def flush_pending_settings(cls):
         """立即刷新挂起的设置写入（用于应用退出前确保落盘）"""
         if cls._save_timer is not None and cls._save_timer.isActive():
@@ -5570,6 +5571,15 @@ class RestReminderWidget(QWidget):
             return
         self.app_settings['mail_last_sent'] = now.date().isoformat()
         LocalSync.save_settings(self.app_settings)
+        # 清理旧 worker，防止线程堆叠
+        old = getattr(self, '_mail_worker', None)
+        if old is not None:
+            try:
+                if old.isRunning():
+                    old.quit()
+                    old.wait(2000)
+            except Exception:
+                pass
         self._mail_worker = _WeeklyReportWorker(recipient)
         def _on_weekly_done(ok, msg):
             # 守卫：主窗口可能已关闭
@@ -8235,6 +8245,12 @@ class RestReminderWidget(QWidget):
             self._save_active_state()
             # 确保防抖挂起的设置立即落盘
             LocalSync.flush_pending_settings()
+            # 清理飞书日程管理器（停止定时器 + 取消后台线程）
+            if hasattr(self, '_calendar_mgr'):
+                try:
+                    self._calendar_mgr.stop()
+                except Exception as e:
+                    log.warning(f'[quit_app] 清理飞书日程失败: {type(e).__name__}: {e}')
             # 清理后台 QThread（与 closeEvent 一致）
             for attr in ('_report_worker', '_mail_worker'):
                 w = getattr(self, attr, None)
@@ -8255,6 +8271,9 @@ class RestReminderWidget(QWidget):
             QApplication.quit()
         except Exception as e:
             log.error(f'[quit_app 异常] {type(e).__name__}: {e}')
+        # 无论 quit_app 是否成功，都强制退出进程，防止 Qt 事件循环残留导致无法退出
+        import threading
+        threading.Timer(1.0, lambda: os._exit(0)).start()
 
 
 _single_instance = SingleInstanceChecker()
@@ -8280,7 +8299,7 @@ def main():
     try:
         ctypes.windll.user32.SetProcessDPIAware()
     except Exception:
-        log.error("[DPIAware] 设置失败")
+        log.warning("[DPIAware] 设置失败")
 
     app = QApplication([])
     app.setQuitOnLastWindowClosed(False)

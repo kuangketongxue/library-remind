@@ -9,6 +9,7 @@ import logging
 import os
 import shutil
 import subprocess
+import sys
 import traceback
 from datetime import datetime, timedelta, timezone
 
@@ -172,34 +173,42 @@ class _FetchWorker(QThread):
 
             cli_path = self._cli_path or _find_lark_cli()
 
-            # ★ 直接用 node.exe 运行 lark-cli，避免 .CMD 脚本在 pythonw 环境下 PATH 问题
-            # node 版本路径动态 glob，避免 WorkBuddy 升级 node 后硬编码版本号失效
-            home = os.path.expanduser('~')
-            workbuddy_node = ''
-            try:
-                import glob
-                node_versions_dir = os.path.join(home, r'.workbuddy\binaries\node\versions')
-                candidates = sorted(glob.glob(os.path.join(node_versions_dir, '*', 'node.exe')), reverse=True)
-                if candidates:
-                    workbuddy_node = candidates[0]
-            except Exception:
-                pass
+            # ★ 查找可用的 node.exe：优先用系统 PATH 中的 node，其次用 npm 目录下的
+            node_exe = shutil.which('node') or shutil.which('node.exe')
+            if not node_exe:
+                # 搜索常见安装位置
+                home = os.path.expanduser('~')
+                for candidate in [
+                    os.path.join(home, r'.workbuddy\binaries\node\versions\22.22.2\node.exe'),
+                    r'C:\Program Files\nodejs\node.exe',
+                    os.path.join(home, r'AppData\Roaming\npm\node.exe'),
+                ]:
+                    if os.path.isfile(candidate):
+                        node_exe = candidate
+                        break
+
             lark_run_js = os.path.join(
                 os.path.dirname(os.path.abspath(cli_path)),
                 'node_modules', '@larksuite', 'cli', 'scripts', 'run.js'
             )
 
-            if os.path.isfile(workbuddy_node) and os.path.isfile(lark_run_js):
-                # 直接用 node.exe 执行，完全绕过 .CMD 的 PATH 查找
+            if node_exe and os.path.isfile(lark_run_js):
+                # ★ 用 node.exe + run.js 直接执行，避免 .CMD 脚本在 pythonw 环境下 PATH 问题
                 cmd = [
-                    workbuddy_node, lark_run_js,
+                    node_exe, lark_run_js,
                     'calendar', '+agenda',
                     '--as', 'user',
                     '--start', start_str,
                     '--end', end_str,
                     '--format', 'json',
                 ]
+                # ★ 设置 NODE_PATH 确保 node 能找到全局模块
+                env = os.environ.copy()
+                npm_global = os.path.join(os.environ.get('APPDATA', ''), 'npm', 'node_modules')
+                node_path = env.get('NODE_PATH', '')
+                env['NODE_PATH'] = f'{npm_global};{node_path}' if node_path else npm_global
             else:
+                # fallback：直接调用 lark-cli.cmd
                 cmd = [
                     cli_path, 'calendar', '+agenda',
                     '--as', 'user',
@@ -207,7 +216,9 @@ class _FetchWorker(QThread):
                     '--end', end_str,
                     '--format', 'json',
                 ]
+                env = None
 
+            log.info(f'[FeishuCalendar] fetch cmd: {cmd}')
             # 最多重试 2 次（应对 token 刷新窗口/网络瞬断）
             last_err = ''
             for attempt in range(2):
@@ -216,14 +227,24 @@ class _FetchWorker(QThread):
                 # 用 Popen + communicate 替代 subprocess.run，
                 # 这样 cancel() 可以 terminate 子进程，不会等到 timeout 才返回
                 try:
-                    proc = subprocess.Popen(
-                        cmd,
+                    popen_kwargs = dict(
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         text=True,
                         encoding='utf-8',
-                        creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0,
+                        stdin=subprocess.DEVNULL,  # ★ 必须重定向 stdin，否则 node.exe 读取无效句柄会崩溃
                     )
+                    # ★ 用 startupinfo + SW_HIDE 代替 CREATE_NO_WINDOW
+                    # CREATE_NO_WINDOW 会阻止控制台分配，node.exe 依赖控制台句柄，导致静默崩溃
+                    # startupinfo 方式只隐藏窗口，不阻止控制台分配，更安全
+                    if sys.platform == 'win32':
+                        si = subprocess.STARTUPINFO()
+                        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                        si.wShowWindow = subprocess.SW_HIDE
+                        popen_kwargs['startupinfo'] = si
+                    if env is not None:
+                        popen_kwargs['env'] = env
+                    proc = subprocess.Popen(cmd, **popen_kwargs)
                 except FileNotFoundError:
                     self.error.emit('未找到 lark-cli，请确认已安装')
                     return
