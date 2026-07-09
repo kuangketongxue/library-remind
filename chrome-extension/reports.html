@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>🤖 AI 学习报告</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  background: #0d0d12; color: #e8e6e1; padding: 40px;
+}
+.container { max-width: 700px; margin: 0 auto; }
+h1 { font-size: 24px; margin-bottom: 8px; color: #d4af37; }
+.subtitle { color: #888; font-size: 14px; margin-bottom: 24px; }
+.types {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px;
+}
+.type-btn {
+  background: #16161c; border: 1px solid #222; border-radius: 12px;
+  padding: 16px; cursor: pointer; text-align: left; transition: all 0.15s;
+}
+.type-btn:hover { border-color: #d4af37; background: #1a1a24; }
+.type-btn.active { border-color: #d4af37; background: #1a1a24; }
+.type-icon { font-size: 24px; margin-bottom: 8px; }
+.type-name { font-size: 14px; font-weight: 600; }
+.type-desc { font-size: 12px; color: #666; margin-top: 4px; }
+.report-box {
+  background: #16161c; border-radius: 12px; padding: 24px;
+  min-height: 200px; white-space: pre-wrap; line-height: 1.7;
+  font-size: 14px; display: none;
+}
+.report-box.visible { display: block; }
+.loading { color: #888; text-align: center; padding: 40px; }
+.generate-btn {
+  width: 100%; padding: 14px; border: none; border-radius: 10px;
+  font-size: 15px; font-weight: 600; cursor: pointer;
+  background: #d4af37; color: #0d0d12; margin-bottom: 16px;
+  font-family: inherit; transition: background 0.15s;
+}
+.generate-btn:hover { background: #e8c44a; }
+.generate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.error { color: #c95454; font-size: 13px; margin-top: 8px; display: none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🤖 AI 学习报告</h1>
+  <div class="subtitle">智能分析你的学习节奏和专注模式</div>
+
+  <div class="types">
+    <div class="type-btn" data-type="daily">
+      <div class="type-icon">📋</div>
+      <div class="type-name">日报</div>
+      <div class="type-desc">今日学习总结</div>
+    </div>
+    <div class="type-btn" data-type="weekly">
+      <div class="type-icon">📊</div>
+      <div class="type-name">周报</div>
+      <div class="type-desc">本周学习趋势</div>
+    </div>
+    <div class="type-btn" data-type="monthly">
+      <div class="type-icon">📈</div>
+      <div class="type-name">月报</div>
+      <div class="type-desc">本月学习概览</div>
+    </div>
+    <div class="type-btn" data-type="quarterly">
+      <div class="type-icon">🔮</div>
+      <div class="type-name">季报</div>
+      <div class="type-desc">季度学习分析</div>
+    </div>
+  </div>
+
+  <button class="generate-btn" id="generateBtn" disabled>选择报告类型后点击生成</button>
+  <div class="error" id="error"></div>
+  <div class="report-box" id="reportBox"></div>
+</div>
+<script>
+let selectedType = null;
+
+document.querySelectorAll('.type-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedType = btn.dataset.type;
+    document.getElementById('generateBtn').disabled = false;
+    document.getElementById('generateBtn').textContent = `生成${btn.querySelector('.type-name').textContent}`;
+  });
+});
+
+document.getElementById('generateBtn').addEventListener('click', async () => {
+  if (!selectedType) return;
+  const btn = document.getElementById('generateBtn');
+  const box = document.getElementById('reportBox');
+  const err = document.getElementById('error');
+
+  btn.disabled = true;
+  btn.textContent = '⏳ 生成中...';
+  box.className = 'report-box visible';
+  box.innerHTML = '<div class="loading">正在分析学习数据...</div>';
+  err.style.display = 'none';
+
+  try {
+    // 先收集本地数据
+    const stats = await new Promise(resolve => {
+      chrome.runtime.sendMessage({ action: 'getStats' }, resolve);
+    });
+    const reviews = await new Promise(resolve => {
+      chrome.runtime.sendMessage({ action: 'getReviews', date: today() }, resolve);
+    });
+    const state = await new Promise(resolve => {
+      chrome.runtime.sendMessage({ action: 'getState' }, resolve);
+    });
+
+    const prompt = buildPrompt(selectedType, stats?.stats, reviews?.reviews, state);
+
+    // 调用 Cloudflare AI 代理
+    const resp = await fetch('https://crazy-rest-reminder.pages.dev/api/ai-proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [
+          { role: 'system', content: '你是精力管理 AI 助手，根据用户的学习数据生成简洁的中文学习报告。用 emoji 分段，重点突出，不超过 500 字。' },
+          { role: 'user', content: prompt }
+        ],
+        model: 'auto',
+      })
+    });
+
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    const content = data.choices?.[0]?.message?.content || data.content || '';
+    if (!content) throw new Error('AI 未返回内容');
+
+    box.innerHTML = content.replace(/\n/g, '<br>');
+  } catch (e) {
+    err.textContent = `生成失败: ${e.message}`;
+    err.style.display = 'block';
+    box.innerHTML = '';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = `生成${document.querySelector('.type-btn.active .type-name')?.textContent || ''}`;
+  }
+});
+
+function today() { return new Date().toISOString().slice(0, 10); }
+
+function buildPrompt(type, stats, reviews, state) {
+  const days = stats?.days || [];
+  const reviewList = reviews || [];
+  const roundCount = state?.roundCount || 0;
+  const studyMin = state?.studyMinutes || 0;
+
+  let data = `今日数据：${roundCount} 轮，${studyMin} 分钟学习\n`;
+  data += `近 7 天：${days.map(d => `${d.label}: ${d.rounds}轮 均分${d.avgScore}`).join('，')}\n`;
+  if (reviewList.length > 0) {
+    data += `今日复盘：${reviewList.map(r => `第${r.round}轮 ${r.score}分`).join('，')}`;
+  }
+
+  const prompts = {
+    daily: `请根据以下数据生成今日学习日报，分析学习节奏和专注度，给出明天的建议：\n${data}`,
+    weekly: `请根据以下数据生成本周学习周报，分析趋势变化，找出高效和低效时段，给出下周优化建议：\n${data}`,
+    monthly: `请根据以下数据生成本月学习月报，总结学习规律，分析进步和退步，给出下月目标建议：\n${data}`,
+    quarterly: `请根据以下数据生成季度学习报告，从宏观角度分析学习模式，给出长期学习策略建议：\n${data}`,
+  };
+  return prompts[type] || prompts.daily;
+}
+</script>
+</body>
+</html>

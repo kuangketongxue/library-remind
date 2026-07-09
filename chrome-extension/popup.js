@@ -4,8 +4,17 @@ const FOCUS_SECONDS = 60 * 60;
 const REST_SECONDS = 5 * 60;
 const DAILY_LIMIT_HOUR = 22;
 
+const AMBIENT_SOUNDS = [
+  { id: 'rain', icon: '🌧️', name: '雨声' },
+  { id: 'forest', icon: '🌲', name: '森林' },
+  { id: 'cafe', icon: '☕', name: '咖啡馆' },
+  { id: 'white', icon: '📻', name: '白噪音' },
+  { id: 'brown', icon: '🌊', name: '棕色噪音' },
+];
+
 let currentState = null;
 let tickInterval = null;
+let ambientCtx = null;
 
 // ── 初始化 ──
 document.addEventListener('DOMContentLoaded', async () => {
@@ -21,44 +30,128 @@ document.addEventListener('DOMContentLoaded', async () => {
     e.preventDefault();
     chrome.runtime.openOptionsPage();
   });
-  document.getElementById('trendsLink').addEventListener('click', (e) => {
-    e.preventDefault();
-    chrome.tabs.create({ url: chrome.runtime.getURL('trends.html') });
+
+  // 快捷入口
+  document.querySelectorAll('.shortcut').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      chrome.tabs.create({ url: chrome.runtime.getURL(el.dataset.page) });
+    });
   });
+
+  // 白噪音按钮
+  renderAmbientBtns();
 });
+
+// ── 白噪音 ──
+function renderAmbientBtns() {
+  const container = document.getElementById('ambientBtns');
+  container.innerHTML = AMBIENT_SOUNDS.map(s =>
+    `<button class="ambient-btn" data-sound="${s.id}" title="${s.name}">${s.icon}</button>`
+  ).join('');
+
+  container.querySelectorAll('.ambient-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const sound = btn.dataset.sound;
+      if (currentState.ambientSound === sound) {
+        stopAmbient();
+        btn.classList.remove('active');
+      } else {
+        playAmbient(sound);
+        container.querySelectorAll('.ambient-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      }
+    });
+  });
+}
+
+function playAmbient(type) {
+  stopAmbient();
+  try {
+    ambientCtx = new AudioContext();
+    const osc = ambientCtx.createOscillator();
+    const gain = ambientCtx.createGain();
+    gain.gain.value = 0.3;
+
+    // 简单噪音生成
+    const bufferSize = 2 * ambientCtx.sampleRate;
+    const buffer = ambientCtx.createBuffer(1, bufferSize, ambientCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+
+    if (type === 'white') {
+      for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+    } else if (type === 'brown') {
+      let last = 0;
+      for (let i = 0; i < bufferSize; i++) {
+        const white = Math.random() * 2 - 1;
+        data[i] = (last + 0.02 * white) / 1.02;
+        last = data[i];
+        data[i] *= 3.5;
+      }
+    } else if (type === 'rain') {
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * (0.5 + 0.5 * Math.sin(i / 1000));
+      }
+    } else {
+      // forest / cafe: brown noise variant
+      let last = 0;
+      for (let i = 0; i < bufferSize; i++) {
+        const white = Math.random() * 2 - 1;
+        data[i] = (last + 0.01 * white) / 1.01;
+        last = data[i];
+        data[i] *= 2;
+      }
+    }
+
+    const source = ambientCtx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    source.connect(gain).connect(ambientCtx.destination);
+    source.start();
+
+    currentState.ambientSound = type;
+    chrome.runtime.sendMessage({ action: 'playAmbient', sound: type });
+  } catch (e) {
+    console.error('Audio failed:', e);
+  }
+}
+
+function stopAmbient() {
+  if (ambientCtx) {
+    ambientCtx.close().catch(() => {});
+    ambientCtx = null;
+  }
+  currentState.ambientSound = '';
+  chrome.runtime.sendMessage({ action: 'stopAmbient' });
+}
 
 // ── 渲染 ──
 function render() {
   if (!currentState) return;
   const { timerState } = currentState;
 
-  // 状态标签
   const badge = document.getElementById('statusBadge');
   badge.className = `status-badge ${timerState}`;
   const stateNames = { idle: '待机', running: '学习中', paused: '已暂停', resting: '休息中', review: '复盘中' };
   badge.textContent = stateNames[timerState] || timerState;
 
-  // 计时器
   const display = document.getElementById('timerDisplay');
   display.className = `timer-display ${timerState}`;
   display.textContent = formatTime(getRemaining());
 
-  // 副标题
   const subtitle = document.getElementById('subtitle');
   const subtitles = {
-    idle: '点击开始学习',
-    running: '保持专注 💪',
-    paused: '已暂停，点击继续',
-    resting: '休息一下 ☕',
-    review: '请为本轮评分',
+    idle: '点击开始学习', running: '保持专注 💪', paused: '已暂停，点击继续',
+    resting: '休息一下 ☕', review: '请为本轮评分',
   };
   subtitle.textContent = subtitles[timerState] || '';
 
-  // 主按钮
   const mainBtn = document.getElementById('mainBtn');
   const skipBtn = document.getElementById('skipBtn');
   mainBtn.style.background = '';
   mainBtn.style.color = '';
+  mainBtn.disabled = false;
+  mainBtn.onclick = onMainBtnClick;
 
   if (timerState === 'idle') {
     const hour = currentState.hour || new Date().getHours();
@@ -69,7 +162,6 @@ function render() {
     } else {
       mainBtn.textContent = '▶ 开始学习';
       mainBtn.className = 'btn btn-primary';
-      mainBtn.disabled = false;
     }
     skipBtn.style.display = 'none';
   } else if (timerState === 'running') {
@@ -96,12 +188,15 @@ function render() {
     skipBtn.style.display = 'none';
   }
 
-  // 统计
   document.getElementById('roundCount').textContent = currentState.roundCount || 0;
   document.getElementById('studyMinutes').textContent = currentState.studyMinutes || 0;
   document.getElementById('breakMinutes').textContent = currentState.breakMinutes || 0;
 
-  // 22:00 倒计时
+  // 白噪音状态同步
+  document.querySelectorAll('.ambient-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.sound === currentState.ambientSound);
+  });
+
   updateCountdown();
 }
 
@@ -124,29 +219,17 @@ function updateCountdown() {
 function getRemaining() {
   if (!currentState) return 0;
   const { timerState, focusStartedAt, pausedRemaining, breakStartedAt } = currentState;
-
-  if (timerState === 'running' && focusStartedAt) {
-    const elapsed = Math.floor((Date.now() - focusStartedAt) / 1000);
-    return Math.max(FOCUS_SECONDS - elapsed, 0);
-  }
-  if (timerState === 'paused' && pausedRemaining) {
-    return pausedRemaining;
-  }
-  if (timerState === 'resting' && breakStartedAt) {
-    const elapsed = Math.floor((Date.now() - breakStartedAt) / 1000);
-    return Math.max(REST_SECONDS - elapsed, 0);
-  }
+  if (timerState === 'running' && focusStartedAt) return Math.max(FOCUS_SECONDS - Math.floor((Date.now() - focusStartedAt) / 1000), 0);
+  if (timerState === 'paused' && pausedRemaining) return pausedRemaining;
+  if (timerState === 'resting' && breakStartedAt) return Math.max(REST_SECONDS - Math.floor((Date.now() - breakStartedAt) / 1000), 0);
   return 0;
 }
 
-function formatTime(seconds) {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+function formatTime(s) {
+  return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
 }
 
 function startTick() {
-  if (tickInterval) clearInterval(tickInterval);
   tickInterval = setInterval(() => {
     if (currentState && currentState.timerState !== 'idle') {
       document.getElementById('timerDisplay').textContent = formatTime(getRemaining());
@@ -155,22 +238,15 @@ function startTick() {
   }, 1000);
 }
 
-// ── 操作 ──
 function onMainBtnClick() {
   if (!currentState) return;
   const { timerState } = currentState;
-
   if (timerState === 'idle' || timerState === 'paused') {
     const action = timerState === 'idle' ? 'start' : 'resume';
     chrome.runtime.sendMessage({ action }, (res) => {
-      if (res && res.error) {
-        alert(res.error);
-        return;
-      }
+      if (res && res.error) { alert(res.error); return; }
       currentState.timerState = 'running';
-      if (action === 'start') {
-        currentState.focusStartedAt = Date.now();
-      }
+      if (action === 'start') currentState.focusStartedAt = Date.now();
       currentState.pausedRemaining = null;
       render();
     });

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>🏆 成就</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  background: #0d0d12; color: #e8e6e1; padding: 40px;
+}
+.container { max-width: 600px; margin: 0 auto; }
+h1 { font-size: 24px; margin-bottom: 24px; color: #d4af37; }
+.category { margin-bottom: 24px; }
+.cat-title { font-size: 14px; color: #888; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.achievement {
+  background: #16161c; border-radius: 12px; padding: 14px;
+  display: flex; align-items: center; gap: 12px;
+  border: 1px solid #222; transition: all 0.15s;
+}
+.achievement.unlocked { border-color: #d4af37; background: #1a1a24; }
+.achievement.locked { opacity: 0.4; }
+.ach-icon { font-size: 28px; }
+.ach-info { flex: 1; }
+.ach-name { font-size: 13px; font-weight: 600; }
+.ach-desc { font-size: 11px; color: #666; margin-top: 2px; }
+.ach-check { font-size: 11px; color: #78B450; margin-top: 2px; }
+.progress-bar {
+  height: 4px; background: #222; border-radius: 2px; margin-top: 6px;
+}
+.progress-fill {
+  height: 100%; background: #d4af37; border-radius: 2px;
+  transition: width 0.3s;
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🏆 成就系统</h1>
+  <div id="achievements"></div>
+</div>
+<script>
+const ACHIEVEMENTS = [
+  // 学习时长
+  { id: 'first_hour', name: '初出茅庐', desc: '累计学习 1 小时', icon: '📖', cat: 'study', key: 'totalStudy', target: 60 },
+  { id: 'ten_hours', name: '学海无涯', desc: '累计学习 10 小时', icon: '📚', cat: 'study', key: 'totalStudy', target: 600 },
+  { id: 'fifty_hours', name: '废寝忘食', desc: '累计学习 50 小时', icon: '🔥', cat: 'study', key: 'totalStudy', target: 3000 },
+  { id: 'hundred_hours', name: '博学多才', desc: '累计学习 100 小时', icon: '🎓', cat: 'study', key: 'totalStudy', target: 6000 },
+  // 连续打卡
+  { id: 'streak_3', name: '三天打鱼', desc: '连续打卡 3 天', icon: '🌱', cat: 'streak', key: 'streak', target: 3 },
+  { id: 'streak_7', name: '一周坚持', desc: '连续打卡 7 天', icon: '🌿', cat: 'streak', key: 'streak', target: 7 },
+  { id: 'streak_14', name: '两周达人', desc: '连续打卡 14 天', icon: '🌳', cat: 'streak', key: 'streak', target: 14 },
+  { id: 'streak_30', name: '月度之星', desc: '连续打卡 30 天', icon: '⭐', cat: 'streak', key: 'streak', target: 30 },
+  // 单日
+  { id: 'daily_4h', name: '半日充实', desc: '单日学习 4 小时', icon: '💪', cat: 'daily', key: 'todayStudy', target: 240 },
+  { id: 'daily_8h', name: '全天奋战', desc: '单日学习 8 小时', icon: '🏆', cat: 'daily', key: 'todayStudy', target: 480 },
+  // 复盘
+  { id: 'review_10', name: '反思达人', desc: '累计 10 次复盘', icon: '📝', cat: 'review', key: 'totalReviews', target: 10 },
+  { id: 'review_50', name: '深度思考', desc: '累计 50 次复盘', icon: '🧠', cat: 'review', key: 'totalReviews', target: 50 },
+  { id: 'perfect', name: '完美一轮', desc: '评分达到 100', icon: '💯', cat: 'review', key: 'maxScore', target: 100 },
+  // 轮次
+  { id: 'rounds_10', name: '初露锋芒', desc: '累计 10 轮', icon: '🎯', cat: 'rounds', key: 'totalRounds', target: 10 },
+  { id: 'rounds_50', name: '持之以恒', desc: '累计 50 轮', icon: '🏅', cat: 'rounds', key: 'totalRounds', target: 50 },
+  { id: 'rounds_100', name: '百日修炼', desc: '累计 100 轮', icon: '👑', cat: 'rounds', key: 'totalRounds', target: 100 },
+];
+
+const CAT_NAMES = { study: '📚 学习时长', streak: '🔥 连续打卡', daily: '💪 单日成就', review: '📝 复盘质量', rounds: '🎯 轮次里程碑' };
+
+async function load() {
+  const res = await new Promise(r => chrome.runtime.sendMessage({ action: 'getAchievementStats' }, r));
+  const s = res?.stats || {};
+
+  const container = document.getElementById('achievements');
+  const cats = {};
+  ACHIEVEMENTS.forEach(a => {
+    if (!cats[a.cat]) cats[a.cat] = [];
+    cats[a.cat].push(a);
+  });
+
+  container.innerHTML = Object.entries(cats).map(([cat, achs]) => `
+    <div class="category">
+      <div class="cat-title">${CAT_NAMES[cat]}</div>
+      <div class="grid">${achs.map(a => {
+        const val = s[a.key] || 0;
+        const unlocked = val >= a.target;
+        const pct = Math.min(100, Math.round(val / a.target * 100));
+        return `<div class="achievement ${unlocked ? 'unlocked' : 'locked'}">
+          <div class="ach-icon">${a.icon}</div>
+          <div class="ach-info">
+            <div class="ach-name">${a.name}</div>
+            <div class="ach-desc">${a.desc}</div>
+            ${unlocked ? '<div class="ach-check">✅ 已解锁</div>' : `<div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>`}
+          </div>
+        </div>`;
+      }).join('')}</div>
+    </div>
+  `).join('');
+}
+
+document.addEventListener('DOMContentLoaded', load);
+</script>
+</body>
+</html>

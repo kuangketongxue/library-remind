@@ -1,28 +1,49 @@
 // ═══ 精力管理 — Service Worker ═══
-// 状态机: idle → running → resting → review → idle (60+5分钟循环+复盘)
-//         任何状态 → paused → running (暂停/继续)
+// 状态机: idle → running → resting → review → idle
+//         任何状态 → paused → running
 
 const ALARM_PREFIX = 'rest_reminder_';
 const FOCUS_MINUTES = 60;
 const REST_MINUTES = 5;
 const EYE_REST_INTERVAL_MINUTES = 20;
-const EYE_REST_EVERY_N_ROUNDS = 3; // 每3轮打开护眼视频
-const DAILY_LIMIT_HOUR = 22; // 22点后不再开始新轮次
+const EYE_REST_EVERY_N_ROUNDS = 3;
+const DAILY_LIMIT_HOUR = 22;
 
 const BILIBILI_FAV_URL = 'https://space.bilibili.com/529362421/favlist?fid=3648313921&ftype=create&spm_id_from=333.788.0.0';
 const BILIBILI_EYE_URL = 'https://www.bilibili.com/video/BV14Y4y1N7PW/?spm_id_from=333.1387.favlist.content.click';
 
+// ── 成就定义 ──
+const ACHIEVEMENTS = [
+  { id: 'first_hour', name: '初出茅庐', desc: '累计学习 1 小时', icon: '📖', cat: 'study', key: 'totalStudy', target: 60 },
+  { id: 'ten_hours', name: '学海无涯', desc: '累计学习 10 小时', icon: '📚', cat: 'study', key: 'totalStudy', target: 600 },
+  { id: 'fifty_hours', name: '废寝忘食', desc: '累计学习 50 小时', icon: '🔥', cat: 'study', key: 'totalStudy', target: 3000 },
+  { id: 'hundred_hours', name: '博学多才', desc: '累计学习 100 小时', icon: '🎓', cat: 'study', key: 'totalStudy', target: 6000 },
+  { id: 'streak_3', name: '三天打鱼', desc: '连续打卡 3 天', icon: '🌱', cat: 'streak', key: 'streak', target: 3 },
+  { id: 'streak_7', name: '一周坚持', desc: '连续打卡 7 天', icon: '🌿', cat: 'streak', key: 'streak', target: 7 },
+  { id: 'streak_14', name: '两周达人', desc: '连续打卡 14 天', icon: '🌳', cat: 'streak', key: 'streak', target: 14 },
+  { id: 'streak_30', name: '月度之星', desc: '连续打卡 30 天', icon: '⭐', cat: 'streak', key: 'streak', target: 30 },
+  { id: 'daily_4h', name: '半日充实', desc: '单日学习 4 小时', icon: '💪', cat: 'daily', key: 'todayStudy', target: 240 },
+  { id: 'daily_8h', name: '全天奋战', desc: '单日学习 8 小时', icon: '🏆', cat: 'daily', key: 'todayStudy', target: 480 },
+  { id: 'review_10', name: '反思达人', desc: '累计 10 次复盘', icon: '📝', cat: 'review', key: 'totalReviews', target: 10 },
+  { id: 'review_50', name: '深度思考', desc: '累计 50 次复盘', icon: '🧠', cat: 'review', key: 'totalReviews', target: 50 },
+  { id: 'perfect', name: '完美一轮', desc: '评分达到 100', icon: '💯', cat: 'review', key: 'maxScore', target: 100 },
+  { id: 'rounds_10', name: '初露锋芒', desc: '累计 10 轮', icon: '🎯', cat: 'rounds', key: 'totalRounds', target: 10 },
+  { id: 'rounds_50', name: '持之以恒', desc: '累计 50 轮', icon: '🏅', cat: 'rounds', key: 'totalRounds', target: 50 },
+  { id: 'rounds_100', name: '百日修炼', desc: '累计 100 轮', icon: '👑', cat: 'rounds', key: 'totalRounds', target: 100 },
+];
+
 // ── 状态管理 ──
 let state = {
-  timerState: 'idle',      // idle | running | paused | resting | review
-  focusStartedAt: null,     // 本轮开始时间戳
-  breakStartedAt: null,     // 休息开始时间戳
-  pausedRemaining: null,    // 暂停时剩余秒数
-  roundCount: 0,            // 今日轮次
-  studyMinutes: 0,          // 今日学习分钟
-  breakMinutes: 0,          // 今日休息分钟
-  lastEyeRest: null,        // 上次护眼提醒时间戳
-  currentDate: null,        // 用于日期切换重置
+  timerState: 'idle',
+  focusStartedAt: null,
+  breakStartedAt: null,
+  pausedRemaining: null,
+  roundCount: 0,
+  studyMinutes: 0,
+  breakMinutes: 0,
+  lastEyeRest: null,
+  currentDate: null,
+  ambientSound: '',  // 当前白噪音类型
 };
 
 // ── 初始化 ──
@@ -39,12 +60,19 @@ chrome.runtime.onStartup.addListener(async () => {
   updateBadge();
 });
 
+// ── 快捷键处理 ──
+chrome.commands.onCommand.addListener((cmd) => {
+  if (cmd === 'toggle-pause') {
+    if (state.timerState === 'running') pauseFocus();
+    else if (state.timerState === 'paused') resumeFocus();
+  }
+});
+
 // ── 闹钟处理 ──
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   checkDateReset();
 
   if (alarm.name === `${ALARM_PREFIX}focus_complete`) {
-    // 60分钟学习完成 → 进入5分钟休息
     state.timerState = 'resting';
     state.breakStartedAt = Date.now();
     state.roundCount++;
@@ -53,22 +81,16 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     updateBadge();
 
     chrome.notifications.create(`${ALARM_PREFIX}rest`, {
-      type: 'basic',
-      iconUrl: 'icons/icon128.png',
+      type: 'basic', iconUrl: 'icons/icon128.png',
       title: '⚡ 学习时间到！',
       message: `已完成第 ${state.roundCount} 轮（${FOCUS_MINUTES}分钟），休息 ${REST_MINUTES} 分钟吧！`,
-      priority: 2,
-      requireInteraction: true,
+      priority: 2, requireInteraction: true,
     });
 
-    // 5分钟后休息结束 → 弹出复盘
-    chrome.alarms.create(`${ALARM_PREFIX}rest_complete`, {
-      delayInMinutes: REST_MINUTES,
-    });
+    chrome.alarms.create(`${ALARM_PREFIX}rest_complete`, { delayInMinutes: REST_MINUTES });
   }
 
   if (alarm.name === `${ALARM_PREFIX}rest_complete`) {
-    // 5分钟休息完成 → 弹出复盘窗口
     state.timerState = 'review';
     state.breakMinutes += REST_MINUTES;
     state.focusStartedAt = null;
@@ -76,30 +98,30 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     await saveState();
     updateBadge();
 
-    // 打开复盘页面
     chrome.tabs.create({ url: 'review.html' });
-
     chrome.notifications.create(`${ALARM_PREFIX}review`, {
-      type: 'basic',
-      iconUrl: 'icons/icon128.png',
+      type: 'basic', iconUrl: 'icons/icon128.png',
       title: '📝 复盘时间',
-      message: `第 ${state.roundCount} 轮学习完成，请为本轮评分（1-100）`,
-      priority: 2,
-      requireInteraction: true,
+      message: `第 ${state.roundCount} 轮学习完成，请为本轮评分`,
+      priority: 2, requireInteraction: true,
     });
   }
 
   if (alarm.name === `${ALARM_PREFIX}eye_rest`) {
     state.lastEyeRest = Date.now();
     await saveState();
-    chrome.notifications.create(`${ALARM_PREFIX}eye_rest`, {
-      type: 'basic',
-      iconUrl: 'icons/icon128.png',
-      title: '👁️ 20-20-20 护眼',
-      message: '看看 6 米以外的东西，持续 20 秒',
-      priority: 2,
-      requireInteraction: true,
+
+    // 打开护眼浮窗
+    chrome.windows.create({
+      url: 'eye-rest.html',
+      type: 'popup',
+      width: 400, height: 350,
+      focused: true,
     });
+  }
+
+  if (alarm.name === `${ALARM_PREFIX}badge_update`) {
+    updateBadge();
   }
 });
 
@@ -152,18 +174,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       break;
 
     case 'submitReview': {
-      // 保存复盘评分
-      const { score } = msg;
-      saveReview(score).then(() => {
-        // 根据轮次打开不同 B 站链接
+      saveReview(msg.score, msg.subject, msg.label).then(async () => {
+        checkAchievements();
         if (state.roundCount % EYE_REST_EVERY_N_ROUNDS === 0) {
           chrome.tabs.create({ url: BILIBILI_EYE_URL });
         } else {
           chrome.tabs.create({ url: BILIBILI_FAV_URL });
         }
-        // 回到 idle
         state.timerState = 'idle';
-        saveState().then(() => updateBadge());
+        await saveState();
+        updateBadge();
         sendResponse({ ok: true });
       });
       break;
@@ -175,6 +195,27 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     case 'getStats':
       getStats().then(stats => sendResponse({ stats }));
+      break;
+
+    case 'getAchievementStats':
+      getAchievementStats().then(stats => sendResponse({ stats }));
+      break;
+
+    case 'openPage':
+      chrome.tabs.create({ url: msg.url });
+      sendResponse({ ok: true });
+      break;
+
+    case 'playAmbient':
+      state.ambientSound = msg.sound;
+      saveState();
+      sendResponse({ ok: true });
+      break;
+
+    case 'stopAmbient':
+      state.ambientSound = '';
+      saveState();
+      sendResponse({ ok: true });
       break;
 
     default:
@@ -191,9 +232,7 @@ function startFocus() {
   state.lastEyeRest = Date.now();
   saveState().then(() => updateBadge());
 
-  chrome.alarms.create(`${ALARM_PREFIX}focus_complete`, {
-    delayInMinutes: FOCUS_MINUTES,
-  });
+  chrome.alarms.create(`${ALARM_PREFIX}focus_complete`, { delayInMinutes: FOCUS_MINUTES });
   chrome.alarms.create(`${ALARM_PREFIX}eye_rest`, {
     delayInMinutes: EYE_REST_INTERVAL_MINUTES,
     periodInMinutes: EYE_REST_INTERVAL_MINUTES,
@@ -212,13 +251,15 @@ function pauseFocus() {
 function resumeFocus() {
   if (state.timerState !== 'paused' || !state.pausedRemaining) return;
   state.timerState = 'running';
-  state.focusStartedAt = Date.now() - (FOCUS_MINUTES * 60 - state.pausedRemaining) * 1000;
   const remainingMin = state.pausedRemaining / 60;
+  state.focusStartedAt = Date.now() - (FOCUS_MINUTES * 60 - state.pausedRemaining) * 1000;
   state.pausedRemaining = null;
   saveState().then(() => updateBadge());
 
-  chrome.alarms.create(`${ALARM_PREFIX}focus_complete`, {
-    delayInMinutes: remainingMin,
+  chrome.alarms.create(`${ALARM_PREFIX}focus_complete`, { delayInMinutes: remainingMin });
+  chrome.alarms.create(`${ALARM_PREFIX}eye_rest`, {
+    delayInMinutes: EYE_REST_INTERVAL_MINUTES,
+    periodInMinutes: EYE_REST_INTERVAL_MINUTES,
   });
 }
 
@@ -228,11 +269,12 @@ function resetAll() {
   state.focusStartedAt = null;
   state.pausedRemaining = null;
   state.lastEyeRest = null;
+  state.ambientSound = '';
   saveState().then(() => updateBadge());
 }
 
 // ── 复盘存储 ──
-async function saveReview(score) {
+async function saveReview(score, subject, label) {
   const today = new Date().toISOString().slice(0, 10);
   const key = `reviews_${today}`;
   const res = await chrome.storage.local.get(key);
@@ -240,6 +282,8 @@ async function saveReview(score) {
   reviews.push({
     round: state.roundCount,
     score: Math.max(1, Math.min(100, score)),
+    subject: subject || '其他',
+    label: label || '其他',
     time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
     timestamp: Date.now(),
   });
@@ -253,28 +297,83 @@ async function getReviews(date) {
 }
 
 async function getStats() {
-  // 获取最近7天的统计
   const stats = { days: [], totalStudy: 0, totalRounds: 0, avgScore: 0 };
-  let totalScore = 0;
-  let scoreCount = 0;
+  let totalScore = 0, scoreCount = 0;
 
   for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
+    const d = new Date(); d.setDate(d.getDate() - i);
     const dateStr = d.toISOString().slice(0, 10);
     const label = `${d.getMonth() + 1}/${d.getDate()}`;
     const key = `reviews_${dateStr}`;
     const res = await chrome.storage.local.get(key);
     const reviews = res[key] || [];
     const dayScore = reviews.length > 0
-      ? reviews.reduce((s, r) => s + r.score, 0) / reviews.length
-      : 0;
+      ? reviews.reduce((s, r) => s + r.score, 0) / reviews.length : 0;
     stats.days.push({ date: dateStr, label, rounds: reviews.length, avgScore: Math.round(dayScore) });
     stats.totalRounds += reviews.length;
     reviews.forEach(r => { totalScore += r.score; scoreCount++; });
   }
   stats.avgScore = scoreCount > 0 ? Math.round(totalScore / scoreCount) : 0;
   return stats;
+}
+
+// ── 成就系统 ──
+async function getAchievementStats() {
+  const today = new Date().toISOString().slice(0, 10);
+
+  // 累计数据
+  let totalStudy = 0, totalReviews = 0, totalRounds = 0, maxScore = 0;
+  const allKeys = (await chrome.storage.local.get(null));
+  for (const [k, v] of Object.entries(allKeys)) {
+    if (k.startsWith('reviews_') && Array.isArray(v)) {
+      v.forEach(r => {
+        totalReviews++;
+        if (r.score > maxScore) maxScore = r.score;
+      });
+    }
+  }
+  totalStudy = state.studyMinutes; // 简化：只计今日
+  totalRounds = state.roundCount;
+
+  // 连续打卡
+  let streak = 0;
+  const d = new Date();
+  for (let i = 0; i < 365; i++) {
+    const ds = d.toISOString().slice(0, 10);
+    const key = `reviews_${ds}`;
+    const res = await chrome.storage.local.get(key);
+    if (res[key] && res[key].length > 0) {
+      streak++;
+      d.setDate(d.getDate() - 1);
+    } else break;
+  }
+
+  return {
+    totalStudy, totalReviews, totalRounds, maxScore,
+    streak, todayStudy: state.studyMinutes,
+  };
+}
+
+async function checkAchievements() {
+  const stats = await getAchievementStats();
+  const res = await chrome.storage.local.get('unlocked_achievements');
+  const unlocked = new Set(res.unlocked_achievements || []);
+
+  ACHIEVEMENTS.forEach(a => {
+    if (unlocked.has(a.id)) return;
+    const val = stats[a.key] || 0;
+    if (val >= a.target) {
+      unlocked.add(a.id);
+      chrome.notifications.create(`ach_${a.id}`, {
+        type: 'basic', iconUrl: 'icons/icon128.png',
+        title: `${a.icon} 成就解锁！`,
+        message: `${a.name} — ${a.desc}`,
+        priority: 1,
+      });
+    }
+  });
+
+  await chrome.storage.local.set({ unlocked_achievements: [...unlocked] });
 }
 
 // ── 辅助 ──
@@ -320,7 +419,7 @@ async function saveState() {
   await chrome.storage.local.set({ state });
 }
 
-// 定期更新 badge
+// badge 每分钟更新
 setInterval(() => {
   if (state.timerState !== 'idle') updateBadge();
 }, 60000);

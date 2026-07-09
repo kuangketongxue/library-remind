@@ -13,67 +13,150 @@ body {
 }
 .card {
   background: #16161c; border-radius: 16px; padding: 32px;
-  width: 400px; text-align: center;
+  width: 420px;
 }
-h1 { font-size: 24px; margin-bottom: 8px; }
-.subtitle { color: #888; font-size: 14px; margin-bottom: 24px; }
+h1 { font-size: 22px; margin-bottom: 6px; text-align: center; }
+.subtitle { color: #888; font-size: 13px; margin-bottom: 20px; text-align: center; }
+.field-label { font-size: 13px; color: #888; margin-bottom: 8px; }
+
+/* 学科选择 */
+.subjects { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+.subject-btn {
+  padding: 8px 14px; border-radius: 8px; border: 1px solid #333;
+  background: #222; color: #aaa; font-size: 13px; cursor: pointer;
+  transition: all 0.12s; font-family: inherit;
+}
+.subject-btn:hover { border-color: #d4af37; color: #d4af37; }
+.subject-btn.active { background: #d4af37; color: #0d0d12; border-color: #d4af37; font-weight: 600; }
+
+/* 标签选择 */
+.labels { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+.label-btn {
+  padding: 6px 12px; border-radius: 6px; border: 1px solid #333;
+  background: #222; color: #aaa; font-size: 12px; cursor: pointer;
+  transition: all 0.12s; font-family: inherit;
+}
+.label-btn:hover { border-color: #6a8cbb; color: #6a8cbb; }
+.label-btn.active { background: #6a8cbb; color: #fff; border-color: #6a8cbb; }
+
+/* 评分滑块 */
+.score-section { text-align: center; margin: 16px 0; }
 .score-display {
-  font-size: 64px; font-weight: 700; color: #d4af37;
-  margin: 16px 0; font-variant-numeric: tabular-nums;
+  font-size: 56px; font-weight: 700; color: #d4af37;
+  font-variant-numeric: tabular-nums;
 }
 input[type="range"] {
   width: 100%; height: 8px; -webkit-appearance: none;
   background: linear-gradient(to right, #c95454, #d4af37, #78B450);
-  border-radius: 4px; outline: none; margin: 16px 0;
+  border-radius: 4px; outline: none; margin: 12px 0;
 }
 input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 24px; height: 24px;
+  -webkit-appearance: none; width: 22px; height: 22px;
   background: #fff; border-radius: 50%; cursor: pointer;
   box-shadow: 0 2px 6px rgba(0,0,0,0.3);
 }
+.score-labels { display: flex; justify-content: space-between; font-size: 11px; color: #555; }
+
+/* 按钮 */
 .btn {
   width: 100%; padding: 14px; border: none; border-radius: 10px;
-  font-size: 16px; font-weight: 600; cursor: pointer;
+  font-size: 15px; font-weight: 600; cursor: pointer;
   background: #d4af37; color: #0d0d12; margin-top: 16px;
   font-family: inherit; transition: background 0.15s;
 }
 .btn:hover { background: #e8c44a; }
-.btn:active { background: #b8972e; }
-.footer { margin-top: 16px; color: #555; font-size: 12px; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.footer { margin-top: 12px; color: #555; font-size: 11px; text-align: center; }
 </style>
 </head>
 <body>
 <div class="card">
   <h1>📝 本轮复盘</h1>
   <div class="subtitle" id="subtitle">第 1 轮学习</div>
-  <div class="score-display" id="scoreDisplay">50</div>
-  <input type="range" id="scoreSlider" min="1" max="100" value="50">
-  <button class="btn" id="submitBtn">提交评分</button>
-  <div class="footer">分数越高质量越好，点击提交后自动打开 B 站</div>
+
+  <div class="field-label">📚 学科</div>
+  <div class="subjects" id="subjects"></div>
+
+  <div class="field-label">💭 状态标签</div>
+  <div class="labels" id="labels"></div>
+
+  <div class="score-section">
+    <div class="field-label">⭐ 学习质量</div>
+    <div class="score-display" id="scoreDisplay">50</div>
+    <input type="range" id="scoreSlider" min="1" max="100" value="50">
+    <div class="score-labels">
+      <span>1 基本没学</span>
+      <span>50 还行</span>
+      <span>100 完美</span>
+    </div>
+  </div>
+
+  <button class="btn" id="submitBtn">提交复盘</button>
+  <div class="footer">💡 方便时提交即可，不急</div>
 </div>
 <script>
+const SUBJECTS = ['语', '数', '英', '物', '化', '政', '其他'];
+const LABELS = ['专注', '疲劳', '收获大', '走神', '其他'];
+
+let selectedSubject = null;
+let selectedLabel = null;
+
+// 渲染学科按钮
+const subjectsEl = document.getElementById('subjects');
+SUBJECTS.forEach(s => {
+  const btn = document.createElement('button');
+  btn.className = 'subject-btn';
+  btn.textContent = s;
+  btn.addEventListener('click', () => {
+    subjectsEl.querySelectorAll('.subject-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedSubject = s;
+  });
+  subjectsEl.appendChild(btn);
+});
+
+// 渲染标签按钮
+const labelsEl = document.getElementById('labels');
+LABELS.forEach(l => {
+  const btn = document.createElement('button');
+  btn.className = 'label-btn';
+  btn.textContent = l;
+  btn.addEventListener('click', () => {
+    labelsEl.querySelectorAll('.label-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedLabel = l;
+  });
+  labelsEl.appendChild(btn);
+});
+
+// 获取轮次
 chrome.runtime.sendMessage({ action: 'getState' }, (state) => {
   document.getElementById('subtitle').textContent = `第 ${state.roundCount} 轮学习`;
 });
 
+// 滑块
 const slider = document.getElementById('scoreSlider');
 const display = document.getElementById('scoreDisplay');
-
 slider.addEventListener('input', () => {
   const v = parseInt(slider.value);
   display.textContent = v;
-  if (v >= 80) display.style.color = '#78B450';
-  else if (v >= 50) display.style.color = '#d4af37';
-  else display.style.color = '#c95454';
+  display.style.color = v >= 80 ? '#78B450' : v >= 50 ? '#d4af37' : '#c95454';
 });
 
+// 提交
 document.getElementById('submitBtn').addEventListener('click', () => {
   const score = parseInt(slider.value);
-  chrome.runtime.sendMessage({ action: 'submitReview', score }, (res) => {
+  chrome.runtime.sendMessage({
+    action: 'submitReview',
+    score,
+    subject: selectedSubject || '其他',
+    label: selectedLabel || '其他',
+  }, (res) => {
     if (res && res.ok) {
-      document.getElementById('submitBtn').textContent = '✓ 已提交';
-      document.getElementById('submitBtn').disabled = true;
-      document.getElementById('submitBtn').style.background = '#78B450';
+      const btn = document.getElementById('submitBtn');
+      btn.textContent = '✓ 已提交';
+      btn.disabled = true;
+      btn.style.background = '#78B450';
       setTimeout(() => window.close(), 1500);
     }
   });

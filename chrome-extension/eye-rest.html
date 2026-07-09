@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>👁️ 护眼时间</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  background: #0a1a0a; color: #e8e6e1;
+  display: flex; justify-content: center; align-items: center;
+  min-height: 100vh;
+  background: radial-gradient(ellipse at center, #0a2a0a 0%, #0a0a0a 100%);
+}
+.card {
+  text-align: center; padding: 40px;
+}
+.icon { font-size: 64px; margin-bottom: 16px; }
+.title { font-size: 28px; font-weight: 700; margin-bottom: 8px; color: #78B450; }
+.subtitle { font-size: 16px; color: #888; margin-bottom: 24px; }
+.countdown {
+  font-size: 72px; font-weight: 700; color: #78B450;
+  font-variant-numeric: tabular-nums; margin: 16px 0;
+}
+.progress-ring {
+  width: 160px; height: 160px; margin: 0 auto 24px;
+}
+.progress-ring circle {
+  fill: none; stroke-width: 8; stroke-linecap: round;
+  transform: rotate(-90deg); transform-origin: center;
+}
+.progress-ring .bg { stroke: #1a3a1a; }
+.progress-ring .fg {
+  stroke: #78B450;
+  transition: stroke-dashoffset 1s linear;
+}
+.done { color: #78B450; font-size: 48px; }
+.hint { font-size: 14px; color: #666; margin-top: 16px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">👁️</div>
+  <div class="title">护眼时间</div>
+  <div class="subtitle">看看 6 米以外的东西</div>
+
+  <svg class="progress-ring" viewBox="0 0 160 160">
+    <circle class="bg" cx="80" cy="80" r="70"/>
+    <circle class="fg" id="ring" cx="80" cy="80" r="70"
+      stroke-dasharray="439.82" stroke-dashoffset="0"/>
+  </svg>
+
+  <div class="countdown" id="countdown">20</div>
+  <div class="hint" id="hint">持续注视远处，放松眼睛</div>
+</div>
+<script>
+const DURATION = 20;
+let remaining = DURATION;
+const circumference = 2 * Math.PI * 70;
+
+function tick() {
+  remaining--;
+  const el = document.getElementById('countdown');
+  const ring = document.getElementById('ring');
+  const hint = document.getElementById('hint');
+
+  if (remaining <= 0) {
+    el.innerHTML = '<span class="done">✓</span>';
+    hint.textContent = '眼睛舒服一点了吧';
+    ring.style.strokeDashoffset = circumference;
+    setTimeout(() => window.close(), 3000);
+    return;
+  }
+
+  el.textContent = remaining;
+  const progress = (DURATION - remaining) / DURATION;
+  ring.style.strokeDashoffset = circumference * (1 - progress);
+}
+
+setInterval(tick, 1000);
+</script>
+</body>
+</html>
