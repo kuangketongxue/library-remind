@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "精力管理 — 久坐提醒 & 护眼",
   "description": "60分钟学习循环 + 20-20-20护眼提醒 + 白噪音 + AI报告，帮你科学管理学习节奏",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "permissions": [
     "alarms",
     "storage",
