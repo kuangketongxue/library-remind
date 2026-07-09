@@ -2,51 +2,131 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>精力管理 — 设置</title>
-<link rel="stylesheet" href="options.css">
+<title>⚙️ 设置</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  background: #0d0d12; color: #e8e6e1; padding: 40px;
+}
+.container { max-width: 520px; margin: 0 auto; }
+h1 { font-size: 24px; margin-bottom: 24px; color: #d4af37; }
+h2 { font-size: 16px; margin-bottom: 12px; color: #888; }
+.section {
+  background: #16161c; border-radius: 12px;
+  padding: 20px; margin-bottom: 16px;
+}
+.setting-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 0; border-bottom: 1px solid #222;
+}
+.setting-row:last-child { border-bottom: none; }
+label { font-size: 14px; color: #ccc; }
+input[type="number"], input[type="text"], input[type="password"] {
+  width: 120px; padding: 6px 10px; background: #222;
+  border: 1px solid #333; border-radius: 6px;
+  color: #e8e6e1; font-size: 13px;
+}
+input[type="checkbox"] { width: 18px; height: 18px; accent-color: #d4af37; }
+.btn {
+  padding: 8px 16px; border: none; border-radius: 8px;
+  font-size: 13px; cursor: pointer; font-family: inherit;
+  transition: background 0.15s;
+}
+.btn-primary { background: #d4af37; color: #0d0d12; }
+.btn-primary:hover { background: #e8c44a; }
+.btn-secondary { background: #222; color: #ccc; }
+.btn-secondary:hover { background: #333; }
+.btn-danger { background: #3a1515; color: #c95454; }
+.btn-danger:hover { background: #4a1f1f; }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+.status { font-size: 12px; margin-top: 8px; }
+.status.ok { color: #78B450; }
+.status.err { color: #c95454; }
+.desc { font-size: 12px; color: #555; margin-top: 4px; }
+.footer { text-align: center; margin-top: 24px; color: #555; font-size: 12px; }
+</style>
 </head>
 <body>
-  <div class="container">
-    <h1>⚡ 精力管理 设置</h1>
+<div class="container">
+  <h1>⚙️ 设置</h1>
 
-    <div class="section">
-      <h2>计时设置</h2>
-      <div class="setting-row">
-        <label>学习时长（分钟）</label>
-        <input type="number" id="focusMinutes" min="15" max="120" value="60">
-      </div>
-      <div class="setting-row">
-        <label>休息时长（分钟）</label>
-        <input type="number" id="restMinutes" min="1" max="30" value="5">
-      </div>
-      <div class="setting-row">
-        <label>护眼提醒间隔（分钟）</label>
-        <input type="number" id="eyeRestInterval" min="10" max="60" value="20">
-      </div>
+  <div class="section">
+    <h2>⏱️ 计时设置</h2>
+    <div class="setting-row">
+      <label>学习时长（分钟）</label>
+      <input type="number" id="focusMinutes" min="15" max="120" value="60">
     </div>
-
-    <div class="section">
-      <h2>通知</h2>
-      <div class="setting-row">
-        <label>启用桌面通知</label>
-        <input type="checkbox" id="notificationsEnabled" checked>
-      </div>
+    <div class="setting-row">
+      <label>休息时长（分钟）</label>
+      <input type="number" id="restMinutes" min="1" max="30" value="5">
     </div>
-
-    <div class="section">
-      <h2>数据</h2>
-      <div class="setting-row">
-        <button class="btn" id="resetBtn">重置今日数据</button>
-      </div>
-      <div class="setting-row">
-        <button class="btn btn-danger" id="clearAllBtn">清除所有数据</button>
-      </div>
-    </div>
-
-    <div class="footer">
-      <p>精力管理 v1.0.0 — 久坐提醒 & 护眼</p>
+    <div class="setting-row">
+      <label>护眼提醒间隔（分钟）</label>
+      <input type="number" id="eyeRestInterval" min="10" max="60" value="20">
     </div>
   </div>
-  <script src="options.js"></script>
+
+  <div class="section">
+    <h2>🔔 通知</h2>
+    <div class="setting-row">
+      <label>启用桌面通知</label>
+      <input type="checkbox" id="notificationsEnabled" checked>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📅 飞书日历</h2>
+    <div class="setting-row">
+      <label>启用飞书日程</label>
+      <input type="checkbox" id="feishuEnabled">
+    </div>
+    <div class="desc">通过 Cloudflare 代理获取飞书日程，需要管理员配置 FEISHU_APP_ID/SECRET</div>
+    <div class="status" id="feishuStatus"></div>
+  </div>
+
+  <div class="section">
+    <h2>📧 邮件周报</h2>
+    <div class="setting-row">
+      <label>启用每周邮件</label>
+      <input type="checkbox" id="mailEnabled">
+    </div>
+    <div class="setting-row">
+      <label>收件人邮箱</label>
+      <input type="text" id="mailTo" placeholder="you@example.com" style="width:200px">
+    </div>
+    <button class="btn btn-secondary btn-sm" id="testMailBtn">发送测试邮件</button>
+    <div class="status" id="mailStatus"></div>
+  </div>
+
+  <div class="section">
+    <h2>💾 GitHub 备份</h2>
+    <div class="setting-row">
+      <label>GitHub Token</label>
+      <input type="password" id="ghToken" placeholder="ghp_xxx" style="width:200px">
+    </div>
+    <div class="setting-row">
+      <label>仓库名</label>
+      <input type="text" id="ghRepo" placeholder="user/repo" style="width:200px">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-secondary btn-sm" id="ghVerifyBtn">验证连接</button>
+      <button class="btn btn-primary btn-sm" id="ghBackupBtn">立即备份</button>
+      <button class="btn btn-secondary btn-sm" id="ghRestoreBtn">恢复数据</button>
+    </div>
+    <div class="status" id="ghStatus"></div>
+  </div>
+
+  <div class="section">
+    <h2>🗑️ 数据</h2>
+    <div class="setting-row">
+      <button class="btn btn-secondary" id="resetBtn">重置今日数据</button>
+      <button class="btn btn-danger" id="clearAllBtn">清除所有数据</button>
+    </div>
+  </div>
+
+  <div class="footer">精力管理 v1.1.0 — 久坐提醒 & 护眼</div>
+</div>
+<script src="options.js"></script>
 </body>
 </html>
