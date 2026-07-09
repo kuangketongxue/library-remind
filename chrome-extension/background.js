@@ -127,7 +127,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   switch (msg.action) {
     case 'getState':
       checkDateReset();
-      sendResponse({ ...state, hour: new Date().getHours(), minute: new Date().getMinutes() });
+      getStreak().then(streak => {
+        sendResponse({ ...state, streak, hour: new Date().getHours(), minute: new Date().getMinutes() });
+      });
       break;
 
     case 'start':
@@ -135,7 +137,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ error: `已过 ${DAILY_LIMIT_HOUR}:00，明天再开始吧` });
         break;
       }
-      startFocus();
+      startFocus(msg.goal);
       sendResponse({ ok: true });
       break;
 
@@ -210,6 +212,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       sendResponse({ ok: true });
       break;
 
+    case 'getStreak':
+      getStreak().then(streak => sendResponse({ streak }));
+      break;
+
+    case 'exportData':
+      exportData().then(json => sendResponse({ json }));
+      break;
+
     default:
       sendResponse({ error: 'unknown action' });
   }
@@ -217,11 +227,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 // ── 核心操作 ──
-function startFocus() {
+function startFocus(goal) {
   chrome.alarms.clearAll();
   state.timerState = 'running';
   state.focusStartedAt = Date.now();
   state.lastEyeRest = Date.now();
+  // 保存本轮目标
+  if (goal) {
+    state.currentGoal = goal;
+  }
   saveState().then(() => updateBadge());
 
   chrome.alarms.create(`${ALARM_PREFIX}focus_complete`, { delayInMinutes: FOCUS_MINUTES });
@@ -366,6 +380,38 @@ async function checkAchievements() {
   });
 
   await chrome.storage.local.set({ unlocked_achievements: [...unlocked] });
+}
+
+// ── 连续打卡 ──
+async function getStreak() {
+  let streak = 0;
+  const d = new Date();
+  for (let i = 0; i < 365; i++) {
+    const ds = d.toISOString().slice(0, 10);
+    const key = `reviews_${ds}`;
+    const res = await chrome.storage.local.get(key);
+    if (res[key] && res[key].length > 0) {
+      streak++;
+      d.setDate(d.getDate() - 1);
+    } else if (i === 0) {
+      // 今天还没复盘，检查昨天
+      d.setDate(d.getDate() - 1);
+      continue;
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
+// ── 数据导出 ──
+async function exportData() {
+  const allData = await chrome.storage.local.get(null);
+  const exportObj = { exportDate: new Date().toISOString(), data: {} };
+  for (const [k, v] of Object.entries(allData)) {
+    exportObj.data[k] = v;
+  }
+  return JSON.stringify(exportObj, null, 2);
 }
 
 // ── 辅助 ──

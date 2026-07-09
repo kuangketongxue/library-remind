@@ -15,13 +15,30 @@ const AMBIENT_SOUNDS = [
 let currentState = null;
 let tickInterval = null;
 let ambientCtx = null;
+let onboardStep = 0;
 
 // ── 初始化 ──
 document.addEventListener('DOMContentLoaded', async () => {
-  chrome.runtime.sendMessage({ action: 'getState' }, (res) => {
-    currentState = res;
+  // 检查是否首次使用
+  const res = await chrome.storage.local.get(['onboarded', 'settings']);
+  if (!res.onboarded) {
+    showOnboarding();
+  }
+
+  // 主题
+  const theme = res.settings?.theme || 'dark';
+  applyTheme(theme);
+
+  chrome.runtime.sendMessage({ action: 'getState' }, (state) => {
+    currentState = state;
     render();
     startTick();
+
+    // streak
+    if (state.streak > 0) {
+      document.getElementById('streakBar').style.display = 'block';
+      document.getElementById('streakCount').textContent = state.streak;
+    }
   });
 
   document.getElementById('mainBtn').addEventListener('click', onMainBtnClick);
@@ -29,6 +46,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('optionsLink').addEventListener('click', (e) => {
     e.preventDefault();
     chrome.runtime.openOptionsPage();
+  });
+
+  // 主题切换
+  document.getElementById('themeToggle').addEventListener('click', (e) => {
+    e.preventDefault();
+    const current = document.documentElement.getAttribute('data-theme');
+    const next = current === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    chrome.storage.local.get(['settings'], (r) => {
+      const s = r.settings || {};
+      s.theme = next;
+      chrome.storage.local.set({ settings: s });
+    });
   });
 
   // 快捷入口
@@ -39,9 +69,42 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // 白噪音按钮
   renderAmbientBtns();
 });
+
+// ── 首次引导 ──
+function showOnboarding() {
+  document.getElementById('onboarding').style.display = 'flex';
+  onboardStep = 0;
+  updateOnboardStep();
+
+  document.getElementById('onboardNext').addEventListener('click', () => {
+    onboardStep++;
+    if (onboardStep >= 3) {
+      document.getElementById('onboarding').style.display = 'none';
+      chrome.storage.local.set({ onboarded: true });
+      return;
+    }
+    updateOnboardStep();
+  });
+}
+
+function updateOnboardStep() {
+  document.querySelectorAll('.onboard-step').forEach((el, i) => {
+    el.style.display = i === onboardStep ? 'block' : 'none';
+  });
+  document.querySelectorAll('.dot').forEach((d, i) => {
+    d.classList.toggle('active', i === onboardStep);
+  });
+  document.getElementById('onboardNext').textContent = onboardStep >= 2 ? '开始使用' : '下一步';
+}
+
+// ── 主题 ──
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const toggle = document.getElementById('themeToggle');
+  if (toggle) toggle.textContent = theme === 'dark' ? '🌙' : '☀️';
+}
 
 // ── 白噪音 ──
 function renderAmbientBtns() {
@@ -69,11 +132,8 @@ function playAmbient(type) {
   stopAmbient();
   try {
     ambientCtx = new AudioContext();
-    const osc = ambientCtx.createOscillator();
     const gain = ambientCtx.createGain();
     gain.gain.value = 0.3;
-
-    // 简单噪音生成
     const bufferSize = 2 * ambientCtx.sampleRate;
     const buffer = ambientCtx.createBuffer(1, bufferSize, ambientCtx.sampleRate);
     const data = buffer.getChannelData(0);
@@ -83,44 +143,30 @@ function playAmbient(type) {
     } else if (type === 'brown') {
       let last = 0;
       for (let i = 0; i < bufferSize; i++) {
-        const white = Math.random() * 2 - 1;
-        data[i] = (last + 0.02 * white) / 1.02;
-        last = data[i];
-        data[i] *= 3.5;
+        const w = Math.random() * 2 - 1;
+        data[i] = (last + 0.02 * w) / 1.02; last = data[i]; data[i] *= 3.5;
       }
     } else if (type === 'rain') {
-      for (let i = 0; i < bufferSize; i++) {
-        data[i] = (Math.random() * 2 - 1) * (0.5 + 0.5 * Math.sin(i / 1000));
-      }
+      for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * (0.5 + 0.5 * Math.sin(i / 1000));
     } else {
-      // forest / cafe: brown noise variant
       let last = 0;
       for (let i = 0; i < bufferSize; i++) {
-        const white = Math.random() * 2 - 1;
-        data[i] = (last + 0.01 * white) / 1.01;
-        last = data[i];
-        data[i] *= 2;
+        const w = Math.random() * 2 - 1;
+        data[i] = (last + 0.01 * w) / 1.01; last = data[i]; data[i] *= 2;
       }
     }
 
     const source = ambientCtx.createBufferSource();
-    source.buffer = buffer;
-    source.loop = true;
+    source.buffer = buffer; source.loop = true;
     source.connect(gain).connect(ambientCtx.destination);
     source.start();
-
     currentState.ambientSound = type;
     chrome.runtime.sendMessage({ action: 'playAmbient', sound: type });
-  } catch (e) {
-    console.error('Audio failed:', e);
-  }
+  } catch (e) { console.error('Audio failed:', e); }
 }
 
 function stopAmbient() {
-  if (ambientCtx) {
-    ambientCtx.close().catch(() => {});
-    ambientCtx = null;
-  }
+  if (ambientCtx) { ambientCtx.close().catch(() => {}); ambientCtx = null; }
   currentState.ambientSound = '';
   chrome.runtime.sendMessage({ action: 'stopAmbient' });
 }
@@ -148,42 +194,32 @@ function render() {
 
   const mainBtn = document.getElementById('mainBtn');
   const skipBtn = document.getElementById('skipBtn');
-  mainBtn.style.background = '';
-  mainBtn.style.color = '';
-  mainBtn.disabled = false;
-  mainBtn.onclick = onMainBtnClick;
+  mainBtn.style.background = ''; mainBtn.style.color = '';
+  mainBtn.disabled = false; mainBtn.onclick = onMainBtnClick;
 
   if (timerState === 'idle') {
     const hour = currentState.hour || new Date().getHours();
     if (hour >= DAILY_LIMIT_HOUR) {
       mainBtn.textContent = `⏰ ${DAILY_LIMIT_HOUR}:00 后休息`;
-      mainBtn.className = 'btn btn-secondary';
-      mainBtn.disabled = true;
+      mainBtn.className = 'btn btn-secondary'; mainBtn.disabled = true;
     } else {
       mainBtn.textContent = '▶ 开始学习';
       mainBtn.className = 'btn btn-primary';
     }
     skipBtn.style.display = 'none';
   } else if (timerState === 'running') {
-    mainBtn.textContent = '⏸ 暂停';
-    mainBtn.className = 'btn btn-primary';
-    mainBtn.style.background = '#d97757';
-    mainBtn.style.color = '#fff';
+    mainBtn.textContent = '⏸ 暂停'; mainBtn.className = 'btn btn-primary';
+    mainBtn.style.background = 'var(--danger)'; mainBtn.style.color = '#fff';
     skipBtn.style.display = 'block';
   } else if (timerState === 'paused') {
-    mainBtn.textContent = '▶ 继续';
-    mainBtn.className = 'btn btn-primary';
+    mainBtn.textContent = '▶ 继续'; mainBtn.className = 'btn btn-primary';
     skipBtn.style.display = 'none';
   } else if (timerState === 'resting') {
-    mainBtn.textContent = '☕ 休息中...';
-    mainBtn.className = 'btn btn-secondary';
-    mainBtn.disabled = true;
-    skipBtn.style.display = 'none';
+    mainBtn.textContent = '☕ 休息中...'; mainBtn.className = 'btn btn-secondary';
+    mainBtn.disabled = true; skipBtn.style.display = 'none';
   } else if (timerState === 'review') {
-    mainBtn.textContent = '📝 去复盘';
-    mainBtn.className = 'btn btn-primary';
-    mainBtn.style.background = '#d4af37';
-    mainBtn.style.color = '#0d0d12';
+    mainBtn.textContent = '📝 去复盘'; mainBtn.className = 'btn btn-primary';
+    mainBtn.style.background = 'var(--accent)'; mainBtn.style.color = 'var(--bg)';
     mainBtn.onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL('review.html') });
     skipBtn.style.display = 'none';
   }
@@ -192,27 +228,22 @@ function render() {
   document.getElementById('studyMinutes').textContent = currentState.studyMinutes || 0;
   document.getElementById('breakMinutes').textContent = currentState.breakMinutes || 0;
 
-  // 白噪音状态同步
   document.querySelectorAll('.ambient-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.sound === currentState.ambientSound);
   });
-
   updateCountdown();
 }
 
 function updateCountdown() {
   const now = new Date();
   const hour = now.getHours();
-  const limitEl = document.getElementById('countdown');
+  const el = document.getElementById('countdown');
   if (hour >= DAILY_LIMIT_HOUR) {
-    limitEl.textContent = '已过 22:00，明天见！';
-    limitEl.style.color = '#c95454';
+    el.textContent = '已过 22:00，明天见！'; el.style.color = 'var(--danger)';
   } else {
     const diff = (DAILY_LIMIT_HOUR - hour - 1) * 60 + (60 - now.getMinutes());
-    const h = Math.floor(diff / 60);
-    const m = diff % 60;
-    limitEl.textContent = `距离 22:00 还有 ${h}小时${m}分钟`;
-    limitEl.style.color = '#666';
+    el.textContent = `距离 22:00 还有 ${Math.floor(diff/60)}小时${diff%60}分钟`;
+    el.style.color = 'var(--muted)';
   }
 }
 
@@ -225,35 +256,67 @@ function getRemaining() {
   return 0;
 }
 
-function formatTime(s) {
-  return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
-}
+function formatTime(s) { return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
 
 function startTick() {
   tickInterval = setInterval(() => {
-    if (currentState && currentState.timerState !== 'idle') {
+    if (currentState?.timerState !== 'idle') {
       document.getElementById('timerDisplay').textContent = formatTime(getRemaining());
     }
     updateCountdown();
   }, 1000);
 }
 
-function onMainBtnClick() {
+// ── 轮次目标弹窗 ──
+function promptGoal() {
+  return new Promise(resolve => {
+    // 创建弹窗 DOM
+    const overlay = document.createElement('div');
+    overlay.className = 'goal-overlay';
+    overlay.innerHTML = `
+      <div class="goal-card">
+        <div class="goal-title">🎯 本轮目标</div>
+        <div class="goal-subtitle">这轮打算学什么？（可跳过）</div>
+        <input type="text" class="goal-input" id="goalInput" placeholder="例：数学导数、英语阅读..." autofocus>
+        <button class="btn btn-primary goal-submit" id="goalSubmit">开始学习</button>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const input = document.getElementById('goalInput');
+    const submit = document.getElementById('goalSubmit');
+
+    const finish = () => {
+      const goal = input.value.trim();
+      overlay.remove();
+      resolve(goal);
+    };
+
+    submit.addEventListener('click', finish);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') finish(); });
+    input.focus();
+  });
+}
+
+// ── 操作 ──
+async function onMainBtnClick() {
   if (!currentState) return;
   const { timerState } = currentState;
+
   if (timerState === 'idle' || timerState === 'paused') {
+    // 弹出轮次目标
+    const goal = await promptGoal();
     const action = timerState === 'idle' ? 'start' : 'resume';
-    chrome.runtime.sendMessage({ action }, (res) => {
-      if (res && res.error) { alert(res.error); return; }
+    chrome.runtime.sendMessage({ action, goal }, (res) => {
+      if (res?.error) { alert(res.error); return; }
       currentState.timerState = 'running';
       if (action === 'start') currentState.focusStartedAt = Date.now();
       currentState.pausedRemaining = null;
+      currentState.currentGoal = goal;
       render();
     });
   } else if (timerState === 'running') {
     chrome.runtime.sendMessage({ action: 'pause' }, () => {
-      const elapsed = Math.floor((Date.now() - currentState.focusStartedAt) / 1000);
-      currentState.pausedRemaining = Math.max(FOCUS_SECONDS - elapsed, 0);
+      currentState.pausedRemaining = Math.max(FOCUS_SECONDS - Math.floor((Date.now() - currentState.focusStartedAt) / 1000), 0);
       currentState.timerState = 'paused';
       render();
     });

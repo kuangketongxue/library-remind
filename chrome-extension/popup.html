@@ -1,11 +1,42 @@
 <!DOCTYPE html>
-<html>
+<html data-theme="dark">
 <head>
 <meta charset="utf-8">
 <link rel="stylesheet" href="popup.css">
 </head>
 <body>
+  <!-- 首次引导 -->
+  <div class="onboarding" id="onboarding" style="display:none">
+    <div class="onboard-card">
+      <div class="onboard-icon">⚡</div>
+      <div class="onboard-title">欢迎使用精力管理</div>
+      <div class="onboard-page" id="onboardPage">
+        <div class="onboard-step" data-step="0">
+          <p>每学习 <strong>60 分钟</strong>，自动提醒你休息 <strong>5 分钟</strong></p>
+          <p>休息后弹出复盘，给你本轮评分</p>
+        </div>
+        <div class="onboard-step" data-step="1" style="display:none">
+          <p>每 <strong>20 分钟</strong>提醒你看看远处，保护眼睛</p>
+          <p>每 <strong>3 轮</strong>自动打开护眼视频</p>
+        </div>
+        <div class="onboard-step" data-step="2" style="display:none">
+          <p>支持 <strong>白噪音</strong>、<strong>AI 报告</strong>、<strong>成就系统</strong></p>
+          <p>点击图标开始你的第一轮学习吧！</p>
+        </div>
+      </div>
+      <div class="onboard-dots">
+        <span class="dot active"></span><span class="dot"></span><span class="dot"></span>
+      </div>
+      <button class="btn btn-primary onboard-btn" id="onboardNext">下一步</button>
+    </div>
+  </div>
+
   <div class="container">
+    <!-- Streak -->
+    <div class="streak-bar" id="streakBar" style="display:none">
+      🔥 <span id="streakCount">0</span> 天连续打卡
+    </div>
+
     <!-- 状态显示 -->
     <div class="status-section">
       <div class="status-badge" id="statusBadge">待机</div>
@@ -54,6 +85,8 @@
     <!-- 底部链接 -->
     <div class="footer">
       <a href="#" id="optionsLink">⚙️ 设置</a>
+      <span class="sep">·</span>
+      <a href="#" id="themeToggle">🌙</a>
     </div>
   </div>
   <script src="popup.js"></script>

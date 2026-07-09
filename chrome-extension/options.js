@@ -155,6 +155,20 @@ document.addEventListener('DOMContentLoaded', () => {
       chrome.storage.local.clear(() => { alert('已清除'); location.reload(); });
     }
   });
+
+  // 数据导出
+  document.getElementById('exportBtn').addEventListener('click', () => {
+    chrome.runtime.sendMessage({ action: 'exportData' }, (res) => {
+      if (!res?.json) { alert('导出失败'); return; }
+      const blob = new Blob([res.json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `精力管理_备份_${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  });
 });
 
 function saveSettings() {
