@@ -3549,8 +3549,8 @@ class RestReminderWidget(QWidget):
         if not self.app_settings.get('onboarding_shown', False):
             QTimer.singleShot(500, self._show_onboarding)
         else:
-            # 启动时提示设目标
-            self._prompt_goal()
+            # 启动时提示设目标（延迟到事件循环启动后，避免初始化时同步弹窗崩溃）
+            QTimer.singleShot(100, self._prompt_goal)
 
         # 启动时静默检查成就（解锁历史已达标但未触发的）
         QTimer.singleShot(2000, lambda: self._check_achievements(silent=True))
@@ -8296,7 +8296,6 @@ def main():
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
     except Exception:
         log.warning('[任务栏] 设置 AppUserModelID 失败')
-
     silent = '--silent' in sys.argv
     widget = RestReminderWidget(silent_start=silent)
     if silent:
