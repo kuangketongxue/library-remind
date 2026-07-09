@@ -3587,6 +3587,19 @@ class RestReminderWidget(QWidget):
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
 
+        # ── 整体垂直布局：可拖动标题栏 + 主体 ──
+        outer_layout = QVBoxLayout()
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+
+        # ── 可拖动标题栏（5px 高，隐藏但可拖动）──
+        _drag_bar = QFrame()
+        _drag_bar.setFixedHeight(5)
+        _drag_bar.setStyleSheet('background: transparent;')
+        _drag_bar.setCursor(Qt.OpenHandCursor)
+        _drag_bar.installEventFilter(self)
+        outer_layout.addWidget(_drag_bar)
+
         # ── 侧边栏 ──
         sidebar = QFrame()
         sidebar.setObjectName('sidebar')
@@ -3733,7 +3746,8 @@ class RestReminderWidget(QWidget):
             self._tab_content.addWidget(placeholder)
 
         root_layout.addWidget(content_widget, 1)
-        self.setLayout(root_layout)
+        outer_layout.addLayout(root_layout, 1)
+        self.setLayout(outer_layout)
 
         # 默认选中第一个 tab
         self._switch_tab(self.TAB_NAMES[0])
@@ -4058,6 +4072,26 @@ class RestReminderWidget(QWidget):
         sub.setStyleSheet(f'color: {THEMES[self._current_theme]["text_secondary"]}; font-size: 13px;')
         layout.addWidget(sub)
         layout.addSpacing(12)
+
+        # ── 核心操作按钮（开始/暂停）──
+        self._start_btn = QPushButton('▶  开始学习')
+        self._start_btn.setObjectName('startBtn')
+        self._start_btn.setFixedHeight(48)
+        self._start_btn.setCursor(Qt.PointingHandCursor)
+        _t = THEMES[self._current_theme]
+        self._start_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {_t['accent']}; color: #0d0d12;
+                border: none; border-radius: 10px;
+                font-size: 16px; font-weight: bold;
+                font-family: 'Microsoft YaHei', sans-serif;
+            }}
+            QPushButton:hover {{ background: {_t['accent_hover']}; }}
+            QPushButton:pressed {{ background: #b8972e; }}
+        """)
+        self._start_btn.clicked.connect(self._toggle_start_pause)
+        layout.addWidget(self._start_btn)
+        layout.addSpacing(4)
 
         # ── 核心数据卡片 ──
         cards_row = QHBoxLayout()
@@ -6917,9 +6951,11 @@ class RestReminderWidget(QWidget):
 
 
     def _sync_buttons(self):
-        """同步浮球 popup 按钮状态（旧 start_btn/pause_btn 已移除）"""
+        """同步浮球 popup 按钮状态 + 主界面开始按钮"""
         try:
-            # 旧 UI 按钮已不存在，仅更新浮球 popup 文字
+            # 更新主界面开始/暂停按钮
+            self._update_start_btn()
+            # 更新浮球 popup 文字
             ball = getattr(self, 'floating_ball', None)
             if ball and hasattr(ball, '_update_popup_text'):
                 ball._update_popup_text()
@@ -6972,6 +7008,54 @@ class RestReminderWidget(QWidget):
             self._pause_timer()
         except Exception as e:
             log.error(f'[on_pause_clicked 异常] {type(e).__name__}: {e}')
+
+    def _toggle_start_pause(self):
+        """主界面开始/暂停按钮的统一入口"""
+        if self.timer_state in ('idle', 'paused'):
+            self.on_start_clicked()
+        elif self.timer_state == 'running':
+            self.on_pause_clicked()
+        self._update_start_btn()
+
+    def _update_start_btn(self):
+        """更新主界面开始按钮的文字和样式"""
+        btn = getattr(self, '_start_btn', None)
+        if btn is None:
+            return
+        _t = THEMES[self._current_theme]
+        if self.timer_state == 'running':
+            btn.setText('⏸  暂停')
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: #d97757; color: #fff;
+                    border: none; border-radius: 10px;
+                    font-size: 16px; font-weight: bold;
+                    font-family: 'Microsoft YaHei', sans-serif;
+                }}
+                QPushButton:hover {{ background: #e88a6a; }}
+            """)
+        elif self.timer_state == 'paused':
+            btn.setText('▶  继续学习')
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {_t['accent']}; color: #0d0d12;
+                    border: none; border-radius: 10px;
+                    font-size: 16px; font-weight: bold;
+                    font-family: 'Microsoft YaHei', sans-serif;
+                }}
+                QPushButton:hover {{ background: {_t['accent_hover']}; }}
+            """)
+        else:
+            btn.setText('▶  开始学习')
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {_t['accent']}; color: #0d0d12;
+                    border: none; border-radius: 10px;
+                    font-size: 16px; font-weight: bold;
+                    font-family: 'Microsoft YaHei', sans-serif;
+                }}
+                QPushButton:hover {{ background: {_t['accent_hover']}; }}
+            """)
 
     def _toast(self, title, message, icon_type=None, duration=3000):
         """统一通知入口：系统托盘 Toast（Win10/11 原生通知样式）"""
@@ -7302,53 +7386,79 @@ class RestReminderWidget(QWidget):
             self.study_info_label.setText(f'{self.study_hours_today:.1f}h')
 
     def _refresh_general_tab(self):
-        """每秒刷新今日 tab 中的动态元素（数据卡片 + 状态 + 倒计时 + 休息时长）"""
+        """每秒刷新今日 tab 中的动态元素（数据卡片 + 状态 + 倒计时 + 休息时长）
+        性能优化：setStyleSheet 仅在状态变化时调用，日程刷新降频到 30 秒"""
         try:
             refs = getattr(self, '_today_refs', {})
             if not refs:
                 return
 
-            # 数据卡片
-            sc = refs.get('study_card')
-            if sc and hasattr(sc, '_value_label'):
-                sc._value_label.setText(f'{self.study_hours_today:.1f}h')
+            # 数据卡片（每 5 秒更新一次即可，值变化慢）
+            if not hasattr(self, '_card_tick'):
+                self._card_tick = 0
+            self._card_tick += 1
+            if self._card_tick >= 5:
+                self._card_tick = 0
+                sc = refs.get('study_card')
+                if sc and hasattr(sc, '_value_label'):
+                    sc._value_label.setText(f'{self.study_hours_today:.1f}h')
+                rc = refs.get('round_card')
+                if rc and hasattr(rc, '_value_label'):
+                    rc._value_label.setText(f'第 {self._round_count + 1} 轮')
+                bc = refs.get('break_card')
+                if bc and hasattr(bc, '_value_label'):
+                    bc._value_label.setText(f'{self.break_minutes_today:.1f} 分钟')
 
-            rc = refs.get('round_card')
-            if rc and hasattr(rc, '_value_label'):
-                rc._value_label.setText(f'第 {self._round_count + 1} 轮')
-
-            bc = refs.get('break_card')
-            if bc and hasattr(bc, '_value_label'):
-                bc._value_label.setText(f'{self.break_minutes_today:.1f} 分钟')
-
-            # 状态标签 + 计时器标签
+            # 状态标签（仅状态变化时更新样式）
             state_lbl = refs.get('state_lbl')
             if state_lbl and not sip.isdeleted(state_lbl):
-                state_colors = {'idle': '#888', 'running': '#78B450', 'resting': '#d97757', 'paused': '#d4a853'}
-                state_names = {'idle': '待机', 'running': '学习中', 'resting': '休息中', 'paused': '已暂停'}
-                state_color = state_colors.get(self.timer_state, '#888')
-                state_lbl.setText(f'状态：{state_names.get(self.timer_state, self.timer_state)}')
-                state_lbl.setStyleSheet(f'color: {state_color}; font-size: 14px; font-weight: bold;')
+                if getattr(self, '_last_displayed_state', None) != self.timer_state:
+                    self._last_displayed_state = self.timer_state
+                    state_colors = {'idle': '#888', 'running': '#78B450', 'resting': '#d97757', 'paused': '#d4a853'}
+                    state_names = {'idle': '待机', 'running': '学习中', 'resting': '休息中', 'paused': '已暂停'}
+                    state_color = state_colors.get(self.timer_state, '#888')
+                    state_lbl.setText(f'状态：{state_names.get(self.timer_state, self.timer_state)}')
+                    state_lbl.setStyleSheet(f'color: {state_color}; font-size: 14px; font-weight: bold;')
 
-            # 计时器标签（本轮剩余/休息剩余）
+            # 计时器标签（仅秒数整数变化时更新文本，样式仅在状态切换时更新）
             timer_lbl = refs.get('timer_lbl')
             if timer_lbl and not sip.isdeleted(timer_lbl):
                 if self.timer_state == 'running' and self._perf_start:
                     elapsed = (time.perf_counter() - self._perf_start) / 60
                     remaining = max(0, 60 - elapsed)
-                    timer_lbl.setText(f'本轮剩余：{remaining:.0f} 分钟')
-                    timer_lbl.setStyleSheet('color: #6a8cbb; font-size: 12px;')
+                    new_text = f'本轮剩余：{remaining:.0f} 分钟'
+                    if new_text != getattr(self, '_last_timer_text', None):
+                        self._last_timer_text = new_text
+                        timer_lbl.setText(new_text)
+                    if getattr(self, '_last_timer_style', None) != 'running':
+                        self._last_timer_style = 'running'
+                        timer_lbl.setStyleSheet('color: #6a8cbb; font-size: 12px;')
                 elif self.timer_state == 'resting' and self._rest_end_time:
                     remaining = max(0, (self._rest_end_time - datetime.now()).total_seconds() / 60)
-                    timer_lbl.setText(f'休息剩余：{remaining:.0f} 分钟')
-                    timer_lbl.setStyleSheet('color: #d97757; font-size: 12px;')
+                    new_text = f'休息剩余：{remaining:.0f} 分钟'
+                    if new_text != getattr(self, '_last_timer_text', None):
+                        self._last_timer_text = new_text
+                        timer_lbl.setText(new_text)
+                    if getattr(self, '_last_timer_style', None) != 'resting':
+                        self._last_timer_style = 'resting'
+                        timer_lbl.setStyleSheet('color: #d97757; font-size: 12px;')
                 elif self.timer_state == 'paused' and self.remaining_when_paused:
                     remaining = max(0, self.remaining_when_paused / 60)
-                    timer_lbl.setText(f'暂停剩余：{remaining:.0f} 分钟')
-                    timer_lbl.setStyleSheet('color: #888; font-size: 12px;')
-            # ── 日程卡片刷新 ──
+                    new_text = f'暂停剩余：{remaining:.0f} 分钟'
+                    if new_text != getattr(self, '_last_timer_text', None):
+                        self._last_timer_text = new_text
+                        timer_lbl.setText(new_text)
+                    if getattr(self, '_last_timer_style', None) != 'paused':
+                        self._last_timer_style = 'paused'
+                        timer_lbl.setStyleSheet('color: #888; font-size: 12px;')
+            # ── 日程卡片刷新（降频到 30 秒，数据 5 分钟才更新一次）──
             if self._calendar_enabled:
-                self._refresh_calendar_display()
+                if not hasattr(self, '_cal_refresh_tick'):
+                    self._cal_refresh_tick = 0
+                self._cal_refresh_tick += 1
+                if self._cal_refresh_tick >= 30:
+                    self._cal_refresh_tick = 0
+                    self._refresh_calendar_display()
 
         except (RuntimeError, Exception):
             pass  # WA_DeleteOnClose 后 C++ 对象已销毁
@@ -7461,7 +7571,7 @@ class RestReminderWidget(QWidget):
         info_bar.setStyleSheet('background: #16161c; border-radius: 6px;')
         info_layout = QHBoxLayout(info_bar)
         info_layout.setContentsMargins(10, 6, 10, 6)
-        info_lbl = QLabel(f'⏳ {AUTO_SUBMIT_SECONDS}秒后自动提交')
+        info_lbl = QLabel('💡 方便时提交即可，不急')
         info_lbl.setStyleSheet('color: #666; font-size: 11px; background: transparent;')
         info_layout.addWidget(info_lbl)
         layout.addWidget(info_bar)
@@ -7470,21 +7580,6 @@ class RestReminderWidget(QWidget):
         submit_btn = QPushButton('提交复盘')
         submit_btn.clicked.connect(dialog.accept)
         layout.addWidget(submit_btn)
-
-        # 倒计时自动提交
-        remaining = [AUTO_SUBMIT_SECONDS]
-        def _countdown():
-            remaining[0] -= 1
-            # 对话框可能已关闭（用户手动提交），跳过已销毁的控件
-            if sip.isdeleted(info_lbl) or sip.isdeleted(dialog):
-                return
-            if remaining[0] > 0:
-                info_lbl.setText(f'⏳ {remaining[0]}秒后自动提交')
-                QTimer.singleShot(1000, _countdown)
-            else:
-                info_lbl.setText('⏳ 自动提交中...')
-                dialog.accept()
-        QTimer.singleShot(1000, _countdown)
 
         dialog._subject_val = subject_val
         dialog._label_val = label_val
@@ -7792,12 +7887,12 @@ class RestReminderWidget(QWidget):
             goal_input.setPlaceholderText('可选：这轮的具体内容')
             layout.addWidget(goal_input)
 
-            # 信息栏 + 倒计时
+            # 信息栏
             info_bar = QWidget()
             info_bar.setStyleSheet('background: #16161c; border-radius: 6px;')
             info_layout = QHBoxLayout(info_bar)
             info_layout.setContentsMargins(10, 6, 10, 6)
-            info_lbl = QLabel(f'⏳ {AUTO_SUBMIT_SECONDS}秒后自动提交')
+            info_lbl = QLabel('💡 填写本轮目标，方便时提交')
             info_lbl.setStyleSheet('color: #666; font-size: 11px; background: transparent;')
             info_layout.addWidget(info_lbl)
             layout.addWidget(info_bar)
@@ -7821,21 +7916,6 @@ class RestReminderWidget(QWidget):
                     )
 
             dialog.accepted.connect(_do_save)
-
-            # 倒计时自动提交
-            remaining = [AUTO_SUBMIT_SECONDS]
-            def _countdown():
-                remaining[0] -= 1
-                # 对话框可能已关闭，跳过已销毁的控件
-                if sip.isdeleted(info_lbl) or sip.isdeleted(dialog):
-                    return
-                if remaining[0] > 0:
-                    info_lbl.setText(f'⏳ {remaining[0]}秒后自动提交')
-                    QTimer.singleShot(1000, _countdown)
-                else:
-                    info_lbl.setText('⏳ 自动提交中...')
-                    dialog.accept()
-            QTimer.singleShot(1000, _countdown)
 
             dialog.exec_()
         except Exception as e:
@@ -7929,7 +8009,7 @@ class RestReminderWidget(QWidget):
         self.update_study_display()
 
     def _save_active_state(self):
-        """保存当前运行状态到本地文件（防崩溃丢失）"""
+        """保存当前运行状态到本地文件（防崩溃丢失），仅状态变化时写入"""
         remaining = 0
         if self.timer_state == 'running' and self._perf_start:
             remaining = max(self._activity_interval * 60 - (time.perf_counter() - self._perf_start), 0)
@@ -7946,7 +8026,10 @@ class RestReminderWidget(QWidget):
             'activity_interval': self._activity_interval,
             'round_count': self._round_count,
         }
-        LocalSync.save_app_state(state)
+        # 脏检查：仅状态/轮次/休息时长变化时才写入磁盘
+        if state != getattr(self, '_last_saved_state', None):
+            self._last_saved_state = state
+            LocalSync.save_app_state(state)
 
     def _get_achievement_stats(self):
         """获取每个成就的当前进度信息"""
@@ -8191,6 +8274,22 @@ class RestReminderWidget(QWidget):
 
 
 
+
+    def eventFilter(self, obj, event):
+        """拖动栏事件过滤器：支持从标题栏拖动窗口"""
+        if obj is getattr(self, '_drag_bar', None):
+            if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+                self.drag_position = event.globalPos() - self.frameGeometry().topLeft()
+                obj.setCursor(Qt.ClosedHandCursor)
+                return True
+            elif event.type() == QEvent.MouseMove and event.buttons() == Qt.LeftButton and self.drag_position is not None:
+                self.move(event.globalPos() - self.drag_position)
+                return True
+            elif event.type() == QEvent.MouseButtonRelease:
+                self.drag_position = None
+                obj.setCursor(Qt.OpenHandCursor)
+                return True
+        return super().eventFilter(obj, event)
 
     def mousePressEvent(self, event):
         try:
