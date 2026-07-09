@@ -60,14 +60,6 @@ chrome.runtime.onStartup.addListener(async () => {
   updateBadge();
 });
 
-// ── 快捷键处理 ──
-chrome.commands.onCommand.addListener((cmd) => {
-  if (cmd === 'toggle-pause') {
-    if (state.timerState === 'running') pauseFocus();
-    else if (state.timerState === 'paused') resumeFocus();
-  }
-});
-
 // ── 闹钟处理 ──
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   checkDateReset();

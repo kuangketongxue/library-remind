@@ -8,12 +8,6 @@
     "storage",
     "notifications"
   ],
-  "commands": {
-    "toggle-pause": {
-      "suggested_key": { "default": "Ctrl+Alt+P" },
-      "description": "暂停/继续计时器"
-    }
-  },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
