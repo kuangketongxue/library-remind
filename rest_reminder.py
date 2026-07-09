@@ -2,7 +2,6 @@
 桌面休息提醒挂件
 - 每小时提醒休息，并随机打开 B 站收藏夹中的视频
 - 20-20-20 护眼提醒：每 20 分钟浮窗提示看远处 20 秒
-- 监控电池充电状态
 - 学习时长本地计数（每次倒计时完成算 1 小时）
 - 数据本地持久化（.daily_log.json）
 """
@@ -3415,7 +3414,6 @@ class RestReminderWidget(QWidget):
         self.start_time = None
         self.remaining_when_paused = None
         self.timer_state = 'idle'
-        self._battery_tick = 0
         self._stats_tick = 0  # 每300tick(5分钟)保存历史统计
         self._state_save_tick = 0  # 每30tick(30秒)保存运行状态
 
@@ -3428,11 +3426,6 @@ class RestReminderWidget(QWidget):
 
         # 22:00 每日汇报标记（每天只弹一次）
         self._daily_report_shown_today = False
-
-        # 电池相关
-        self.last_charging_state = None
-        self.battery_warning_shown = False
-        self.battery_notification_active = False
 
         # 日期检测
         self.current_date = datetime.now().date()
@@ -7356,12 +7349,6 @@ class RestReminderWidget(QWidget):
                 self._weekly_check_tick = 0
                 self._check_weekly_report()
 
-            # --- 每 15 秒电池检测 ---
-            self._battery_tick += 1
-            if self._battery_tick >= 15:
-                self._battery_tick = 0
-                self.update_battery_status()
-
             # --- 每5分钟保存历史统计 ---
             self._stats_tick += 1
             if self._stats_tick >= 300:
@@ -8216,57 +8203,6 @@ class RestReminderWidget(QWidget):
         self.tray_icon.showMessage('📋 已复制到剪贴板', f'最近7天数据已导出\n\n{text}', QSystemTrayIcon.Information, 5000)
         log.info(f'[导出] 本周数据已复制到剪贴板')
 
-    def update_battery_status(self):
-        try:
-            battery = psutil.sensors_battery()
-
-            if battery is None:
-                return
-
-            percent = battery.percent
-            plugged = battery.power_plugged
-
-
-
-
-            if plugged:
-                if percent >= 100:
-                    icon, status = '🔌', '已充满'
-                else:
-                    icon, status = '⚡', '充电中'
-
-                if self.battery_notification_active:
-                    self.tray_icon.showMessage('', '', QSystemTrayIcon.NoIcon, 1)
-                    self.battery_notification_active = False
-                self.battery_warning_shown = False
-            else:
-                icon = '🔋'
-                if percent <= 20:
-                    status, icon = '电量低', '🪫'
-                elif percent <= 50:
-                    status = '电量中'
-                else:
-                    status = '使用电池'
-
-                if self.last_charging_state is True and not plugged:
-                    if not self.battery_warning_shown:
-                        self.show_battery_warning(percent)
-                        self.battery_warning_shown = True
-                        self.battery_notification_active = True
-
-            self.last_charging_state = plugged
-
-        except Exception as e:
-            log.error(f'获取电池状态失败：{e}')
-
-    def show_battery_warning(self, percent):
-        self.tray_icon.showMessage(
-            '⚠️ 电源已断开',
-            f'检测到电脑未在充电！\n当前电量：{percent}%\n建议连接电源以保持最佳性能。',
-            QSystemTrayIcon.Warning,
-            5000
-        )
-        if self.isVisible():
             self.setWindowOpacity(0.5)
             QTimer.singleShot(200, lambda: self.setWindowOpacity(1.0))
             QTimer.singleShot(400, lambda: self.setWindowOpacity(0.5))
