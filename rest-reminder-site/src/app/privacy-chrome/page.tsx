@@ -132,7 +132,7 @@ export default function PrivacyChromePage() {
                 ].map((item) => (
                   <p key={item} className="flex gap-2 items-start">
                     <span className="text-[var(--accent)]">—</span>
-                    <span>{t(item)}。</span>
+                    <span>{t(item)}</span>
                   </p>
                 ))}
               </div>

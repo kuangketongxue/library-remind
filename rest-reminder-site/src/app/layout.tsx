@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import OfficialNotice from "@/components/OfficialNotice";
 import AnnouncementModal from "@/components/AnnouncementModal";
+import MetadataSync from "@/components/MetadataSync";
 import { I18nProvider } from "@/lib/i18n";
 import { ThemeProvider } from "@/lib/theme";
 import "./globals.css";
@@ -15,6 +16,7 @@ export const metadata: Metadata = {
     title: "Rest Reminder — 保护你的眼睛，从每一次休息开始",
     description: "桌面休息提醒挂件，48MB轻量安装，60分钟自动循环。学习时长追踪、AI学习分析、趋势可视化。MIT开源，数据完全本地。",
     type: "website",
+    url: "https://crazy-rest-reminder.pages.dev",
   },
 };
 
@@ -28,6 +30,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-[var(--bg)] text-[var(--fg)]">
         <I18nProvider>
           <ThemeProvider>
+            <MetadataSync />
             <Navbar />
             <OfficialNotice />
             <AnnouncementModal />

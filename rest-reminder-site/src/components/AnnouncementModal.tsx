@@ -2,16 +2,18 @@
 
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
+import { useI18n } from "@/lib/i18n";
 
 export default function AnnouncementModal() {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
   useEffect(() => {
     // 只在首页弹出
     if (pathname !== "/") return;
-    const t = setTimeout(() => setOpen(true), 800);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setOpen(true), 800);
+    return () => clearTimeout(timer);
   }, [pathname]);
 
   const dismiss = () => {
@@ -28,12 +30,12 @@ export default function AnnouncementModal() {
         onClick={dismiss}
       />
       {/* 弹窗 */}
-      <div className="relative bg-[#1a1a24] border border-[#3a3a4a] rounded-2xl shadow-2xl w-[90vw] max-w-[520px] p-8 animate-[fadeInUp_0.3s_ease-out]">
+      <div className="relative bg-[var(--surface-raised)] border border-[var(--border)] rounded-2xl shadow-2xl w-[90vw] max-w-[520px] p-8 animate-[fadeInUp_0.3s_ease-out]">
         {/* 关闭按钮 */}
         <button
           onClick={dismiss}
-          className="absolute top-4 right-4 text-[#888] hover:text-white transition-colors text-xl leading-none"
-          aria-label="关闭"
+          className="absolute top-4 right-4 text-[var(--fg-muted)] hover:text-[var(--fg)] transition-colors text-xl leading-none"
+          aria-label={t("ann.modal.close")}
         >
           ✕
         </button>
@@ -41,48 +43,48 @@ export default function AnnouncementModal() {
         {/* 标题 */}
         <div className="flex items-center gap-2 mb-4">
           <span className="text-xl">📢</span>
-          <h2 className="text-lg font-bold text-white">平台公告</h2>
+          <h2 className="text-lg font-bold text-[var(--fg)]">{t("ann.modal.title")}</h2>
         </div>
 
         {/* 内容 */}
         <div className="text-sm leading-relaxed space-y-4 mb-6">
-          <p className="text-[#ccc]">
-            感谢各位用户对 Rest Reminder 的支持！以下是近期重要更新：
+          <p className="text-[var(--fg-dim)]">
+            {t("ann.modal.intro")}
           </p>
 
           <div>
-            <p className="font-semibold text-white mb-1">1. AI 学习报告修复</p>
-            <ul className="list-disc list-inside text-[#bbb] space-y-0.5 ml-2">
-              <li>修复 AI 服务不可用时报告只显示一条金句的问题</li>
-              <li>现在会显示完整的学习数据摘要（时长、轮次、复盘记录）</li>
+            <p className="font-semibold text-[var(--fg)] mb-1">{t("ann.modal.s1.title")}</p>
+            <ul className="list-disc list-inside text-[var(--fg-dim)] space-y-0.5 ml-2">
+              <li>{t("ann.modal.s1.i1")}</li>
+              <li>{t("ann.modal.s1.i2")}</li>
             </ul>
           </div>
 
           <div>
-            <p className="font-semibold text-white mb-1">2. 官网全面升级</p>
-            <ul className="list-disc list-inside text-[#bbb] space-y-0.5 ml-2">
-              <li>新增联系我们页面、定价页面、法律合规页面</li>
-              <li>文档中心改版，新增搜索和快速导航</li>
+            <p className="font-semibold text-[var(--fg)] mb-1">{t("ann.modal.s2.title")}</p>
+            <ul className="list-disc list-inside text-[var(--fg-dim)] space-y-0.5 ml-2">
+              <li>{t("ann.modal.s2.i1")}</li>
+              <li>{t("ann.modal.s2.i2")}</li>
             </ul>
           </div>
 
           <div>
-            <p className="font-semibold text-white mb-1">3. v6.2.6 发布</p>
-            <ul className="list-disc list-inside text-[#bbb] space-y-0.5 ml-2">
-              <li>官网背景视频修复、公告弹窗优化</li>
-              <li>修复多个界面和部署相关问题</li>
+            <p className="font-semibold text-[var(--fg)] mb-1">{t("ann.modal.s3.title")}</p>
+            <ul className="list-disc list-inside text-[var(--fg-dim)] space-y-0.5 ml-2">
+              <li>{t("ann.modal.s3.i1")}</li>
+              <li>{t("ann.modal.s3.i2")}</li>
             </ul>
           </div>
         </div>
 
         {/* 日期 + 按钮 */}
         <div className="flex items-center justify-between">
-          <span className="text-xs text-[#777]">2026年7月6日</span>
+          <span className="text-xs text-[var(--fg-muted)]">{t("ann.modal.date")}</span>
           <button
             onClick={dismiss}
-            className="px-6 py-2 text-sm font-medium rounded-lg border border-[#d4af37] text-[#d4af37] hover:bg-[rgba(212,175,55,0.1)] transition-colors"
+            className="px-6 py-2 text-sm font-medium rounded-lg border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"
           >
-            我知道了
+            {t("ann.modal.dismiss")}
           </button>
         </div>
       </div>

@@ -569,15 +569,15 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-sm font-bold">v6.2.7</span>
                   <span className="text-xs text-[var(--fg-dim)]">2026-07-09</span>
-                  <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">最新</span>
+                  <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">{t("docs.changelog_latest")}</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                  <li>桌面应用关于页按钮加 emoji（官网🌐、更新日志📋、检查更新🔄）</li>
-                  <li>官网新增 CN/EN/JP 三语言切换 + 日/夜模式</li>
-                  <li>Navbar/Footer GitHub 链接改为真实 cat SVG 图标</li>
-                  <li>新增唯一官方渠道声明横幅（防山寨/反诈提醒）</li>
-                  <li>AI 服务不可用提示优化 + 单实例 Mutex stale lock 修复</li>
-                  <li>官网 Hero 视频背景修复 + 公告弹窗逻辑修正</li>
+                  <li>{t("changelog.v6_2_7.i1")}</li>
+                  <li>{t("changelog.v6_2_7.i2")}</li>
+                  <li>{t("changelog.v6_2_7.i3")}</li>
+                  <li>{t("changelog.v6_2_7.i4")}</li>
+                  <li>{t("changelog.v6_2_7.i5")}</li>
+                  <li>{t("changelog.v6_2_7.i6")}</li>
                 </ul>
               </div>
 
@@ -587,11 +587,11 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                   <span className="text-xs text-[var(--fg-dim)]">2026-07-06</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                  <li>浏览器图标修复：favicon 换为 256x256 cute_icon.png</li>
-                  <li>Contact 页面 framer-motion SSR 修复：内容不再透明不可见</li>
-                  <li>Contact 页面使用 Gmail/WeChat 官方品牌图标</li>
-                  <li>Hero 背景视频修复：静态图兜底 + 视频立即 autoPlay</li>
-                  <li>公告弹窗每次访问弹出，文字颜色修复</li>
+                  <li>{t("changelog.v6_2_6.i1")}</li>
+                  <li>{t("changelog.v6_2_6.i2")}</li>
+                  <li>{t("changelog.v6_2_6.i3")}</li>
+                  <li>{t("changelog.v6_2_6.i4")}</li>
+                  <li>{t("changelog.v6_2_6.i5")}</li>
                 </ul>
               </div>
 
@@ -601,11 +601,11 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                   <span className="text-xs text-[var(--fg-dim)]">2026-07-06</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                  <li>AI 报告降级修复：服务不可用时显示本地数据摘要（学习时长/轮次/复盘）而非随机金句</li>
-                  <li>Cloudflare Worker 重部署：AI 代理恢复正常</li>
-                  <li>关终端不再退出应用：改用 pythonw.exe 后台启动</li>
-                  <li>官网 Contact 等页面 404 修复：添加 fix-routes.js 构建后脚本</li>
-                  <li>CI/CD 部署验证：自动测试所有页面和 AI 代理</li>
+                  <li>{t("changelog.v6_2_5.i1")}</li>
+                  <li>{t("changelog.v6_2_5.i2")}</li>
+                  <li>{t("changelog.v6_2_5.i3")}</li>
+                  <li>{t("changelog.v6_2_5.i4")}</li>
+                  <li>{t("changelog.v6_2_5.i5")}</li>
                 </ul>
               </div>
 
@@ -615,8 +615,8 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                   <span className="text-xs text-[var(--fg-dim)]">2026-07-06</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                  <li>AI 报告反幻觉修复：禁止编造老师姓名、学校、科目细节等虚构内容</li>
-                  <li>所有结论必须引用具体数字</li>
+                  <li>{t("changelog.v6_2_4.i1")}</li>
+                  <li>{t("changelog.v6_2_4.i2")}</li>
                 </ul>
               </div>
 
@@ -626,10 +626,10 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                   <span className="text-xs text-[var(--fg-dim)]">2026-07-06</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                  <li>新增 /contact 联系页面：邮箱 + 微信二维码 + GitHub Issue 模板</li>
-                  <li>新增 bug_report / feature_request / partnership 3 个 Issue 模板</li>
-                  <li>文档页新增产品简介段 + 4 个数据卡片</li>
-                  <li>导航栏新增「联系我们」链接</li>
+                  <li>{t("changelog.v6_2_3.i1")}</li>
+                  <li>{t("changelog.v6_2_3.i2")}</li>
+                  <li>{t("changelog.v6_2_3.i3")}</li>
+                  <li>{t("changelog.v6_2_3.i4")}</li>
                 </ul>
               </div>
 
@@ -639,13 +639,13 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                   <span className="text-xs text-[var(--fg-dim)]">2026-07-06</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                  <li>官网全面改版：暖奶油色背景 + WorkBuddy 风格 Footer + 三栏文档布局</li>
-                  <li>导航栏新增「定价」链接 + 搜索按钮</li>
-                  <li>Footer 重设计：Hero CTA + 4 栏导航（服务条款/文档指引/产品下载/联系我们）</li>
-                  <li>文档页三栏布局：左侧导航 + 中间内容 + 右侧快速导航（滚动高亮）</li>
-                  <li>文档页顶部搜索框（Enter 跳转匹配章节）</li>
-                  <li>Navbar 文字适配深色背景（白色）</li>
-                  <li>知识库清理：删除 7 个过期文件 + 新增 7 条经验记录</li>
+                  <li>{t("changelog.v6_2_2.i1")}</li>
+                  <li>{t("changelog.v6_2_2.i2")}</li>
+                  <li>{t("changelog.v6_2_2.i3")}</li>
+                  <li>{t("changelog.v6_2_2.i4")}</li>
+                  <li>{t("changelog.v6_2_2.i5")}</li>
+                  <li>{t("changelog.v6_2_2.i6")}</li>
+                  <li>{t("changelog.v6_2_2.i7")}</li>
                 </ul>
               </div>
 
@@ -655,9 +655,9 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                   <span className="text-xs text-[var(--fg-dim)]">2026-07-06</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                  <li>页面背景从纯白改为暖奶油色（#fdf6f0），长时间浏览不伤眼</li>
-                  <li>CTA 横幅深棕渐变，白字清晰可见</li>
-                  <li>底部粘性 CTA 栏适配暖色背景</li>
+                  <li>{t("changelog.v6_2_1.i1")}</li>
+                  <li>{t("changelog.v6_2_1.i2")}</li>
+                  <li>{t("changelog.v6_2_1.i3")}</li>
                 </ul>
               </div>
 
@@ -667,10 +667,10 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                   <span className="text-xs text-[var(--fg-dim)]">2026-07-06</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                  <li>修复 9 处 QFont CSS 字符串导致的主界面文字乱码（Georgia/Consolas 等字体失效回退）</li>
-                  <li>修复飞书日历 lark-cli 路径亡址（指向已删 .workbuddy/ 目录）</li>
-                  <li>AI 服务超时时自动 fallback 本地智慧语录（不再显示错误 toast，review 报告始终可用）</li>
-                  <li>官网新增 pricing / privacy / rules / terms 法律合规 4 个独立页面</li>
+                  <li>{t("changelog.v6_2_0.i1")}</li>
+                  <li>{t("changelog.v6_2_0.i2")}</li>
+                  <li>{t("changelog.v6_2_0.i3")}</li>
+                  <li>{t("changelog.v6_2_0.i4")}</li>
                 </ul>
               </div>
 
@@ -680,9 +680,9 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                   <span className="text-xs text-[var(--fg-dim)]">2026-07-04</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                  <li>浮球 popup 飞书日程显示修复：root 重建 bug + 高度增大到 240</li>
-                  <li>新增版本更新检查：启动后自动检测 GitHub 最新 release，有新版弹窗提示</li>
-                  <li>修复 threading 模块未导入导致后台任务崩溃（影响 AI 报告 + 版本检查）</li>
+                  <li>{t("changelog.v6_1_9.i1")}</li>
+                  <li>{t("changelog.v6_1_9.i2")}</li>
+                  <li>{t("changelog.v6_1_9.i3")}</li>
                 </ul>
               </div>
 
@@ -692,9 +692,9 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                   <span className="text-xs text-[var(--fg-dim)]">2026-07-04</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                  <li>修复浮球 popup 关闭后再打开卡片空白</li>
-                  <li>文档站 /docs 全面改版：Claude.ai 风格三栏布局</li>
-                  <li>导航链接修复 + 硬编码颜色统一 + 死代码清理</li>
+                  <li>{t("changelog.v6_1_8.i1")}</li>
+                  <li>{t("changelog.v6_1_8.i2")}</li>
+                  <li>{t("changelog.v6_1_8.i3")}</li>
                 </ul>
               </div>
 
@@ -704,11 +704,11 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                   <span className="text-xs text-[var(--fg-dim)]">2026-07-04</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                  <li>修复 import copy 缺失导致设置保存崩溃</li>
-                  <li>修复复盘弹窗 QSlider GC 崩溃（自动提交后评分丢失）</li>
-                  <li>清理 _enter_rest() 重复通知</li>
-                  <li>关于页 AI 服务动态展示真实 providers 列表</li>
-                  <li>CLAUDE.md 与规格文档同步到 v6.x</li>
+                  <li>{t("changelog.v6_1_7.i1")}</li>
+                  <li>{t("changelog.v6_1_7.i2")}</li>
+                  <li>{t("changelog.v6_1_7.i3")}</li>
+                  <li>{t("changelog.v6_1_7.i4")}</li>
+                  <li>{t("changelog.v6_1_7.i5")}</li>
                 </ul>
               </div>
 
@@ -718,12 +718,12 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                   <span className="text-xs text-[var(--fg-dim)]">2026-07-03</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                  <li>设置保存防抖：300ms 内多次调用合并为一次磁盘写入</li>
-                  <li>单实例锁删除 msvcrt 文件锁残留，仅用 Named Mutex</li>
-                  <li>飞书日程 subprocess 改 Popen，stop() 可立即终止子进程</li>
-                  <li>飞书日程缓存 24h→1h，避免跨天日程不刷新</li>
-                  <li>修复邮件测试连点堆叠 QThread 崩溃、JSONStore 并发写丢 key</li>
-                  <li>md_to_html 接受 theme 参数，light 主题报告不再显示 dark 底色</li>
+                  <li>{t("changelog.v6_1_6.i1")}</li>
+                  <li>{t("changelog.v6_1_6.i2")}</li>
+                  <li>{t("changelog.v6_1_6.i3")}</li>
+                  <li>{t("changelog.v6_1_6.i4")}</li>
+                  <li>{t("changelog.v6_1_6.i5")}</li>
+                  <li>{t("changelog.v6_1_6.i6")}</li>
                 </ul>
               </div>
 
@@ -733,12 +733,12 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                   <span className="text-xs text-[var(--fg-dim)]">2026-07-02</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                  <li>修复 AI 服务不可用：default_proxy 被禁用后重启仍不可用</li>
-                  <li>修复设置页测试连接卡顿：HTTP 请求改后台线程，UI 不再冻结</li>
-                  <li>浮球短点击切换显示/隐藏，右键菜单动态文案</li>
-                  <li>托盘菜单新增浮球显示切换</li>
-                  <li>浮球 popup 扩容到 260×200，22:00 进度条改为倒计时模式</li>
-                  <li>飞书刷新按钮对比度修复，侧边栏矢量图标，GitHub 真实图标</li>
+                  <li>{t("changelog.v6_1_4.i1")}</li>
+                  <li>{t("changelog.v6_1_4.i2")}</li>
+                  <li>{t("changelog.v6_1_4.i3")}</li>
+                  <li>{t("changelog.v6_1_4.i4")}</li>
+                  <li>{t("changelog.v6_1_4.i5")}</li>
+                  <li>{t("changelog.v6_1_4.i6")}</li>
                 </ul>
               </div>
 
@@ -748,10 +748,10 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                   <span className="text-xs text-[var(--fg-dim)]">2026-07-02</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                  <li>修复计时漂移：引入 time.perf_counter() 统一计时源</li>
-                  <li>修复临时文件泄漏：_TempFileManager 集中注册 + atexit 清理</li>
-                  <li>增强日志归档：按日期自动归档旧日志</li>
-                  <li>Sponsor 区重构：真实技术生态 + 文档 FAQ 赞助合作</li>
+                  <li>{t("changelog.v6_1_3.i1")}</li>
+                  <li>{t("changelog.v6_1_3.i2")}</li>
+                  <li>{t("changelog.v6_1_3.i3")}</li>
+                  <li>{t("changelog.v6_1_3.i4")}</li>
                 </ul>
               </div>
 
@@ -761,9 +761,9 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                   <span className="text-xs text-[var(--fg-dim)]">2026-07-01</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                  <li>修复趋势图完全空白（延迟加载后初始数据未加载）</li>
-                  <li>修复设置 Tab 错误显示趋势内容（索引错位）</li>
-                  <li>官网下载截图替换为 GitHub Releases 页面</li>
+                  <li>{t("changelog.v6_1_2.i1")}</li>
+                  <li>{t("changelog.v6_1_2.i2")}</li>
+                  <li>{t("changelog.v6_1_2.i3")}</li>
                 </ul>
               </div>
 
@@ -773,10 +773,10 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                   <span className="text-xs text-[var(--fg-dim)]">2026-06-30</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                  <li>主界面去置顶 + AI 服务自定义提供商</li>
-                  <li>内置免费 AI（Cloudflare 代理，key 隐藏）</li>
-                  <li>成就扩充 16→19 个，进度条优化</li>
-                  <li>GitHub 自动备份 + 官网优化</li>
+                  <li>{t("changelog.v6_0_0.i1")}</li>
+                  <li>{t("changelog.v6_0_0.i2")}</li>
+                  <li>{t("changelog.v6_0_0.i3")}</li>
+                  <li>{t("changelog.v6_0_0.i4")}</li>
                 </ul>
               </div>
 
@@ -786,10 +786,10 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                   <span className="text-xs text-[var(--fg-dim)]">2026-06-30</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                  <li>成就显示优化：卡片式展示 + 进度条 + 当前进度文本</li>
-                  <li>环境白噪音：30 秒循环、首尾 crossfade 消除循环断裂</li>
-                  <li>邮件周报改用 Agent QQ 邮箱（agently-cli），移除 SMTP</li>
-                  <li>关于界面字体放大，环境/数据/AI 服务信息清晰可见</li>
+                  <li>{t("changelog.v5_6_0.i1")}</li>
+                  <li>{t("changelog.v5_6_0.i2")}</li>
+                  <li>{t("changelog.v5_6_0.i3")}</li>
+                  <li>{t("changelog.v5_6_0.i4")}</li>
                 </ul>
               </div>
 
@@ -799,13 +799,13 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                   <span className="text-xs text-[var(--fg-dim)]">2026-06-29</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                  <li>成就/徽章系统：16 个成就，解锁 Toast 通知</li>
-                  <li>GitHub 风格学习热力图：52 周 × 7 天，5 级颜色</li>
-                  <li>环境白噪音：雨声/森林/咖啡厅/白噪音/棕噪音</li>
-                  <li>每周邮件周报：SMTP 配置，HTML 格式 AI 学习报告</li>
-                  <li>主题切换：深色/浅色/跟随系统</li>
-                  <li>全局快捷键：Ctrl+Alt+P/S/B，Ctrl+1~5 切换 Tab</li>
-                  <li>API Key 加密存储（XOR + 机器盐值）</li>
+                  <li>{t("changelog.v5_5_0.i1")}</li>
+                  <li>{t("changelog.v5_5_0.i2")}</li>
+                  <li>{t("changelog.v5_5_0.i3")}</li>
+                  <li>{t("changelog.v5_5_0.i4")}</li>
+                  <li>{t("changelog.v5_5_0.i5")}</li>
+                  <li>{t("changelog.v5_5_0.i6")}</li>
+                  <li>{t("changelog.v5_5_0.i7")}</li>
                 </ul>
               </div>
 
@@ -815,11 +815,11 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                   <span className="text-xs text-[var(--fg-dim)]">2026-06-29</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                  <li>飞书日程集成：实时显示当前/下一个日程</li>
-                  <li>趋势时间选择器：近7/14/30天 + 自定义日期范围</li>
-                  <li>AI API Key 配置界面、SenseNova 推理模型兼容</li>
-                  <li>修复任务栏图标丢失、多实例启动竞态</li>
-                  <li>「关于」「趋势」页面重新设计</li>
+                  <li>{t("changelog.v5_4_0.i1")}</li>
+                  <li>{t("changelog.v5_4_0.i2")}</li>
+                  <li>{t("changelog.v5_4_0.i3")}</li>
+                  <li>{t("changelog.v5_4_0.i4")}</li>
+                  <li>{t("changelog.v5_4_0.i5")}</li>
                 </ul>
               </div>
 
@@ -829,10 +829,10 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                   <span className="text-xs text-[var(--fg-dim)]">2026-06-26</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                  <li>主界面全面实时刷新：学习时长/轮次/休息时长/状态/倒计时每秒更新</li>
-                  <li>修复复盘摘要空列表崩溃、连续打卡恢复逻辑错误</li>
-                  <li>修复月趋势/季年趋势统计错误</li>
-                  <li>删除死代码，移除失效窗口按钮</li>
+                  <li>{t("changelog.v5_1_0.i1")}</li>
+                  <li>{t("changelog.v5_1_0.i2")}</li>
+                  <li>{t("changelog.v5_1_0.i3")}</li>
+                  <li>{t("changelog.v5_1_0.i4")}</li>
                 </ul>
               </div>
 
@@ -842,10 +842,10 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                   <span className="text-xs text-[var(--fg-dim)]">2026-06-25</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                  <li>柱状图悬浮提示、复盘学科新增「其他」</li>
-                  <li>AI 报告后台线程（QThread 异步），趋势分析全面重构</li>
-                  <li>AI 报告字数提升至 400+ 字，增加 5 个分析章节</li>
-                  <li>修复 AI 报告卡死、tooltip 不显示等 P0 bug</li>
+                  <li>{t("changelog.v5_0_0.i1")}</li>
+                  <li>{t("changelog.v5_0_0.i2")}</li>
+                  <li>{t("changelog.v5_0_0.i3")}</li>
+                  <li>{t("changelog.v5_0_0.i4")}</li>
                 </ul>
               </div>
 
@@ -855,10 +855,10 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                   <span className="text-xs text-[var(--fg-dim)]">2026-06-23</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                  <li>5 标签页主界面（今日/AI报告/趋势/设置/关于）</li>
-                  <li>⚡ 浮球独立（60×60）、点击弹出信息面板</li>
-                  <li>20-20-20 护眼浮窗、热力图、B站收藏夹</li>
-                  <li>开源发布：移除 Pro 订阅系统，MIT 协议全部免费</li>
+                  <li>{t("changelog.v4_4_0.i1")}</li>
+                  <li>{t("changelog.v4_4_0.i2")}</li>
+                  <li>{t("changelog.v4_4_0.i3")}</li>
+                  <li>{t("changelog.v4_4_0.i4")}</li>
                 </ul>
               </div>
 
@@ -868,9 +868,9 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                   <span className="text-xs text-[var(--fg-dim)]">2026-06-21</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
-                  <li>固定 60 分钟学习 → 5 分钟请辨 → 5 分钟休息循环</li>
-                  <li>每 3 轮自动播放护眼视频</li>
-                  <li>休息期间弹出复盘评分（学科 + 标签 + 1-100 评分）</li>
+                  <li>{t("changelog.v4_3_0.i1")}</li>
+                  <li>{t("changelog.v4_3_0.i2")}</li>
+                  <li>{t("changelog.v4_3_0.i3")}</li>
                 </ul>
               </div>
             </div>
@@ -973,7 +973,7 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
             <div className="space-y-4">
               <div className="docs-card">
                 <h3 className="text-sm font-semibold mb-2">{t("docs.ts_float_title")}</h3>
-                <p className="text-[var(--fg-dim)] text-sm leading-relaxed mb-2">按以下步骤排查：</p>
+                <p className="text-[var(--fg-dim)] text-sm leading-relaxed mb-2">{t("docs.ts_steps")}</p>
                 <ol className="text-xs text-[var(--fg-dim)] leading-relaxed list-decimal list-inside space-y-1">
                   <li>{t("docs.ts_float_0")}</li>
                   <li>{t("docs.ts_float_1")}</li>
@@ -984,7 +984,7 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
 
               <div className="docs-card">
                 <h3 className="text-sm font-semibold mb-2">{t("docs.ts_ai_title")}</h3>
-                <p className="text-[var(--fg-dim)] text-sm leading-relaxed mb-2">按以下步骤排查：</p>
+                <p className="text-[var(--fg-dim)] text-sm leading-relaxed mb-2">{t("docs.ts_steps")}</p>
                 <ol className="text-xs text-[var(--fg-dim)] leading-relaxed list-decimal list-inside space-y-1">
                   <li>{t("docs.ts_ai_0")}</li>
                   <li>{t("docs.ts_ai_1")}</li>
@@ -1002,7 +1002,7 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
 
               <div className="docs-card">
                 <h3 className="text-sm font-semibold mb-2">{t("docs.ts_bili_title")}</h3>
-                <p className="text-[var(--fg-dim)] text-sm leading-relaxed mb-2">按以下步骤排查：</p>
+                <p className="text-[var(--fg-dim)] text-sm leading-relaxed mb-2">{t("docs.ts_steps")}</p>
                 <ol className="text-xs text-[var(--fg-dim)] leading-relaxed list-decimal list-inside space-y-1">
                   <li>{t("docs.ts_bili_0")}</li>
                   <li>{t("docs.ts_bili_1")}</li>

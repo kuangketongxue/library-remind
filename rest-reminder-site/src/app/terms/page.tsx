@@ -108,7 +108,7 @@ export default function TermsPage() {
             <h2 className="text-xl font-bold mb-4 font-display">{t("terms.section_contact")}</h2>
             <div className="docs-card">
               <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                {t("terms.contact_desc")} <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">kuangketongxue@gmail.com</code>。
+                {t("terms.contact_desc")} <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">{t("terms.contact_email")}</code>{t("terms.contact_period")}
               </p>
             </div>
           </section>

@@ -36,7 +36,7 @@ export default function ContactPage() {
         <div className="docs-card p-8 mb-8 animate-[fadeInUp_0.5s_ease-out_0.2s_both]">
           <div className="flex items-center gap-4 mb-6">
             <div className="w-12 h-12 rounded-xl bg-[var(--accent-soft)] flex items-center justify-center">
-              <img src="/wechat.svg" alt="微信" className="w-6 h-6" />
+              <img src="/wechat.svg" alt="WeChat" className="w-6 h-6" />
             </div>
             <div>
               <h3 className="text-lg font-bold">{t("contact.wechat_title")}</h3>
@@ -44,7 +44,7 @@ export default function ContactPage() {
             </div>
           </div>
           <div className="flex items-center gap-6">
-            <img src="/wechat-pay.jpg" alt="微信二维码" className="w-32 h-32 rounded-lg border border-[var(--border)]" />
+            <img src="/wechat-pay.jpg" alt="WeChat QR code" className="w-32 h-32 rounded-lg border border-[var(--border)]" />
             <p className="text-sm text-[var(--fg-dim)]">{t("contact.wechat_add")}</p>
           </div>
         </div>
@@ -58,7 +58,7 @@ export default function ContactPage() {
               </svg>
             </div>
             <div>
-              <h3 className="text-lg font-bold">GitHub</h3>
+              <h3 className="text-lg font-bold">{t("contact.github_title")}</h3>
               <p className="text-sm text-[var(--fg-dim)]">{t("contact.github_desc")}</p>
             </div>
           </div>

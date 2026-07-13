@@ -1,25 +1,27 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useI18n } from "@/lib/i18n";
 
 const tocItems = [
-  { id: "简介", label: "产品简介" },
-  { id: "快速开始", label: "快速开始" },
-  { id: "下载运行", label: "下载运行" },
-  { id: "设定目标", label: "设定目标" },
-  { id: "开始学习", label: "开始学习" },
-  { id: "复盘追踪", label: "复盘追踪" },
-  { id: "专注循环", label: "60 分钟专注循环" },
-  { id: "护眼提醒", label: "20-20-20 护眼提醒" },
-  { id: "学习追踪", label: "学习时长追踪" },
-  { id: "趋势分析", label: "趋势分析" },
-  { id: "ai分析", label: "AI 学习分析" },
-  { id: "设置详解", label: "设置详解" },
-  { id: "更新日志", label: "更新日志" },
-  { id: "常见问题", label: "常见问题" },
+  { id: "简介", labelKey: "docs.section_intro" },
+  { id: "快速开始", labelKey: "docs.section_quickstart" },
+  { id: "下载运行", labelKey: "docs.download_run" },
+  { id: "设定目标", labelKey: "docs.set_goal" },
+  { id: "开始学习", labelKey: "docs.start_learn" },
+  { id: "复盘追踪", labelKey: "docs.review_track" },
+  { id: "专注循环", labelKey: "docs.focus_cycle" },
+  { id: "护眼提醒", labelKey: "docs.eye_care" },
+  { id: "学习追踪", labelKey: "docs.learning_track" },
+  { id: "趋势分析", labelKey: "docs.trends" },
+  { id: "ai分析", labelKey: "docs.ai_analysis" },
+  { id: "设置详解", labelKey: "docs.settings" },
+  { id: "更新日志", labelKey: "docs.changelog" },
+  { id: "常见问题", labelKey: "docs.faq" },
 ];
 
 export default function DocsTOC() {
+  const { t } = useI18n();
   const [active, setActive] = useState("");
 
   useEffect(() => {
@@ -40,9 +42,9 @@ export default function DocsTOC() {
 
   return (
     <aside className="docs-toc hidden lg:block">
-      <p className="text-xs font-bold text-[var(--fg)] mb-4 tracking-wide uppercase">快速导航</p>
+      <p className="text-xs font-bold text-[var(--fg)] mb-4 tracking-wide uppercase">{t("docs.toc_title")}</p>
       <nav className="space-y-1">
-        {tocItems.map(({ id, label }) => (
+        {tocItems.map(({ id, labelKey }) => (
           <a
             key={id}
             href={`#${id}`}
@@ -52,7 +54,7 @@ export default function DocsTOC() {
                 : "text-[var(--fg-dim)] hover:text-[var(--fg)] border-transparent"
             }`}
           >
-            {label}
+            {t(labelKey)}
           </a>
         ))}
       </nav>

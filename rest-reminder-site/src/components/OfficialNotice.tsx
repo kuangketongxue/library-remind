@@ -5,7 +5,7 @@ import { useI18n } from "@/lib/i18n";
 export default function OfficialNotice() {
   const { t } = useI18n();
   return (
-    <div className="bg-[rgba(212,175,55,0.08)] border-b border-[rgba(212,175,55,0.2)]">
+    <div className="bg-[var(--accent-soft)] border-b border-[var(--accent-glow)]">
       <div className="max-w-6xl mx-auto px-6 py-3">
         <div className="flex items-start gap-3">
           <span className="text-base mt-0.5">⚠️</span>
@@ -16,14 +16,14 @@ export default function OfficialNotice() {
               <table className="w-full text-xs border border-[var(--border)] rounded-lg overflow-hidden">
                 <thead>
                   <tr className="bg-[var(--surface)]">
-                    <th className="text-left px-3 py-2 font-medium text-[var(--fg-dim)] border-b border-[var(--border)]">类别</th>
-                    <th className="text-left px-3 py-2 font-medium text-[var(--fg-dim)] border-b border-[var(--border)]">唯一官方</th>
+                    <th className="text-left px-3 py-2 font-medium text-[var(--fg-dim)] border-b border-[var(--border)]">{t("notice.col_category")}</th>
+                    <th className="text-left px-3 py-2 font-medium text-[var(--fg-dim)] border-b border-[var(--border)]">{t("notice.col_official")}</th>
                   </tr>
                 </thead>
                 <tbody className="bg-[var(--bg)]">
                   <tr className="border-b border-[var(--border)]">
                     <td className="px-3 py-2 text-[var(--fg-dim)]">{t("notice.label_website")}</td>
-                    <td className="px-3 py-2"><a href="https://crazy-rest-reminder.pages.dev" className="text-[var(--accent)] hover:underline">crazy-rest-reminder.pages.dev</a></td>
+                    <td className="px-3 py-2"><a href="https://crazy-rest-reminder.pages.dev" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">crazy-rest-reminder.pages.dev</a></td>
                   </tr>
                   <tr className="border-b border-[var(--border)]">
                     <td className="px-3 py-2 text-[var(--fg-dim)]">{t("notice.label_source")}</td>

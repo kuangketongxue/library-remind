@@ -8,18 +8,21 @@ const steps = [
     num: "1",
     titleKey: "download.step1",
     descKey: "download.step1_desc",
+    altKey: "download.step1_alt",
     img: "/screenshot-download.png",
   },
   {
     num: "2",
     titleKey: "download.step2",
     descKey: "download.step2_desc",
+    altKey: "download.step2_alt",
     img: "/screenshot-main.png",
   },
   {
     num: "3",
     titleKey: "download.step3",
     descKey: "download.step3_desc",
+    altKey: "download.step3_alt",
     img: "/screenshot-stats.png",
   },
 ];
@@ -51,14 +54,14 @@ export default function Download() {
                 transition={{ duration: 0.5, delay: i * 0.15 }}
                 className="text-center"
               >
-                <div className="w-10 h-10 rounded-full bg-[var(--accent-soft)] text-[var(--accent)] text-sm font-bold flex items-center justify-center border border-[var(--border-accent)] mx-auto mb-4">
+                <div className="w-10 h-10 rounded-full bg-[var(--accent-soft)] text-[var(--accent)] text-sm font-bold flex items-center justify-center border border-[var(--accent)] mx-auto mb-4">
                   {s.num}
                 </div>
                 <h3 className="text-lg font-semibold mb-2">{t(s.titleKey)}</h3>
                 <p className="text-sm text-[var(--fg-dim)] mb-5">{t(s.descKey)}</p>
                 <img
                   src={s.img}
-                  alt={t(s.titleKey)}
+                  alt={t(s.altKey)}
                   className="w-full max-w-[200px] mx-auto rounded-xl border border-[var(--border)] shadow-lg"
                   loading="lazy"
                 />
@@ -82,7 +85,7 @@ export default function Download() {
                 href="https://github.com/kuangketongxue/library-remind/releases/latest"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 bg-white text-[#b5651d] font-semibold px-8 py-3.5 rounded-full text-base hover:bg-[var(--fg)] hover:shadow-lg transition-all"
+                className="inline-flex items-center gap-2 bg-[var(--cta-fg)] text-[var(--cta-from)] font-semibold px-8 py-3.5 rounded-full text-base hover:opacity-90 hover:shadow-lg transition-all"
               >
                 {t("download.cta_download")}
               </a>
@@ -90,12 +93,12 @@ export default function Download() {
                 href="https://github.com/kuangketongxue/library-remind"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 border-2 border-white/40 text-white font-medium px-8 py-3.5 rounded-full text-base hover:border-white hover:bg-white/10 transition-all"
+                className="inline-flex items-center gap-2 border-2 border-[var(--cta-fg)]/40 text-[var(--cta-fg)] font-medium px-8 py-3.5 rounded-full text-base hover:border-[var(--cta-fg)] hover:bg-[var(--cta-fg)]/10 transition-all"
               >
                 {t("download.cta_github")}
               </a>
             </div>
-            <p className="text-white/70 text-sm">
+            <p className="text-[var(--cta-fg)]/70 text-sm">
               {t("download.note")}
             </p>
           </motion.div>

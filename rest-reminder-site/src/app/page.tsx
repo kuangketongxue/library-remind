@@ -32,6 +32,7 @@ function Stats() {
 }
 
 export default function Home() {
+  const { t } = useI18n();
   return (
     <main className="flex-1">
       <Hero />
@@ -41,7 +42,7 @@ export default function Home() {
         <div className="max-w-5xl mx-auto">
           <img
             src="/hero-banner-promo.png"
-            alt="Rest Reminder"
+            alt={t("hero.banner.alt")}
             className="w-full rounded-2xl border border-[var(--border)]"
           />
         </div>

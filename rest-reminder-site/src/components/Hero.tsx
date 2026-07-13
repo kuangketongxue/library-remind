@@ -48,6 +48,7 @@ export default function Hero() {
         loop
         playsInline
         poster="/hero-banner.png"
+        aria-label={t("hero.video.alt")}
         className="absolute inset-0 w-full h-full object-cover -z-10"
       >
         <source src="/promo_video.mp4" type="video/mp4" />
@@ -61,7 +62,7 @@ export default function Hero() {
 
       <div className="relative z-10 max-w-3xl mx-auto">
         <div className="inline-flex items-center gap-2 mb-5">
-          <span className="text-[11px] font-semibold text-[var(--accent)] bg-[var(--accent-soft)] px-3 py-1 rounded-full border border-[var(--border-accent)]">
+          <span className="text-[11px] font-semibold text-[var(--accent)] bg-[var(--accent-soft)] px-3 py-1 rounded-full border border-[var(--border)]">
             {t("hero.badge")}
           </span>
           <span className="text-xs text-white/70">v6.2.6</span>
@@ -73,7 +74,7 @@ export default function Hero() {
         >
           {t("hero.title_1")}
           <br />
-          <span style={{ color: "#d4a853", textShadow: "0 2px 8px rgba(0,0,0,0.4)" }}>
+          <span style={{ color: "var(--accent)", textShadow: "0 2px 8px rgba(0,0,0,0.4)" }}>
             {t("hero.title_2")}
           </span>
         </h1>
