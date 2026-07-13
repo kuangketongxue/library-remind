@@ -139,7 +139,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "changelog.v4_3_0.tag": "功能",
     "changelog.v4_3_0.i1": "固定 60 分钟学习 → 5 分钟请辨 → 5 分钟休息循环",
     "changelog.v4_3_0.i2": "每 3 轮自动播放护眼视频",
-    "changelog.v4_3_0.i3": "休息期间弹出复盘评分（学科 + 标签 + 1-100 评分）"
+    "changelog.v4_3_0.i3": "休息期间弹出复盘评分（学科 + 标签 + 1-100 评分）",
     // Navbar
     "nav.docs": "文档",
     "nav.next_page": "下一页",
@@ -1010,7 +1010,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "changelog.v4_3_0.tag": "Feature",
     "changelog.v4_3_0.i1": "Fixed 60-min study to 5-min reflection to 5-min break cycle",
     "changelog.v4_3_0.i2": "Eye-care video auto-plays every 3 rounds",
-    "changelog.v4_3_0.i3": "Review score popup during break (subject + tag + 1-100 score)"
+    "changelog.v4_3_0.i3": "Review score popup during break (subject + tag + 1-100 score)",
     "nav.docs": "Docs",
     "nav.next_page": "Next",
     "nav.prev_page": "Previous",
@@ -1861,7 +1861,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "changelog.v4_3_0.tag": "機能",
     "changelog.v4_3_0.i1": "60分学習→5分振り返→5分休憩サイクルを固定",
     "changelog.v4_3_0.i2": "3ラウンドごとにアイケア動画を自動再生",
-    "changelog.v4_3_0.i3": "休憩中に復習スコアリングをポップアップ（科目 + タグ + 1-100スコア）"
+    "changelog.v4_3_0.i3": "休憩中に復習スコアリングをポップアップ（科目 + タグ + 1-100スコア）",
     "nav.docs": "ドキュメント",
     "nav.next_page": "次へ",
     "nav.prev_page": "前へ",
