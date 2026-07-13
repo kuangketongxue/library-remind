@@ -1,11 +1,11 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useEffect } from "react";
 import { useI18n } from "@/lib/i18n";
 
 export default function Hero() {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [playing, setPlaying] = useState(false);
+  const playingRef = useRef(false);
   const { t } = useI18n();
 
   useEffect(() => {
@@ -13,11 +13,12 @@ export default function Hero() {
     if (!v) return;
 
     const tryPlay = async () => {
+      if (playingRef.current) return;
       try {
         await v.play();
-        setPlaying(true);
+        playingRef.current = true;
       } catch {
-        setPlaying(false);
+        playingRef.current = false;
       }
     };
 
@@ -28,7 +29,7 @@ export default function Hero() {
     }
 
     const unlock = () => {
-      if (!playing) tryPlay();
+      if (!playingRef.current) tryPlay();
     };
     document.addEventListener("click", unlock, { once: true });
 
@@ -36,7 +37,7 @@ export default function Hero() {
       v.removeEventListener("canplay", tryPlay);
       document.removeEventListener("click", unlock);
     };
-  }, [playing]);
+  }, []);
 
   return (
     <section className="relative min-h-[92vh] flex flex-col items-center justify-center px-6 pt-24 pb-16 text-center overflow-hidden">
@@ -47,6 +48,7 @@ export default function Hero() {
         muted
         loop
         playsInline
+        preload="auto"
         poster="/hero-banner.png"
         aria-label={t("hero.video.alt")}
         className="absolute inset-0 w-full h-full object-cover -z-10"

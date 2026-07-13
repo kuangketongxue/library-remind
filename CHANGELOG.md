@@ -2,6 +2,17 @@
 
 所有重要版本更新记录。
 
+## 官网修复 v6.2.7 (2026-07-13) — 图标/视频/主题全面修复
+
+### 🔧 问题修复
+- **图标消失修复**：favicon 从 1.1MB 的 `logo-eye.png` 改为 37KB 的 `favicon.png`，浏览器无法解码超大的 favicon 文件；导航栏 logo 同步改用 `favicon.png`，页脚大图改用 `rest-reminder-logo.png`(145KB)
+- **背景视频消失修复**：`<video>` 添加 `preload="auto"`，确保浏览器加载足够帧数以支持 autoplay；修复 `useEffect` 依赖数组无限循环 bug（`playing` state → `playingRef`，依赖数组改为 `[]`）
+- **CSS @import 顺序修复**：Google Fonts `@import` 从 Tailwind `@import` 之后移到之前，消除浏览器 CSS 警告
+- **主题闪烁修复**：在 `<html>` 标签加内联脚本，React 水合前就读取 localStorage + system preference 设置 `dark` class，消除浅色→深色闪烁
+- **缺失 CSS 类补全**：添加 `section-glow`（区块顶部微光晕）和 `btn-shine`（按钮悬停光泽动画）定义，修复 WhyChoose/Testimonials/Pricing 区块样式缺失
+
+---
+
 ## Chrome 扩展 v1.3.0 (2026-07-13) — 功能补齐 + 体验升级
 
 ### 🆕 新功能

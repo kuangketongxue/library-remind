@@ -31,7 +31,7 @@ export default function Footer() {
             </a>
           </div>
           <div className="flex-shrink-0 hidden md:block">
-            <img src="/logo-eye.png" alt="Rest Reminder" className="w-40 h-40 rounded-2xl opacity-80" />
+            <img src="/rest-reminder-logo.png" alt="Rest Reminder" className="w-40 h-40 rounded-2xl opacity-80" />
           </div>
         </div>
       </div>
