@@ -10,17 +10,24 @@ export default function AnnouncementModal() {
   const pathname = usePathname();
 
   useEffect(() => {
-    // 只在首页弹出
     if (pathname !== "/") return;
     const timer = setTimeout(() => setOpen(true), 800);
     return () => clearTimeout(timer);
   }, [pathname]);
 
-  const dismiss = () => {
-    setOpen(false);
-  };
+  const dismiss = () => setOpen(false);
 
   if (!open) return null;
+
+  const features = [
+    { title: t("ann.modal.f1_title"), items: [t("ann.modal.f1_1")] },
+    { title: t("ann.modal.f2_title"), items: [t("ann.modal.f2_1"), t("ann.modal.f2_2")] },
+    { title: t("ann.modal.f3_title"), items: [t("ann.modal.f3_1"), t("ann.modal.f3_2")] },
+    { title: t("ann.modal.f4_title"), items: [t("ann.modal.f4_1")] },
+    { title: t("ann.modal.f5_title"), items: [t("ann.modal.f5_1")] },
+    { title: t("ann.modal.f6_title"), items: [t("ann.modal.f6_1")] },
+    { title: t("ann.modal.f7_title"), items: [t("ann.modal.f7_1"), t("ann.modal.f7_2")] },
+  ];
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center">
@@ -29,8 +36,9 @@ export default function AnnouncementModal() {
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={dismiss}
       />
+
       {/* 弹窗 */}
-      <div className="relative bg-[var(--surface-raised)] border border-[var(--border)] rounded-2xl shadow-2xl w-[90vw] max-w-[560px] p-8 animate-[fadeInUp_0.3s_ease-out] max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-[var(--surface-raised)] border border-[var(--border)] rounded-2xl shadow-2xl w-[90vw] max-w-[580px] p-8 animate-[fadeInUp_0.3s_ease-out] max-h-[90vh] overflow-y-auto">
         {/* 关闭按钮 */}
         <button
           onClick={dismiss}
@@ -41,27 +49,52 @@ export default function AnnouncementModal() {
         </button>
 
         {/* 标题 */}
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-3">
           <span className="text-xl">📢</span>
           <h2 className="text-lg font-bold text-[var(--fg)]">{t("ann.modal.title")}</h2>
         </div>
 
-        {/* 更新内容 */}
-        <div className="text-sm leading-relaxed space-y-3 mb-5">
-          <p className="text-[var(--fg)]">{t("ann.modal.lead")}</p>
-          <ul className="list-disc list-inside text-[var(--fg-dim)] space-y-1 ml-2">
-            <li>{t("ann.modal.f1")}</li>
-            <li>{t("ann.modal.f2")}</li>
-            <li>{t("ann.modal.f3")}</li>
-            <li>{t("ann.modal.f4")}</li>
-            <li>{t("ann.modal.f5")}</li>
-            <li>{t("ann.modal.f6")}</li>
-            <li>{t("ann.modal.f7")}</li>
-          </ul>
+        {/* 简介 */}
+        <p className="text-sm text-[var(--fg-dim)] mb-5 leading-relaxed">
+          {t("ann.modal.lead")}
+        </p>
+
+        {/* 编号更新项 */}
+        <div className="space-y-4 mb-5">
+          {features.map((f, i) => (
+            <div key={i}>
+              <div className="text-sm font-semibold text-[var(--fg)] mb-1">
+                {i + 1}、{f.title}
+              </div>
+              <ul className="space-y-0.5 ml-4">
+                {f.items.map((item, j) => (
+                  <li key={j} className="text-[13px] text-[var(--fg-dim)] leading-relaxed list-disc list-inside">
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
 
-        {/* 防骗声明 */}
-        <div className="border-t border-[var(--border)] pt-4">
+        {/* 底部说明 */}
+        <p className="text-xs text-[var(--fg-muted)] mb-4 leading-relaxed">
+          {t("ann.modal.footer_note")}
+        </p>
+
+        {/* 日期 + 按钮 */}
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-[var(--fg-muted)]">{t("ann.modal.date")}</span>
+          <button
+            onClick={dismiss}
+            className="px-5 py-1.5 text-sm font-medium rounded-lg border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"
+          >
+            {t("ann.modal.dismiss")}
+          </button>
+        </div>
+
+        {/* 分隔线 + 防骗指南 */}
+        <div className="border-t border-[var(--border)] mt-5 pt-4">
           <div className="flex items-center gap-2 mb-2">
             <span>⚠️</span>
             <h3 className="text-sm font-semibold text-[var(--fg)]">{t("ann.modal.notice_title")}</h3>
@@ -102,17 +135,6 @@ export default function AnnouncementModal() {
           <p className="text-xs text-[var(--fg-muted)] mt-2">
             {t("notice.scam")} <a href="https://github.com/kuangketongxue/library-remind/issues" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">{t("notice.scam_link")}</a> {t("notice.scam_suffix")}
           </p>
-        </div>
-
-        {/* 日期 + 按钮 */}
-        <div className="flex items-center justify-between mt-5">
-          <span className="text-xs text-[var(--fg-muted)]">{t("ann.modal.date")}</span>
-          <button
-            onClick={dismiss}
-            className="px-6 py-2 text-sm font-medium rounded-lg border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"
-          >
-            {t("ann.modal.dismiss")}
-          </button>
         </div>
       </div>
     </div>
