@@ -40,11 +40,15 @@ export default function Home() {
       {/* 视觉展示横幅 */}
       <section className="py-12 px-6">
         <div className="max-w-5xl mx-auto">
-          <img
-            src="/hero-banner-promo.png"
-            alt={t("hero.banner.alt")}
-            className="w-full rounded-2xl border border-[var(--border)]"
-          />
+          <picture>
+            <source srcSet="/hero-banner-promo.webp" type="image/webp" />
+            <img
+              src="/hero-banner-promo.png"
+              alt={t("hero.banner.alt")}
+              className="w-full rounded-2xl border border-[var(--border)]"
+              loading="lazy"
+            />
+          </picture>
         </div>
       </section>
       <Features />

@@ -49,7 +49,7 @@ export default function Hero() {
         loop
         playsInline
         preload="auto"
-        poster="/hero-banner.png"
+        poster="/hero-banner.webp"
         aria-label={t("hero.video.alt")}
         className="absolute inset-0 w-full h-full object-cover -z-10"
       >
