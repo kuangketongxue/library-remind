@@ -3,14 +3,27 @@
 //         任何状态 → paused → running
 
 const ALARM_PREFIX = 'rest_reminder_';
-const FOCUS_MINUTES = 60;
-const REST_MINUTES = 5;
-const EYE_REST_INTERVAL_MINUTES = 20;
+const FOCUS_MINUTES_DEFAULT = 60;
+const REST_MINUTES_DEFAULT = 5;
+const EYE_REST_INTERVAL_DEFAULT = 20;
 const EYE_REST_EVERY_N_ROUNDS = 3;
 const DAILY_LIMIT_HOUR = 22;
 
 const BILIBILI_FAV_DEFAULT = 'https://space.bilibili.com/529362421/favlist?fid=3648313921&ftype=create&spm_id_from=333.788.0.0';
 const BILIBILI_EYE_DEFAULT = 'https://www.bilibili.com/video/BV14Y4y1N7PW/?spm_id_from=333.1387.favlist.content.click';
+
+// ── 读取用户设置（每次都读最新，不缓存）──
+async function getSettings() {
+  const res = await chrome.storage.local.get('settings');
+  const s = res.settings || {};
+  return {
+    focusMinutes: Math.max(15, parseInt(s.focusMinutes) || FOCUS_MINUTES_DEFAULT),
+    restMinutes: Math.max(1, parseInt(s.restMinutes) || REST_MINUTES_DEFAULT),
+    eyeRestInterval: Math.max(5, parseInt(s.eyeRestInterval) || EYE_REST_INTERVAL_DEFAULT),
+    autoStartNext: s.autoStartNext === true,
+    soundEnabled: s.soundEnabled !== false, // 默认开
+  };
+}
 
 // ── 成就定义 ──
 const ACHIEVEMENTS = [
@@ -43,19 +56,164 @@ let state = {
   breakMinutes: 0,
   lastEyeRest: null,
   currentDate: null,
-  ambientSound: '',  // 当前白噪音类型
+  ambientSound: '',
+  grayscale: false,
+  pausedCount: 0,
+  focusMinutes: FOCUS_MINUTES_DEFAULT,
+  restMinutes: REST_MINUTES_DEFAULT,
+  eyeRestInterval: EYE_REST_INTERVAL_DEFAULT,
 };
 
+// ── 灰阶滤镜 CSS ──
+const GRAYSCALE_CSS = 'html, body { filter: grayscale(100%) !important; }';
+
+// ── 灰阶滤镜注入 ──
+async function enableGrayscale() {
+  try {
+    if (!chrome.scripting || !chrome.tabs) return false;
+    const tabs = await chrome.tabs.query({});
+    const results = await Promise.allSettled(
+      tabs
+        .filter(t => t.url && !t.url.startsWith('chrome://') && !t.url.startsWith('chrome-extension://') && !t.url.startsWith('about:'))
+        .map(t => chrome.scripting.insertCSS({
+          target: { tabId: t.id },
+          css: GRAYSCALE_CSS,
+        }))
+    );
+    return results.filter(r => r.status === 'fulfilled').length > 0;
+  } catch (e) { console.error('Grayscale enable failed:', e); return false; }
+}
+
+async function disableGrayscale() {
+  try {
+    if (!chrome.scripting || !chrome.tabs) return false;
+    const tabs = await chrome.tabs.query({});
+    await Promise.allSettled(
+      tabs
+        .filter(t => t.url && !t.url.startsWith('chrome://') && !t.url.startsWith('chrome-extension://') && !t.url.startsWith('about:'))
+        .map(t => chrome.scripting.removeCSS({
+          target: { tabId: t.id },
+          css: GRAYSCALE_CSS,
+        }))
+    );
+    return true;
+  } catch (e) { console.error('Grayscale disable failed:', e); return false; }
+}
+
+// ── 动态图标生成 (OffscreenCanvas) ──
+function generateIcon(state) {
+  const SIZE = 128;
+  let remaining = 0;
+  let progress = 0;
+  const now = Date.now();
+
+  if (state.timerState === 'running' && state.focusStartedAt) {
+    const elapsed = (now - state.focusStartedAt) / 60000;
+    remaining = Math.max(0, Math.ceil(state.focusMinutes - elapsed));
+    progress = Math.min(elapsed / state.focusMinutes, 1);
+  } else if (state.timerState === 'paused' && state.pausedRemaining) {
+    remaining = Math.max(0, Math.ceil(state.pausedRemaining / 60));
+    progress = 0;
+  } else if (state.timerState === 'resting' && state.breakStartedAt) {
+    const elapsed = (now - state.breakStartedAt) / 60000;
+    remaining = Math.max(0, Math.ceil(state.restMinutes - elapsed));
+    progress = Math.min(elapsed / state.restMinutes, 1);
+  }
+
+  const canvas = new OffscreenCanvas(SIZE, SIZE);
+  const ctx = canvas.getContext('2d');
+  const cx = SIZE / 2, cy = SIZE / 2, r = SIZE / 2 - 4;
+
+  // 背景
+  const bgColors = { idle: '#1a1a24', running: '#0a2a0a', paused: '#2a2a0a', resting: '#2a1a0a', review: '#2a240a' };
+  ctx.fillStyle = bgColors[state.timerState] || '#1a1a24';
+  ctx.fillRect(0, 0, SIZE, SIZE);
+
+  // 进度环 (底色)
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+  ctx.lineWidth = 6;
+  ctx.stroke();
+
+  // 进度环 (前景)
+  if (progress > 0) {
+    const accentColors = { running: '#78B450', resting: '#d97757', review: '#d4af37', paused: '#d4a853' };
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * progress);
+    ctx.strokeStyle = accentColors[state.timerState] || '#d4af37';
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+  }
+
+  // 数字
+  let text = '';
+  if (state.timerState === 'running') text = String(remaining);
+  else if (state.timerState === 'paused') text = '⏸';
+  else if (state.timerState === 'resting') text = '☕';
+  else if (state.timerState === 'review') text = '📝';
+  else text = '⚡';
+
+  const fontSize = text.length >= 3 ? 36 : text.length >= 2 ? 44 : 56;
+  ctx.font = `700 ${fontSize}px 'Segoe UI', sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(text, cx, cy + 2);
+
+  return canvas.convertToBlob('image/png');
+}
+
+async function updateIcon() {
+  try {
+    const blob = await generateIcon(state);
+    const bitmap = await createImageBitmap(blob);
+    const ctx = new OffscreenCanvas(bitmap.width, bitmap.height).getContext('2d');
+    ctx.drawImage(bitmap, 0, 0);
+    const imageData = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
+    await chrome.action.setIcon({ imageData: { 128: imageData } });
+  } catch (e) { console.error('Icon update failed:', e); }
+}
+
+// ── 深度专注评分算法 ──
+// 公式: 深度分 = 自评分 × 完成度系数 × 专注度系数 × 连续性系数
+//   - 完成度系数: 本轮实际学习时长 / 计划时长 (0.6 ~ 1.0)
+//   - 专注度系数: 1 - (暂停次数 × 0.08) (最低 0.6)
+//   - 连续性系数: 基于连续打卡天数 (0.8 ~ 1.0)
+function computeDeepScore(selfScore, roundStudyMinutes, pausedCount, streak = 0) {
+  const completion = Math.min(Math.max(roundStudyMinutes / state.focusMinutes, 0.6), 1.0);
+  const focus = Math.max(1 - (pausedCount || 0) * 0.08, 0.6);
+  const continuity = Math.min(0.8 + (streak || 0) * 0.01, 1.0);
+  const raw = selfScore * completion * focus * continuity;
+  return {
+    score: Math.round(raw),
+    completion: Math.round(completion * 100),
+    focus: Math.round(focus * 100),
+    continuity: Math.round(continuity * 100),
+  };
+}
+
 // ── 初始化 ──
+async function syncSettingsToState() {
+  const s = await getSettings();
+  state.focusMinutes = s.focusMinutes;
+  state.restMinutes = s.restMinutes;
+  state.eyeRestInterval = s.eyeRestInterval;
+}
+
 chrome.runtime.onInstalled.addListener(async () => {
   const saved = await chrome.storage.local.get('state');
   if (saved.state) state = { ...state, ...saved.state };
+  await syncSettingsToState();
   updateBadge();
+  chrome.alarms.create(`${ALARM_PREFIX}badge_update`, { periodInMinutes: 1 });
 });
 
 chrome.runtime.onStartup.addListener(async () => {
   const saved = await chrome.storage.local.get('state');
   if (saved.state) state = { ...state, ...saved.state };
+  await syncSettingsToState();
   checkDateReset();
   updateBadge();
 });
@@ -63,28 +221,30 @@ chrome.runtime.onStartup.addListener(async () => {
 // ── 闹钟处理 ──
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   checkDateReset();
+  const s = await getSettings();
 
   if (alarm.name === `${ALARM_PREFIX}focus_complete`) {
     state.timerState = 'resting';
     state.breakStartedAt = Date.now();
     state.roundCount++;
-    state.studyMinutes += FOCUS_MINUTES;
+    state.studyMinutes += s.focusMinutes;
     await saveState();
     updateBadge();
 
-    chrome.notifications.create(`${ALARM_PREFIX}rest`, {
-      type: 'basic', iconUrl: 'icons/icon128.png',
-      title: '⚡ 学习时间到！',
-      message: `已完成第 ${state.roundCount} 轮（${FOCUS_MINUTES}分钟），休息 ${REST_MINUTES} 分钟吧！`,
-      priority: 2, requireInteraction: true,
+    chrome.windows.create({
+      url: 'rest.html',
+      type: 'popup',
+      width: 400, height: 420,
+      focused: true,
     });
 
-    chrome.alarms.create(`${ALARM_PREFIX}rest_complete`, { delayInMinutes: REST_MINUTES });
+    chrome.alarms.create(`${ALARM_PREFIX}rest_complete`, { delayInMinutes: s.restMinutes });
   }
 
   if (alarm.name === `${ALARM_PREFIX}rest_complete`) {
+    if (state.timerState !== 'resting') return;
     state.timerState = 'review';
-    state.breakMinutes += REST_MINUTES;
+    state.breakMinutes += s.restMinutes;
     state.focusStartedAt = null;
     state.pausedRemaining = null;
     await saveState();
@@ -95,6 +255,16 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
       type: 'basic', iconUrl: 'icons/icon128.png',
       title: '📝 复盘时间',
       message: `第 ${state.roundCount} 轮学习完成，请为本轮评分`,
+      priority: 2, requireInteraction: true,
+    });
+  }
+
+  if (alarm.name === `${ALARM_PREFIX}pause_remind`) {
+    if (state.timerState !== 'paused') return;
+    chrome.notifications.create(`${ALARM_PREFIX}pause_remind`, {
+      type: 'basic', iconUrl: 'icons/icon128.png',
+      title: '⏸ 已暂停 2 分钟',
+      message: '继续学习？还是结束本轮去休息？',
       priority: 2, requireInteraction: true,
     });
   }
@@ -127,8 +297,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   switch (msg.action) {
     case 'getState':
       checkDateReset();
-      getStreak().then(streak => {
-        sendResponse({ ...state, streak, hour: new Date().getHours(), minute: new Date().getMinutes() });
+      getStreak().then(async streak => {
+        const s = await getSettings();
+        sendResponse({
+          ...state,
+          streak,
+          hour: new Date().getHours(),
+          minute: new Date().getMinutes(),
+          focusMinutes: s.focusMinutes,
+          restMinutes: s.restMinutes,
+          eyeRestInterval: s.eyeRestInterval,
+          autoStartNext: s.autoStartNext,
+          soundEnabled: s.soundEnabled,
+        });
       });
       break;
 
@@ -163,15 +344,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       state.roundCount++;
       state.studyMinutes += Math.floor((Date.now() - state.focusStartedAt) / 60000);
       saveState().then(() => updateBadge());
-      chrome.alarms.create(`${ALARM_PREFIX}rest_complete`, { delayInMinutes: REST_MINUTES });
+      chrome.alarms.create(`${ALARM_PREFIX}rest_complete`, { delayInMinutes: state.restMinutes });
       sendResponse({ ok: true });
       break;
 
     case 'submitReview': {
-      saveReview(msg.score, msg.subject, msg.label).then(async () => {
+      saveReview(msg.score, msg.subject, msg.label, msg.deepScore).then(async () => {
         checkAchievements();
-        const s = await chrome.storage.local.get('settings');
-        const settings = s.settings || {};
+        const s = await getSettings();
+        const settings = s;
         if (state.roundCount % EYE_REST_EVERY_N_ROUNDS === 0) {
           chrome.tabs.create({ url: settings.bilibiliEyeUrl || BILIBILI_EYE_DEFAULT });
         } else {
@@ -180,8 +361,43 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         state.timerState = 'idle';
         await saveState();
         updateBadge();
+        // 自动开始下一轮（延时 3 秒让用户看到"已提交"反馈）
+        if (settings.autoStartNext) {
+          setTimeout(() => startFocus(), 3000);
+        }
         sendResponse({ ok: true });
       });
+      break;
+    }
+
+    case 'toggleGrayscale': {
+      state.grayscale = !state.grayscale;
+      await saveState();
+      if (state.grayscale && state.timerState === 'running') {
+        await enableGrayscale();
+      } else {
+        await disableGrayscale();
+      }
+      updateBadge();
+      sendResponse({ ok: true, grayscale: state.grayscale });
+      break;
+    }
+
+    case 'getGrayscale':
+      sendResponse({ grayscale: state.grayscale });
+      break;
+
+    case 'submitRest': {
+      // rest.html 倒计时结束，进入复盘
+      if (state.timerState !== 'resting') break;
+      state.timerState = 'review';
+      state.breakMinutes += state.restMinutes;
+      state.focusStartedAt = null;
+      state.pausedRemaining = null;
+      chrome.alarms.clear(`${ALARM_PREFIX}rest_complete`); // 清除备份报警
+      saveState().then(() => updateBadge());
+      chrome.tabs.create({ url: 'review.html' });
+      sendResponse({ ok: true });
       break;
     }
 
@@ -229,45 +445,54 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 // ── 核心操作 ──
-function startFocus(goal) {
+async function startFocus(goal) {
+  const s = await getSettings();
   chrome.alarms.clearAll();
   state.timerState = 'running';
   state.focusStartedAt = Date.now();
   state.lastEyeRest = Date.now();
-  // 保存本轮目标
-  if (goal) {
-    state.currentGoal = goal;
-  }
-  saveState().then(() => updateBadge());
+  state.pausedCount = 0;
+  if (goal) state.currentGoal = goal;
+  await saveState();
+  updateBadge();
 
-  chrome.alarms.create(`${ALARM_PREFIX}focus_complete`, { delayInMinutes: FOCUS_MINUTES });
+  chrome.alarms.create(`${ALARM_PREFIX}focus_complete`, { delayInMinutes: s.focusMinutes });
   chrome.alarms.create(`${ALARM_PREFIX}eye_rest`, {
-    delayInMinutes: EYE_REST_INTERVAL_MINUTES,
-    periodInMinutes: EYE_REST_INTERVAL_MINUTES,
+    delayInMinutes: s.eyeRestInterval,
+    periodInMinutes: s.eyeRestInterval,
   });
+  if (state.grayscale) enableGrayscale();
 }
 
-function pauseFocus() {
+async function pauseFocus() {
   if (state.timerState !== 'running') return;
+  const s = await getSettings();
   chrome.alarms.clearAll();
   const elapsed = Math.floor((Date.now() - state.focusStartedAt) / 1000);
-  state.pausedRemaining = Math.max(FOCUS_MINUTES * 60 - elapsed, 0);
+  state.pausedRemaining = Math.max(s.focusMinutes * 60 - elapsed, 0);
   state.timerState = 'paused';
-  saveState().then(() => updateBadge());
+  state.pausedCount = (state.pausedCount || 0) + 1;
+  await saveState();
+  updateBadge();
+  // 暂停 2 分钟后提醒
+  chrome.alarms.create(`${ALARM_PREFIX}pause_remind`, { delayInMinutes: 2 });
 }
 
-function resumeFocus() {
+async function resumeFocus() {
   if (state.timerState !== 'paused' || !state.pausedRemaining) return;
+  const s = await getSettings();
   state.timerState = 'running';
   const remainingMin = state.pausedRemaining / 60;
-  state.focusStartedAt = Date.now() - (FOCUS_MINUTES * 60 - state.pausedRemaining) * 1000;
+  state.focusStartedAt = Date.now() - (s.focusMinutes * 60 - state.pausedRemaining) * 1000;
   state.pausedRemaining = null;
-  saveState().then(() => updateBadge());
+  chrome.alarms.clear(`${ALARM_PREFIX}pause_remind`);
+  await saveState();
+  updateBadge();
 
   chrome.alarms.create(`${ALARM_PREFIX}focus_complete`, { delayInMinutes: remainingMin });
   chrome.alarms.create(`${ALARM_PREFIX}eye_rest`, {
-    delayInMinutes: EYE_REST_INTERVAL_MINUTES,
-    periodInMinutes: EYE_REST_INTERVAL_MINUTES,
+    delayInMinutes: s.eyeRestInterval,
+    periodInMinutes: s.eyeRestInterval,
   });
 }
 
@@ -278,11 +503,13 @@ function resetAll() {
   state.pausedRemaining = null;
   state.lastEyeRest = null;
   state.ambientSound = '';
+  state.pausedCount = 0;
   saveState().then(() => updateBadge());
+  if (state.grayscale) disableGrayscale();
 }
 
 // ── 复盘存储 ──
-async function saveReview(score, subject, label) {
+async function saveReview(score, subject, label, deepScore) {
   const today = new Date().toISOString().slice(0, 10);
   const key = `reviews_${today}`;
   const res = await chrome.storage.local.get(key);
@@ -294,6 +521,7 @@ async function saveReview(score, subject, label) {
     label: label || '其他',
     time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
     timestamp: Date.now(),
+    deepScore: deepScore || null,
   });
   await chrome.storage.local.set({ [key]: reviews });
 }
@@ -430,6 +658,8 @@ function checkDateReset() {
 }
 
 function updateBadge() {
+  updateIcon();
+
   const badges = {
     idle: { text: '', color: '#888888' },
     running: { text: '', color: '#78B450' },
@@ -442,11 +672,11 @@ function updateBadge() {
 
   if (state.timerState === 'running' && state.focusStartedAt) {
     const elapsed = Math.floor((Date.now() - state.focusStartedAt) / 60000);
-    const remaining = Math.max(FOCUS_MINUTES - elapsed, 0);
+    const remaining = Math.max(state.focusMinutes - elapsed, 0);
     chrome.action.setBadgeText({ text: String(remaining) });
   } else if (state.timerState === 'resting' && state.breakStartedAt) {
     const elapsed = Math.floor((Date.now() - state.breakStartedAt) / 60000);
-    const remaining = Math.max(REST_MINUTES - elapsed, 0);
+    const remaining = Math.max(state.restMinutes - elapsed, 0);
     chrome.action.setBadgeText({ text: `${remaining}☕` });
   } else if (state.timerState === 'paused' && state.pausedRemaining) {
     chrome.action.setBadgeText({ text: String(Math.ceil(state.pausedRemaining / 60)) });
@@ -458,8 +688,3 @@ function updateBadge() {
 async function saveState() {
   await chrome.storage.local.set({ state });
 }
-
-// badge 每分钟更新
-setInterval(() => {
-  if (state.timerState !== 'idle') updateBadge();
-}, 60000);

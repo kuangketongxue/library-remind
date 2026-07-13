@@ -57,6 +57,24 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .score-labels { display: flex; justify-content: space-between; font-size: 11px; color: #555; }
 
+/* ── 深度评分 ── */
+.deep-section {
+  margin-top: 16px; padding-top: 16px; border-top: 1px solid #222;
+}
+.deep-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.deep-title { font-size: 13px; color: #888; }
+.deep-score-display {
+  font-size: 32px; font-weight: 700; color: #d4af37;
+  font-variant-numeric: tabular-nums;
+}
+.deep-breakdown { display: flex; gap: 8px; margin-top: 4px; }
+.deep-factor {
+  flex: 1; text-align: center; padding: 6px 4px;
+  background: #0d0d12; border-radius: 6px;
+}
+.deep-factor-label { display: block; font-size: 10px; color: #555; }
+.deep-factor-val { display: block; font-size: 14px; font-weight: 600; color: #aaa; margin-top: 2px; }
+
 /* 按钮 */
 .btn {
   width: 100%; padding: 14px; border: none; border-radius: 10px;
@@ -91,15 +109,63 @@ input[type="range"]::-webkit-slider-thumb {
     </div>
   </div>
 
+  <!-- 深度专注评分 -->
+  <div class="deep-section">
+    <div class="deep-header">
+      <div class="deep-title">🧠 深度专注评分</div>
+    </div>
+    <div class="deep-score-display" id="deepScoreDisplay">50</div>
+    <div class="deep-breakdown">
+      <div class="deep-factor">
+        <span class="deep-factor-label">完成度</span>
+        <span class="deep-factor-val" id="deepCompletion">100%</span>
+      </div>
+      <div class="deep-factor">
+        <span class="deep-factor-label">专注度</span>
+        <span class="deep-factor-val" id="deepFocus">100%</span>
+      </div>
+      <div class="deep-factor">
+        <span class="deep-factor-label">连续性</span>
+        <span class="deep-factor-val" id="deepContinuity">100%</span>
+      </div>
+    </div>
+  </div>
+
   <button class="btn" id="submitBtn">提交复盘</button>
   <div class="footer">💡 方便时提交即可，不急</div>
 </div>
 <script>
+// 检查是否启用提示音并播放
+chrome.storage.local.get('settings', (res) => {
+  const soundEnabled = res.settings?.soundEnabled !== false;
+  if (soundEnabled) playChime();
+});
+
+function playChime() {
+  try {
+    const ctx = new AudioContext();
+    const notes = [440, 554.37, 659.25]; // A4, C#5, E5 (更柔和的和弦)
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.12, ctx.currentTime + i * 0.2);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.2 + 0.6);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(ctx.currentTime + i * 0.2);
+      osc.stop(ctx.currentTime + i * 0.2 + 0.6);
+    });
+  } catch (e) {}
+}
+
 const SUBJECTS = ['语', '数', '英', '物', '化', '政', '其他'];
 const LABELS = ['专注', '疲劳', '收获大', '走神', '其他'];
+const FOCUS_MINUTES = 60;
 
 let selectedSubject = null;
 let selectedLabel = null;
+let roundInfo = null; // 从 state 获取本轮信息
 
 // 渲染学科按钮
 const subjectsEl = document.getElementById('subjects');
@@ -129,28 +195,72 @@ LABELS.forEach(l => {
   labelsEl.appendChild(btn);
 });
 
-// 获取轮次
+// 获取轮次 + 实际学习时间（深度评分）
 chrome.runtime.sendMessage({ action: 'getState' }, (state) => {
   document.getElementById('subtitle').textContent = `第 ${state.roundCount} 轮学习`;
+  roundInfo = state;
+  updateDeepScore(); // 初始计算
 });
 
-// 滑块
+// 滑块 + 实时深度评分
 const slider = document.getElementById('scoreSlider');
 const display = document.getElementById('scoreDisplay');
 slider.addEventListener('input', () => {
   const v = parseInt(slider.value);
   display.textContent = v;
   display.style.color = v >= 80 ? '#78B450' : v >= 50 ? '#d4af37' : '#c95454';
+  updateDeepScore();
 });
+
+// ── 深度评分 ──
+function updateDeepScore() {
+  if (!roundInfo) return;
+  const selfScore = parseInt(slider.value) || 50;
+  const now = Date.now();
+  let actualMinutes = FOCUS_MINUTES;
+  if (roundInfo.focusStartedAt) {
+    actualMinutes = (now - roundInfo.focusStartedAt) / 60000;
+    actualMinutes = Math.min(Math.max(actualMinutes, 1), FOCUS_MINUTES);
+  }
+  const pausedCount = roundInfo.pausedCount || 0;
+  const streak = roundInfo.streak || 0;
+
+  const completion = Math.round(Math.min(Math.max(actualMinutes / FOCUS_MINUTES, 0.6), 1) * 100);
+  const focus = Math.round(Math.max(1 - pausedCount * 0.08, 0.6) * 100);
+  const continuity = Math.round(Math.min(0.8 + streak * 0.01, 1) * 100);
+  const deepScore = Math.round(selfScore * (completion / 100) * (focus / 100) * (continuity / 100));
+
+  const deepDisplay = document.getElementById('deepScoreDisplay');
+  deepDisplay.textContent = deepScore;
+  deepDisplay.style.color = deepScore >= 80 ? '#78B450' : deepScore >= 50 ? '#d4af37' : '#c95454';
+  document.getElementById('deepCompletion').textContent = completion + '%';
+  document.getElementById('deepFocus').textContent = focus + '%';
+  document.getElementById('deepContinuity').textContent = continuity + '%';
+}
 
 // 提交
 document.getElementById('submitBtn').addEventListener('click', () => {
   const score = parseInt(slider.value);
+  const selfScore = score;
+  const now = Date.now();
+  let actualMinutes = FOCUS_MINUTES;
+  if (roundInfo && roundInfo.focusStartedAt) {
+    actualMinutes = (now - roundInfo.focusStartedAt) / 60000;
+    actualMinutes = Math.min(Math.max(actualMinutes, 1), FOCUS_MINUTES);
+  }
+  const pausedCount = roundInfo?.pausedCount || 0;
+  const streak = roundInfo?.streak || 0;
+  const completion = Math.round(Math.min(Math.max(actualMinutes / FOCUS_MINUTES, 0.6), 1) * 100);
+  const focus = Math.round(Math.max(1 - pausedCount * 0.08, 0.6) * 100);
+  const continuity = Math.round(Math.min(0.8 + streak * 0.01, 1) * 100);
+  const deepScore = Math.round(selfScore * (completion / 100) * (focus / 100) * (continuity / 100));
+
   chrome.runtime.sendMessage({
     action: 'submitReview',
     score,
     subject: selectedSubject || '其他',
     label: selectedLabel || '其他',
+    deepScore: { score: deepScore, completion, focus, continuity },
   }, (res) => {
     if (res && res.ok) {
       const btn = document.getElementById('submitBtn');

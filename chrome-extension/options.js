@@ -10,6 +10,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('restMinutes').value = s.restMinutes || 5;
     document.getElementById('eyeRestInterval').value = s.eyeRestInterval || 20;
     document.getElementById('notificationsEnabled').checked = s.notificationsEnabled !== false;
+    document.getElementById('soundEnabled').checked = s.soundEnabled !== false;
+    document.getElementById('autoStartNext').checked = s.autoStartNext === true;
     document.getElementById('feishuEnabled').checked = s.feishuEnabled || false;
     document.getElementById('mailEnabled').checked = s.mailEnabled || false;
     document.getElementById('mailTo').value = s.mailTo || '';
@@ -179,6 +181,8 @@ function saveSettings() {
     restMinutes: parseInt(document.getElementById('restMinutes').value) || 5,
     eyeRestInterval: parseInt(document.getElementById('eyeRestInterval').value) || 20,
     notificationsEnabled: document.getElementById('notificationsEnabled').checked,
+    soundEnabled: document.getElementById('soundEnabled').checked,
+    autoStartNext: document.getElementById('autoStartNext').checked,
     feishuEnabled: document.getElementById('feishuEnabled').checked,
     mailEnabled: document.getElementById('mailEnabled').checked,
     mailTo: document.getElementById('mailTo').value.trim(),

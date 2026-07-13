@@ -87,6 +87,20 @@ input[type="checkbox"] { width: 18px; height: 18px; accent-color: #d4af37; }
       <label>启用桌面通知</label>
       <input type="checkbox" id="notificationsEnabled" checked>
     </div>
+    <div class="setting-row">
+      <label>休息/复盘提示音</label>
+      <input type="checkbox" id="soundEnabled" checked>
+    </div>
+    <div class="desc">休息开始和复盘开始时播放提示音</div>
+  </div>
+
+  <div class="section">
+    <h2>🔄 学习节奏</h2>
+    <div class="setting-row">
+      <label>提交复盘后自动开始下一轮</label>
+      <input type="checkbox" id="autoStartNext">
+    </div>
+    <div class="desc">每轮复盘后 3 秒自动进入下一轮（默认关）</div>
   </div>
 
   <div class="section">
@@ -140,7 +154,7 @@ input[type="checkbox"] { width: 18px; height: 18px; accent-color: #d4af37; }
     </div>
   </div>
 
-  <div class="footer">精力管理 v1.1.0 — 久坐提醒 & 护眼</div>
+  <div class="footer">精力管理 v1.3.0 — 久坐提醒 & 护眼</div>
 </div>
 <script src="options.js"></script>
 </body>

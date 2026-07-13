@@ -1,7 +1,5 @@
 // ═══ 精力管理 — Popup 逻辑 ═══
 
-const FOCUS_SECONDS = 60 * 60;
-const REST_SECONDS = 5 * 60;
 const DAILY_LIMIT_HOUR = 22;
 
 const AMBIENT_SOUNDS = [
@@ -58,6 +56,21 @@ document.addEventListener('DOMContentLoaded', async () => {
       const s = r.settings || {};
       s.theme = next;
       chrome.storage.local.set({ settings: s });
+    });
+  });
+
+  // 灰阶滤镜切换
+  chrome.runtime.sendMessage({ action: 'getGrayscale' }, (res) => {
+    const gsBtn = document.getElementById('grayscaleToggle');
+    if (res && res.grayscale) gsBtn.classList.add('active');
+  });
+  document.getElementById('grayscaleToggle').addEventListener('click', (e) => {
+    e.preventDefault();
+    chrome.runtime.sendMessage({ action: 'toggleGrayscale' }, (res) => {
+      if (res && res.ok) {
+        const gsBtn = document.getElementById('grayscaleToggle');
+        gsBtn.classList.toggle('active', res.grayscale);
+      }
     });
   });
 
@@ -215,8 +228,11 @@ function render() {
     mainBtn.textContent = '▶ 继续'; mainBtn.className = 'btn btn-primary';
     skipBtn.style.display = 'none';
   } else if (timerState === 'resting') {
-    mainBtn.textContent = '☕ 休息中...'; mainBtn.className = 'btn btn-secondary';
+    const restRemaining = formatTime(getRemaining());
+    mainBtn.textContent = `☕ 休息中  ${restRemaining}`; mainBtn.className = 'btn btn-secondary';
     mainBtn.disabled = true; skipBtn.style.display = 'none';
+    // 休息进度条更新
+    updateRestProgress();
   } else if (timerState === 'review') {
     mainBtn.textContent = '📝 去复盘'; mainBtn.className = 'btn btn-primary';
     mainBtn.style.background = 'var(--accent)'; mainBtn.style.color = 'var(--bg)';
@@ -247,12 +263,27 @@ function updateCountdown() {
   }
 }
 
+function updateRestProgress() {
+  const bar = document.getElementById('restProgress');
+  if (!bar || !currentState || currentState.timerState !== 'resting') {
+    if (bar) bar.style.display = 'none';
+    return;
+  }
+  bar.style.display = 'block';
+  const restSeconds = (currentState.restMinutes || 5) * 60;
+  const remaining = getRemaining();
+  const pct = Math.max(0, (remaining / restSeconds) * 100);
+  bar.querySelector('.rest-progress-fill').style.width = pct + '%';
+}
+
 function getRemaining() {
   if (!currentState) return 0;
   const { timerState, focusStartedAt, pausedRemaining, breakStartedAt } = currentState;
-  if (timerState === 'running' && focusStartedAt) return Math.max(FOCUS_SECONDS - Math.floor((Date.now() - focusStartedAt) / 1000), 0);
+  const focusSeconds = (currentState.focusMinutes || 60) * 60;
+  const restSeconds = (currentState.restMinutes || 5) * 60;
+  if (timerState === 'running' && focusStartedAt) return Math.max(focusSeconds - Math.floor((Date.now() - focusStartedAt) / 1000), 0);
   if (timerState === 'paused' && pausedRemaining) return pausedRemaining;
-  if (timerState === 'resting' && breakStartedAt) return Math.max(REST_SECONDS - Math.floor((Date.now() - breakStartedAt) / 1000), 0);
+  if (timerState === 'resting' && breakStartedAt) return Math.max(restSeconds - Math.floor((Date.now() - breakStartedAt) / 1000), 0);
   return 0;
 }
 
@@ -262,6 +293,12 @@ function startTick() {
   tickInterval = setInterval(() => {
     if (currentState?.timerState !== 'idle') {
       document.getElementById('timerDisplay').textContent = formatTime(getRemaining());
+      // 休息中：更新按钮倒计时文字
+      if (currentState.timerState === 'resting') {
+        const mainBtn = document.getElementById('mainBtn');
+        mainBtn.textContent = `☕ 休息中  ${formatTime(getRemaining())}`;
+        updateRestProgress();
+      }
     }
     updateCountdown();
   }, 1000);
@@ -316,7 +353,8 @@ async function onMainBtnClick() {
     });
   } else if (timerState === 'running') {
     chrome.runtime.sendMessage({ action: 'pause' }, () => {
-      currentState.pausedRemaining = Math.max(FOCUS_SECONDS - Math.floor((Date.now() - currentState.focusStartedAt) / 1000), 0);
+      const focusSec = (currentState.focusMinutes || 60) * 60;
+      currentState.pausedRemaining = Math.max(focusSec - Math.floor((Date.now() - currentState.focusStartedAt) / 1000), 0);
       currentState.timerState = 'paused';
       render();
     });

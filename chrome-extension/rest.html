@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>☕ 休息时间</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  background: radial-gradient(ellipse at center, #1a1008 0%, #0a0a0a 100%);
+  color: #e8e6e1;
+  display: flex; justify-content: center; align-items: center;
+  min-height: 100vh;
+}
+.card { text-align: center; padding: 40px; }
+.icon { font-size: 64px; margin-bottom: 16px; }
+.title { font-size: 28px; font-weight: 700; margin-bottom: 8px; color: #d97757; }
+.subtitle { font-size: 16px; color: #888; margin-bottom: 24px; }
+.countdown {
+  font-size: 72px; font-weight: 700; color: #d97757;
+  font-variant-numeric: tabular-nums; margin: 16px 0;
+}
+.progress-ring { width: 160px; height: 160px; margin: 0 auto 24px; }
+.progress-ring circle {
+  fill: none; stroke-width: 8; stroke-linecap: round;
+  transform: rotate(-90deg); transform-origin: center;
+}
+.progress-ring .bg { stroke: #2a1a0a; }
+.progress-ring .fg {
+  stroke: #d97757;
+  transition: stroke-dashoffset 1s linear;
+}
+.done { color: #d97757; font-size: 48px; }
+.hint { font-size: 14px; color: #666; margin-top: 16px; }
+.progress-bar {
+  width: 280px; height: 4px; background: #222; border-radius: 2px;
+  margin: 0 auto 24px;
+}
+.progress-bar-fill {
+  height: 100%; background: #d97757; border-radius: 2px;
+  transition: width 1s linear;
+}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">☕</div>
+  <div class="title">休息时间</div>
+  <div class="subtitle">站起来走走，喝口水</div>
+
+  <svg class="progress-ring" viewBox="0 0 160 160">
+    <circle class="bg" cx="80" cy="80" r="70"/>
+    <circle class="fg" id="ring" cx="80" cy="80" r="70"
+      stroke-dasharray="439.82" stroke-dashoffset="439.82"/>
+  </svg>
+
+  <div class="countdown" id="countdown">5:00</div>
+  <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
+  <div class="hint" id="hint">休息结束后会自动弹出复盘</div>
+</div>
+<script>
+// 检查是否启用提示音并播放
+chrome.storage.local.get('settings', (res) => {
+  const soundEnabled = res.settings?.soundEnabled !== false;
+  if (soundEnabled) playChime();
+});
+
+function playChime() {
+  try {
+    const ctx = new AudioContext();
+    const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.15, ctx.currentTime + i * 0.15);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.15 + 0.5);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(ctx.currentTime + i * 0.15);
+      osc.stop(ctx.currentTime + i * 0.15 + 0.5);
+    });
+  } catch (e) {}
+}
+
+const DURATION = 300; // 5 分钟 = 300 秒
+let remaining = DURATION;
+const circumference = 2 * Math.PI * 70;
+
+function formatTime(s) {
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${String(sec).padStart(2, '0')}`;
+}
+
+function tick() {
+  remaining--;
+  const el = document.getElementById('countdown');
+  const ring = document.getElementById('ring');
+  const hint = document.getElementById('hint');
+  const fill = document.getElementById('progressFill');
+
+  if (remaining <= 0) {
+    el.innerHTML = '<span class="done">✓</span>';
+    hint.textContent = '休息结束，开始复盘';
+    ring.style.strokeDashoffset = '0';
+    fill.style.width = '100%';
+    // 通知 background.js 进入复盘状态
+    try {
+      chrome.runtime.sendMessage({ action: 'submitRest' });
+    } catch (e) {}
+    setTimeout(() => window.close(), 2000);
+    return;
+  }
+
+  el.textContent = formatTime(remaining);
+  const progress = (DURATION - remaining) / DURATION;
+  ring.style.strokeDashoffset = circumference * (1 - progress);
+  fill.style.width = (progress * 100) + '%';
+
+  if (remaining === 60) {
+    hint.textContent = '还有一分钟，准备开始学习';
+  } else if (remaining === 30) {
+    hint.textContent = '30 秒后开始复盘，请回到电脑前';
+  }
+}
+
+setInterval(tick, 1000);
+tick(); // 立即显示初始值
+</script>
+</body>
+</html>

@@ -126,7 +126,19 @@ body {
 }
 .footer a { color: var(--muted); text-decoration: none; font-size: 12px; }
 .footer a:hover { color: var(--accent); }
+.footer a.active { color: var(--accent); font-weight: 600; }
 .sep { color: var(--border); margin: 0 6px; }
+
+/* ── 休息进度条 ── */
+.rest-progress {
+  height: 6px; background: var(--border); border-radius: 3px;
+  margin-bottom: 12px; overflow: hidden;
+}
+.rest-progress-fill {
+  height: 100%; width: 100%; border-radius: 3px;
+  background: var(--orange);
+  transition: width 1s linear;
+}
 
 /* ── 轮次目标弹窗 ── */
 .goal-overlay {

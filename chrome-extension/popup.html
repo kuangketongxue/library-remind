@@ -50,6 +50,11 @@
       <button class="btn btn-secondary" id="skipBtn" style="display:none">⏭ 跳到休息</button>
     </div>
 
+    <!-- 休息进度条 (仅休息状态显示) -->
+    <div class="rest-progress" id="restProgress" style="display:none">
+      <div class="rest-progress-fill"></div>
+    </div>
+
     <!-- 今日统计 -->
     <div class="stats">
       <div class="stat-item">
@@ -85,6 +90,8 @@
     <!-- 底部链接 -->
     <div class="footer">
       <a href="#" id="optionsLink">⚙️ 设置</a>
+      <span class="sep">·</span>
+      <a href="#" id="grayscaleToggle" title="灰阶滤镜（降低浏览多巴胺）">⬛ 灰阶</a>
       <span class="sep">·</span>
       <a href="#" id="themeToggle">🌙</a>
     </div>
