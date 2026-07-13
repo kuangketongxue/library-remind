@@ -30,7 +30,7 @@ export default function AnnouncementModal() {
         onClick={dismiss}
       />
       {/* 弹窗 */}
-      <div className="relative bg-[var(--surface-raised)] border border-[var(--border)] rounded-2xl shadow-2xl w-[90vw] max-w-[600px] p-8 animate-[fadeInUp_0.3s_ease-out] max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-[var(--surface-raised)] border border-[var(--border)] rounded-2xl shadow-2xl w-[90vw] max-w-[560px] p-8 animate-[fadeInUp_0.3s_ease-out] max-h-[90vh] overflow-y-auto">
         {/* 关闭按钮 */}
         <button
           onClick={dismiss}
@@ -42,16 +42,31 @@ export default function AnnouncementModal() {
 
         {/* 标题 */}
         <div className="flex items-center gap-2 mb-4">
-          <span className="text-xl">⚠️</span>
-          <h2 className="text-lg font-bold text-[var(--fg)]">{t("notice.warning")}</h2>
+          <span className="text-xl">📢</span>
+          <h2 className="text-lg font-bold text-[var(--fg)]">{t("ann.modal.title")}</h2>
         </div>
 
-        {/* 内容 */}
-        <div className="text-sm leading-relaxed space-y-4 mb-6">
-          <p className="text-[var(--fg-dim)]">
-            {t("notice.free")}
-          </p>
+        {/* 更新内容 */}
+        <div className="text-sm leading-relaxed space-y-3 mb-5">
+          <p className="text-[var(--fg)]">{t("ann.modal.lead")}</p>
+          <ul className="list-disc list-inside text-[var(--fg-dim)] space-y-1 ml-2">
+            <li>{t("ann.modal.f1")}</li>
+            <li>{t("ann.modal.f2")}</li>
+            <li>{t("ann.modal.f3")}</li>
+            <li>{t("ann.modal.f4")}</li>
+            <li>{t("ann.modal.f5")}</li>
+            <li>{t("ann.modal.f6")}</li>
+            <li>{t("ann.modal.f7")}</li>
+          </ul>
+        </div>
 
+        {/* 防骗声明 */}
+        <div className="border-t border-[var(--border)] pt-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span>⚠️</span>
+            <h3 className="text-sm font-semibold text-[var(--fg)]">{t("ann.modal.notice_title")}</h3>
+          </div>
+          <p className="text-xs text-[var(--fg-dim)] mb-2">{t("notice.free")}</p>
           <div className="overflow-x-auto">
             <table className="w-full text-xs border border-[var(--border)] rounded-lg overflow-hidden">
               <thead>
@@ -84,14 +99,14 @@ export default function AnnouncementModal() {
               </tbody>
             </table>
           </div>
-
-          <p className="text-xs text-[var(--fg-muted)]">
+          <p className="text-xs text-[var(--fg-muted)] mt-2">
             {t("notice.scam")} <a href="https://github.com/kuangketongxue/library-remind/issues" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">{t("notice.scam_link")}</a> {t("notice.scam_suffix")}
           </p>
         </div>
 
-        {/* 关闭按钮 */}
-        <div className="flex justify-end">
+        {/* 日期 + 按钮 */}
+        <div className="flex items-center justify-between mt-5">
+          <span className="text-xs text-[var(--fg-muted)]">{t("ann.modal.date")}</span>
           <button
             onClick={dismiss}
             className="px-6 py-2 text-sm font-medium rounded-lg border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"

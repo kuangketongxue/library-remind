@@ -259,6 +259,21 @@ const translations: Record<Locale, Record<string, string>> = {
     "notice.scam_link": "GitHub Issues",
     "notice.scam_suffix": "反馈。",
 
+    // Announcement (更新公告)
+    "ann.modal.title": "📢 更新公告",
+    "ann.modal.close": "关闭",
+    "ann.modal.date": "2026 年 7 月 13 日",
+    "ann.modal.dismiss": "我知道了",
+    "ann.modal.lead": "Chrome 扩展 v1.3.0 已发布，新增 7 项功能：",
+    "ann.modal.f1": "休息倒计时弹窗：5 分钟独立弹窗，圆环+横条进度条",
+    "ann.modal.f2": "声音提醒：休息/复盘开始时播放和弦",
+    "ann.modal.f3": "暂停超时提醒：暂停超过 2 分钟自动提醒",
+    "ann.modal.f4": "自动开始下一轮：复盘提交后 3 秒续接",
+    "ann.modal.f5": "灰阶滤镜：专注期间所有标签页变灰",
+    "ann.modal.f6": "动态工具栏图标：实时显示剩余分钟+圆环进度",
+    "ann.modal.f7": "深度专注评分：四维算法评估专注质量",
+    "ann.modal.notice_title": "⚠️ 防骗声明",
+
     // Docs page
     "docs.title": "文档",
     "docs.subtitle": "Rest Reminder 完整使用指南，从快速上手到高级功能。",
@@ -1123,8 +1138,20 @@ const translations: Record<Locale, Record<string, string>> = {
     "notice.scam_link": "GitHub Issues",
     "notice.scam_suffix": ".",
 
-    // Docs page
-    "docs.title": "Documentation",
+    // Announcement (更新公告)
+    "ann.modal.title": "📢 Update Announcement",
+    "ann.modal.close": "Close",
+    "ann.modal.date": "July 13, 2026",
+    "ann.modal.dismiss": "Got it",
+    "ann.modal.lead": "Chrome extension v1.3.0 is live with 7 new features:",
+    "ann.modal.f1": "Rest countdown popup: 5-min standalone window with ring + bar progress",
+    "ann.modal.f2": "Sound alerts: chimes at rest/review start",
+    "ann.modal.f3": "Pause timeout reminder: auto-notify after 2 min pause",
+    "ann.modal.f4": "Auto-start next round: 3s auto-continue after review",
+    "ann.modal.f5": "Grayscale filter: desaturates all tabs during focus",
+    "ann.modal.f6": "Dynamic toolbar icon: shows remaining minutes + ring progress",
+    "ann.modal.f7": "Deep focus score: 4-factor focus quality algorithm",
+    "ann.modal.notice_title": "⚠️ Anti-Scam Notice",
     "docs.subtitle": "Complete guide from quick start to advanced features.",
     "docs.section_intro": "Introduction",
     "docs.section_quickstart": "Quick Start",
@@ -1985,8 +2012,20 @@ const translations: Record<Locale, Record<string, string>> = {
     "notice.scam_link": "GitHub Issues",
     "notice.scam_suffix": "で報告してください。",
 
-    // Docs page
-    "docs.title": "ドキュメント",
+    // Announcement (更新公告)
+    "ann.modal.title": "📢 更新公告",
+    "ann.modal.close": "閉じる",
+    "ann.modal.date": "2026年7月13日",
+    "ann.modal.dismiss": "わかりました",
+    "ann.modal.lead": "Chrome 拡張 v1.3.0 がリリースされ、7 つの新機能が追加されました：",
+    "ann.modal.f1": "休息カウントダウン-popup: 5 分間の独立ウィンドウ、リング+バー進行状況",
+    "ann.modal.f2": "サウンド提醒: 休憩/レビュー開始時にチャイム音",
+    "ann.modal.f3": "一時停止タイムアウト提醒: 2 分超過で自動通知",
+    "ann.modal.f4": "自動次ラウンド開始: レビュー提出後 3 秒で自動継続",
+    "ann.modal.f5": "グレースケールフィルター: フォーカス中にすべてのタブを灰色化",
+    "ann.modal.f6": "動的ツールバーアイコン: 残り分 + リング進行状況を表示",
+    "ann.modal.f7": "ディープフォーカススコア: 4 要素フォーカス品質アルゴリズム",
+    "ann.modal.notice_title": "⚠️ 詐欺注意事項",
     "docs.subtitle": "クイックスタートから高度な機能までの完全ガイド。",
     "docs.section_intro": "製品紹介",
     "docs.section_quickstart": "クイックスタート",
