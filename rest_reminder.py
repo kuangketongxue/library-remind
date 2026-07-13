@@ -8203,10 +8203,10 @@ class RestReminderWidget(QWidget):
         self.tray_icon.showMessage('📋 已复制到剪贴板', f'最近7天数据已导出\n\n{text}', QSystemTrayIcon.Information, 5000)
         log.info(f'[导出] 本周数据已复制到剪贴板')
 
-            self.setWindowOpacity(0.5)
-            QTimer.singleShot(200, lambda: self.setWindowOpacity(1.0))
-            QTimer.singleShot(400, lambda: self.setWindowOpacity(0.5))
-            QTimer.singleShot(600, lambda: self.setWindowOpacity(1.0))
+        self.setWindowOpacity(0.5)
+        QTimer.singleShot(200, lambda: self.setWindowOpacity(1.0))
+        QTimer.singleShot(400, lambda: self.setWindowOpacity(0.5))
+        QTimer.singleShot(600, lambda: self.setWindowOpacity(1.0))
 
 
 

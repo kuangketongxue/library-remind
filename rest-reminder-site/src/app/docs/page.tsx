@@ -32,7 +32,7 @@ export default function DocsPage() {
               <input
                 id="doc-search-input"
                 type="text"
-                placeholder="搜索文档…"
+                placeholder={t("docs.search_placeholder")}
                 className="w-full pl-10 pr-4 py-2.5 text-sm bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--fg)] placeholder:text-[var(--fg-muted)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition-colors"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
@@ -66,32 +66,32 @@ export default function DocsPage() {
 
             <div className="docs-card mb-6">
               <p className="text-sm text-[var(--fg)] leading-relaxed mb-3">
-                <strong>Rest Reminder</strong> 是一款专为长时间学习/工作设计的桌面护眼助手。它会在你专注 60 分钟后自动提醒你休息，帮你养成科学的用眼习惯，保护视力健康。
+                <strong>Rest Reminder</strong> {t("docs.intro_p1")}
               </p>
               <p className="text-sm text-[var(--fg)] leading-relaxed mb-3">
-                核心功能包括：<strong>60 分钟专注循环</strong>（学习→倒计时→休息→B 站视频）、<strong>20-20-20 护眼提醒</strong>（每 20 分钟看远处 20 秒）、<strong>学习时长追踪</strong>（连续打卡 + 成就系统）、<strong>AI 学习分析</strong>（日报/周报/月报）。
+                {t("docs.intro_p2")}
               </p>
               <p className="text-sm text-[var(--fg-dim)] leading-relaxed">
-                48MB 轻量安装，数据完全本地存储，MIT 开源协议，永久免费。
+                {t("docs.intro_p3")}
               </p>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="docs-card text-center">
                 <div className="text-2xl font-bold text-[var(--accent)] mb-1">48MB</div>
-                <div className="text-xs text-[var(--fg-dim)]">轻量安装</div>
+                <div className="text-xs text-[var(--fg-dim)]">{t("stats.48mb")}</div>
               </div>
               <div className="docs-card text-center">
                 <div className="text-2xl font-bold text-[var(--accent)] mb-1">60min</div>
-                <div className="text-xs text-[var(--fg-dim)]">专注循环</div>
+                <div className="text-xs text-[var(--fg-dim)]">{t("stats.60min")}</div>
               </div>
               <div className="docs-card text-center">
                 <div className="text-2xl font-bold text-[var(--accent)] mb-1">17</div>
-                <div className="text-xs text-[var(--fg-dim)]">成就徽章</div>
+                <div className="text-xs text-[var(--fg-dim)]">{t("docs.stat_achievements")}</div>
               </div>
               <div className="docs-card text-center">
                 <div className="text-2xl font-bold text-[var(--accent)] mb-1">MIT</div>
-                <div className="text-xs text-[var(--fg-dim)]">开源协议</div>
+                <div className="text-xs text-[var(--fg-dim)]">{t("stats.mit")}</div>
               </div>
             </div>
           </section>
@@ -116,7 +116,7 @@ export default function DocsPage() {
                     {t("docs.step1_desc")}
                   </p>
                   <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                    如果从源码运行，确保已安装依赖：
+                    {t("docs.step1_note")}
                   </p>
                   <pre className="bg-[var(--surface)] rounded-lg p-4 mt-3 text-xs font-mono text-[#b5651d] overflow-x-auto">
 {`pip install -r requirements.txt
@@ -124,7 +124,7 @@ python rest_reminder.py`}
                   </pre>
                 </div>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                  首次运行会在程序目录创建数据文件（.daily_log.json、.review_log.json 等），用于持久化学习数据。
+                  {t("docs.step1_note2")}
                 </p>
               </div>
 
@@ -135,7 +135,7 @@ python rest_reminder.py`}
                 </p>
                 <div className="docs-card mt-3">
                   <p className="text-xs text-[var(--fg-dim)]">
-                    <span className="text-[var(--accent)]">提示：</span> 目标是可选的。跳过不影响计时功能，随时可从主界面或浮球面板重新设定。
+                    <span className="text-[var(--accent)]">{t("docs.step2_tip_label")}</span> {t("docs.step2_tip")}
                   </p>
                 </div>
               </div>
@@ -146,19 +146,19 @@ python rest_reminder.py`}
                   {t("docs.step3_desc")}
                 </p>
                 <div className="docs-card mt-3">
-                  <p className="text-sm font-semibold mb-2">计时流程</p>
+                  <p className="text-sm font-semibold mb-2">{t("docs.step3_flow_title")}</p>
                   <div className="flex items-center gap-2 text-sm text-[var(--fg-dim)]">
-                    <span className="bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-1 rounded-lg font-mono text-xs">60min 学习</span>
+                    <span className="bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-1 rounded-lg font-mono text-xs">{t("docs.step3_flow_learn")}</span>
                     <span>→</span>
-                    <span className="bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-1 rounded-lg font-mono text-xs">5min 请辨</span>
+                    <span className="bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-1 rounded-lg font-mono text-xs">{t("docs.step3_flow_discern")}</span>
                     <span>→</span>
-                    <span className="bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-1 rounded-lg font-mono text-xs">5min 休息</span>
+                    <span className="bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-1 rounded-lg font-mono text-xs">{t("docs.step3_flow_rest")}</span>
                     <span>→</span>
-                    <span className="bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-1 rounded-lg font-mono text-xs">B站视频</span>
+                    <span className="bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-1 rounded-lg font-mono text-xs">{t("docs.step3_flow_bili")}</span>
                   </div>
                 </div>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed mt-3">
-                  最后 5 分钟弹出请辨浮层，展示随机金句。倒计时结束自动进入休息状态，休息结束后自动打开 B 站收藏夹视频。
+                  {t("docs.step3_note")}
                 </p>
               </div>
 
@@ -169,21 +169,21 @@ python rest_reminder.py`}
                 </p>
                 <div className="space-y-3 mt-3">
                   <div className="docs-card">
-                    <p className="text-sm font-semibold mb-1">📝 复盘评分</p>
+                    <p className="text-sm font-semibold mb-1">{t("docs.step4_review_title")}</p>
                     <p className="text-xs text-[var(--fg-dim)] leading-relaxed">
-                      滑块选择 1-100 分评分，记录学科（语/数/英/物/化/政/其他）和标签（专注/疲劳/收获大/走神/其他）。数据持久化到本地，供趋势分析和 AI 报告使用。
+                      {t("docs.step4_review_desc")}
                     </p>
                   </div>
                   <div className="docs-card">
-                    <p className="text-sm font-semibold mb-1">🔥 连续打卡</p>
+                    <p className="text-sm font-semibold mb-1">{t("docs.step4_streak_title")}</p>
                     <p className="text-xs text-[var(--fg-dim)] leading-relaxed">
-                      每日学习满 4 小时自动打卡。连续打卡到达里程碑（1/3/7/14/30/60/90/365 天）时展示特殊金句奖励。中断后重新开始计数。
+                      {t("docs.step4_streak_desc")}
                     </p>
                   </div>
                   <div className="docs-card">
-                    <p className="text-sm font-semibold mb-1">📊 实时数据</p>
+                    <p className="text-sm font-semibold mb-1">{t("docs.step4_live_title")}</p>
                     <p className="text-xs text-[var(--fg-dim)] leading-relaxed">
-                      「今日」tab 每秒刷新学习时长、当前轮次、休息时长、状态标签。22:00 自动弹出每日学习汇报。
+                      {t("docs.step4_live_desc")}
                     </p>
                   </div>
                 </div>
@@ -201,33 +201,33 @@ python rest_reminder.py`}
                 <div className="bg-[var(--bg)] p-8 flex items-center justify-center">
                   <div className="text-center">
                     <div className="w-12 h-12 rounded-full bg-[var(--accent-soft)] flex items-center justify-center text-2xl mx-auto mb-2">⚡</div>
-                    <p className="text-xs text-[var(--fg-dim)]">浮球挂件</p>
+                    <p className="text-xs text-[var(--fg-dim)]">{t("docs.preview_float_title")}</p>
                   </div>
                 </div>
                 <div className="p-3 border-t border-[var(--border)]">
-                  <p className="text-xs text-[var(--fg-dim)]">60×60 桌面浮球，短点击弹出信息面板，长按拖动 reposition。休息时显示环形进度条。</p>
+                  <p className="text-xs text-[var(--fg-dim)]">{t("docs.preview_float_desc")}</p>
                 </div>
               </div>
               <div className="docs-card overflow-hidden">
                 <div className="bg-[var(--bg)] p-8 flex items-center justify-center">
                   <div className="text-center">
                     <div className="text-2xl font-bold font-display text-[var(--accent)] mb-2">⏱ 58:32</div>
-                    <p className="text-[10px] text-[var(--fg-dim)]">学习倒计时</p>
+                    <p className="text-[10px] text-[var(--fg-dim)]">{t("docs.preview_timer_title")}</p>
                   </div>
                 </div>
                 <div className="p-3 border-t border-[var(--border)]">
-                  <p className="text-xs text-[var(--fg-dim)]">主面板实时显示倒计时、学习时长、轮次、状态标签。每秒刷新，22:00 自动弹出每日汇报。</p>
+                  <p className="text-xs text-[var(--fg-dim)]">{t("docs.preview_timer_desc")}</p>
                 </div>
               </div>
               <div className="docs-card overflow-hidden">
                 <div className="bg-[var(--bg)] p-8 flex items-center justify-center">
                   <div className="text-center">
                     <div className="w-16 h-8 rounded bg-[var(--accent-soft)] mb-2"></div>
-                    <p className="text-[10px] text-[var(--fg-dim)]">趋势图表</p>
+                    <p className="text-[10px] text-[var(--fg-dim)]">{t("docs.preview_trend_title")}</p>
                   </div>
                 </div>
                 <div className="p-3 border-t border-[var(--border)]">
-                  <p className="text-xs text-[var(--fg-dim)]">今日复盘时间线、周/月/季/年柱状图、7×24 学习热力图。鼠标悬浮查看具体数值。</p>
+                  <p className="text-xs text-[var(--fg-dim)]">{t("docs.preview_trend_desc")}</p>
                 </div>
               </div>
             </div>
@@ -240,120 +240,120 @@ python rest_reminder.py`}
 
             <div className="space-y-5">
               <div className="docs-card" id="专注循环">
-                <h3 className="text-sm font-semibold mb-2">⏱ 60 分钟专注循环</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.feature_focus_title")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                  采用固定 60 分钟学习周期。60 分钟结束后进入 <strong>5 分钟请辨倒计时</strong>，浮层展示一条随机请辨金句，帮助你在休息前回顾学习内容。请辨结束后进入 <strong>5 分钟休息</strong>，休息结束后自动打开 B 站收藏夹视频。
+                  {t("docs.feature_focus_desc")}
                 </p>
                 <div className="mt-3 bg-[var(--surface)] rounded-lg p-4">
                   <p className="text-xs font-mono text-[var(--fg-dim)]">
-                    计时规则：60min 学习 → 5min 请辨（金句） → 5min 休息 → B站视频 → 循环
+                    {t("docs.feature_focus_rule")}
                   </p>
                 </div>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed mt-3">
-                  每 3 轮休息后自动打开护眼视频（BV14Y4y1N7PW），缓解长时间用眼疲劳。
+                  {t("docs.feature_focus_note")}
                 </p>
               </div>
 
               <div className="docs-card" id="护眼提醒">
-                <h3 className="text-sm font-semibold mb-2">👁 20-20-20 护眼提醒</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.feature_eye_title")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                  遵循眼科推荐的 <strong>20-20-20 法则</strong>：每学习 20 分钟，弹出轻量浮窗提醒看 6 米外 20 秒。浮窗 15 秒后自动消失，不打断学习流。可拖动到任意位置，下次启动记住位置。
+                  {t("docs.feature_eye_desc")}
                 </p>
               </div>
 
               <div className="docs-card" id="学习追踪">
-                <h3 className="text-sm font-semibold mb-2">📊 学习时长追踪与打卡</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.feature_track_title")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                  每次 60 分钟倒计时完成自动累计 1 小时学习时长。每日学习满 <strong>4 小时</strong> 完成打卡。
+                  {t("docs.feature_track_desc")}
                 </p>
                 <ul className="text-[var(--fg-dim)] text-sm leading-relaxed mt-3 space-y-1 list-disc list-inside">
-                  <li><strong>连续打卡</strong>：每日达标自动累计，中断后从零开始</li>
-                  <li><strong>里程碑金句</strong>：连续 1/3/7/14/30/60/90/365 天触发专属激励文案</li>
-                  <li><strong>数据持久化</strong>：学习时长、休息时长、打卡记录全部存储在本地 JSON 文件</li>
-                  <li><strong>请辨金句</strong>：休息前展示思辨金句，每日不重复循环</li>
+                  <li>{t("docs.feature_track_0")}</li>
+                  <li>{t("docs.feature_track_1")}</li>
+                  <li>{t("docs.feature_track_2")}</li>
+                  <li>{t("docs.feature_track_3")}</li>
                 </ul>
               </div>
 
               <div className="docs-card" id="趋势分析">
-                <h3 className="text-sm font-semibold mb-2">📈 趋势分析</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.feature_trend_title")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                  5 个标签页提供多维度学习数据分析：
+                  {t("docs.feature_trend_desc")}
                 </p>
                 <div className="mt-3 space-y-2">
                   <div className="flex gap-3">
                     <span className="text-xs font-mono text-[var(--accent)] shrink-0">今日</span>
-                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">复盘时间线 — 今天每次复盘的时间、评分、学科一览</p>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">{t("docs.feature_trend_0")}</p>
                   </div>
                   <div className="flex gap-3">
                     <span className="text-xs font-mono text-[var(--accent)] shrink-0">周趋势</span>
-                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">近 7 天学习时长柱状图，鼠标悬浮查看具体数值</p>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">{t("docs.feature_trend_1")}</p>
                   </div>
                   <div className="flex gap-3">
                     <span className="text-xs font-mono text-[var(--accent)] shrink-0">月趋势</span>
-                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">近 5 周学习时长趋势（周聚合）</p>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">{t("docs.feature_trend_2")}</p>
                   </div>
                   <div className="flex gap-3">
                     <span className="text-xs font-mono text-[var(--accent)] shrink-0">季/年</span>
-                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">近 6 个月月度趋势 + 总览统计</p>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">{t("docs.feature_trend_3")}</p>
                   </div>
                   <div className="flex gap-3">
                     <span className="text-xs font-mono text-[var(--accent)] shrink-0">时段</span>
-                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">各时段专注度对比 + 一周学习热力图（7天×24小时）</p>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">{t("docs.feature_trend_4")}</p>
                   </div>
                 </div>
               </div>
 
               <div className="docs-card" id="ai分析">
-                <h3 className="text-sm font-semibold mb-2">🤖 AI 学习分析</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.feature_ai_title")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                  基于任意 OpenAI 兼容 API，根据你的学习数据自动生成深度分析报告。支持 <strong>日报/周报/月报/季报/年报</strong> 五级报告。
+                  {t("docs.feature_ai_desc")}
                 </p>
                 <div className="mt-3 bg-[var(--surface)] rounded-xl p-4">
-                  <p className="text-sm font-semibold mb-2">每份报告包含</p>
+                  <p className="text-sm font-semibold mb-2">{t("docs.feature_ai_subtitle")}</p>
                   <ul className="text-xs text-[var(--fg-dim)] leading-relaxed space-y-1 list-disc list-inside">
-                    <li><strong>概览</strong> — 学习时长、完成轮次、复盘质量数据总结</li>
-                    <li><strong>趋势分析</strong> — 学习节奏变化，结合复盘评分解释原因</li>
-                    <li><strong>学科分布</strong> — 各学科投入情况分析</li>
-                    <li><strong>改进建议</strong> — 5-7 条可落地的具体行动</li>
-                    <li><strong>亮点总结</strong> — 肯定成就，指出可保持的优点</li>
+                    <li>{t("docs.feature_ai_0")}</li>
+                    <li>{t("docs.feature_ai_1")}</li>
+                    <li>{t("docs.feature_ai_2")}</li>
+                    <li>{t("docs.feature_ai_3")}</li>
+                    <li>{t("docs.feature_ai_4")}</li>
                   </ul>
                 </div>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed mt-3">
-                  未配置 API Key 时自动降级为本地数据摘要报告，确保功能可用。
+                  {t("docs.feature_ai_note")}
                 </p>
               </div>
 
               <div className="docs-card" id="使用技巧">
-                <h3 className="text-sm font-semibold mb-2">💡 使用技巧</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.tips_title")}</h3>
                 <div className="space-y-3 mt-2">
                   <div>
-                    <p className="text-sm font-medium text-[var(--fg)]">快捷键</p>
+                    <p className="text-sm font-medium text-[var(--fg)]">{t("docs.tips_shortcut_title")}</p>
                     <p className="text-xs text-[var(--fg-dim)] mt-1">
-                      Ctrl+Alt+P 暂停/继续学习计时，无需切换窗口。
+                      {t("docs.tips_shortcut_desc")}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-[var(--fg)]">浮球交互</p>
+                    <p className="text-sm font-medium text-[var(--fg)]">{t("docs.tips_float_title")}</p>
                     <p className="text-xs text-[var(--fg-dim)] mt-1">
-                      短点击浮球弹出信息面板（含开始/暂停按钮），长按拖动 reposition。休息时浮球显示琥珀色环形进度条。
+                      {t("docs.tips_float_desc")}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-[var(--fg)]">托盘控制</p>
+                    <p className="text-sm font-medium text-[var(--fg)]">{t("docs.tips_tray_title")}</p>
                     <p className="text-xs text-[var(--fg-dim)] mt-1">
-                      系统托盘右键菜单可补录复盘、打开信息面板、隐藏/退出程序。托盘图标 tooltip 实时显示倒计时和状态。
+                      {t("docs.tips_tray_desc")}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-[var(--fg)]">电池监控</p>
+                    <p className="text-sm font-medium text-[var(--fg)]">{t("docs.tips_battery_title")}</p>
                     <p className="text-xs text-[var(--fg-dim)] mt-1">
-                      充电时弹窗提醒拔掉电源，保护电池健康。
+                      {t("docs.tips_battery_desc")}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-[var(--fg)]">开机自启</p>
+                    <p className="text-sm font-medium text-[var(--fg)]">{t("docs.tips_autostart_title")}</p>
                     <p className="text-xs text-[var(--fg-dim)] mt-1">
-                      设置中开启「开机自启」，程序随系统启动并在后台运行。
+                      {t("docs.tips_autostart_desc")}
                     </p>
                   </div>
                 </div>
@@ -368,57 +368,57 @@ python rest_reminder.py`}
 
             <div className="space-y-3">
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-1">🎯 学习计时</h3>
+                <h3 className="text-sm font-semibold mb-1">{t("docs.set_timer_title")}</h3>
                 <p className="text-xs text-[var(--fg-dim)] leading-relaxed">
-                  固定 60 分钟学习周期。包含 5 分钟请辨倒计时和 5 分钟休息，循环自动进行。
+                  {t("docs.set_timer_desc")}
                 </p>
               </div>
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-1">💬 请辨模式</h3>
+                <h3 className="text-sm font-semibold mb-1">{t("docs.set_discern_title")}</h3>
                 <p className="text-xs text-[var(--fg-dim)] leading-relaxed">
-                  休息前展示思辨金句，帮助你在休息前回顾学习内容。金句库每日不重复循环。
+                  {t("docs.set_discern_desc")}
                 </p>
               </div>
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-1">👁 20-20-20 护眼</h3>
+                <h3 className="text-sm font-semibold mb-1">{t("docs.set_eye_title")}</h3>
                 <p className="text-xs text-[var(--fg-dim)] leading-relaxed">
-                  每 20 分钟弹出护眼提醒浮窗，看 6 米外 20 秒，15 秒自动消失。可关闭。
+                  {t("docs.set_eye_desc")}
                 </p>
               </div>
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-1">📊 学习统计</h3>
+                <h3 className="text-sm font-semibold mb-1">{t("docs.set_stats_title")}</h3>
                 <p className="text-xs text-[var(--fg-dim)] leading-relaxed">
-                  开启后记录学习时长和休息时长，用于趋势分析和连续打卡。
+                  {t("docs.set_stats_desc")}
                 </p>
               </div>
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-1">📝 复盘提醒</h3>
+                <h3 className="text-sm font-semibold mb-1">{t("docs.set_review_title")}</h3>
                 <p className="text-xs text-[var(--fg-dim)] leading-relaxed">
-                  每小时学习结束后弹出复盘评分弹窗，记录学科和标签。
+                  {t("docs.set_review_desc")}
                 </p>
               </div>
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-1">🔊 声音提醒</h3>
+                <h3 className="text-sm font-semibold mb-1">{t("docs.set_sound_title")}</h3>
                 <p className="text-xs text-[var(--fg-dim)] leading-relaxed">
-                  休息提醒时播放提示音。休息音为轻柔两音符，倒计时结束为三音符上行琶音。
+                  {t("docs.set_sound_desc")}
                 </p>
               </div>
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-1">⚡ 开机自启</h3>
+                <h3 className="text-sm font-semibold mb-1">{t("docs.set_autostart_title")}</h3>
                 <p className="text-xs text-[var(--fg-dim)] leading-relaxed">
-                  通过注册表实现开机自动启动。开启后程序随系统启动并在后台运行。
+                  {t("docs.set_autostart_desc")}
                 </p>
               </div>
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-1">🤫 静默启动</h3>
+                <h3 className="text-sm font-semibold mb-1">{t("docs.set_silent_title")}</h3>
                 <p className="text-xs text-[var(--fg-dim)] leading-relaxed">
-                  启动后只显示浮球，不弹出主窗口。点击浮球弹出信息面板，显示倒计时与学习状态。
+                  {t("docs.set_silent_desc")}
                 </p>
               </div>
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-1">🗂 关闭最小化</h3>
+                <h3 className="text-sm font-semibold mb-1">{t("docs.set_minimize_title")}</h3>
                 <p className="text-xs text-[var(--fg-dim)] leading-relaxed">
-                  关闭主窗口时最小化到系统托盘，而非退出程序。
+                  {t("docs.set_minimize_desc")}
                 </p>
               </div>
             </div>
@@ -431,81 +431,81 @@ python rest_reminder.py`}
 
             <div className="space-y-5">
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">环境要求</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.dev_env_title")}</h3>
                 <ul className="text-[var(--fg-dim)] text-sm leading-relaxed space-y-1 list-disc list-inside">
-                  <li><strong>Python 3.14+</strong> — 核心依赖，必须使用 3.14 或更高版本</li>
-                  <li><strong>PyQt5</strong> — GUI 框架（项目 vendor/ 目录已内嵌兼容版本）</li>
-                  <li><strong>Windows 10/11</strong> — 使用 Win32 API（ctypes），仅支持 Windows</li>
+                  <li>{t("docs.dev_env_0")}</li>
+                  <li>{t("docs.dev_env_1")}</li>
+                  <li>{t("docs.dev_env_2")}</li>
                 </ul>
               </div>
 
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">快速启动</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.dev_quick_title")}</h3>
                 <pre className="bg-[var(--surface)] rounded-lg p-4 text-xs font-mono text-[#b5651d] overflow-x-auto">
 {`git clone https://github.com/kuangketongxue/library-remind.git
 cd library-remind
 C:\\Python314\\python.exe rest_reminder.py --silent`}
                 </pre>
                 <p className="text-[var(--fg-dim)] text-xs mt-3 leading-relaxed">
-                  注意：必须使用完整路径 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">C:\Python314\python.exe</code>，PATH 中的 python 可能指向其他版本，导致 ImportError。
+                  {t("docs.dev_quick_note")}
                 </p>
               </div>
 
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">项目结构</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.dev_struct_title")}</h3>
                 <div className="space-y-2">
                   <div className="flex gap-3">
                     <span className="text-xs font-mono text-[var(--accent)] shrink-0 w-44">rest_reminder.py</span>
-                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">主程序，约 8200 行，包含所有 UI 和业务逻辑</p>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">{t("docs.dev_struct_0")}</p>
                   </div>
                   <div className="flex gap-3">
                     <span className="text-xs font-mono text-[var(--accent)] shrink-0 w-44">storage.py</span>
-                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">统一 JSON 存储层（JSONStore 类）</p>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">{t("docs.dev_struct_1")}</p>
                   </div>
                   <div className="flex gap-3">
                     <span className="text-xs font-mono text-[var(--accent)] shrink-0 w-44">tray_card.py</span>
-                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">系统托盘卡片组件</p>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">{t("docs.dev_struct_2")}</p>
                   </div>
                   <div className="flex gap-3">
                     <span className="text-xs font-mono text-[var(--accent)] shrink-0 w-44">feishu_calendar.py</span>
-                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">飞书日程集成模块</p>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">{t("docs.dev_struct_3")}</p>
                   </div>
                   <div className="flex gap-3">
                     <span className="text-xs font-mono text-[var(--accent)] shrink-0 w-44">vendor/</span>
-                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">内嵌 PyQt5 等依赖（按 Python 3.14 ABI 编译）</p>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">{t("docs.dev_struct_4")}</p>
                   </div>
                   <div className="flex gap-3">
                     <span className="text-xs font-mono text-[var(--accent)] shrink-0 w-44">CLAUDE.md / AGENTS.md</span>
-                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">AI 开发规则和踩坑记录</p>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">{t("docs.dev_struct_5")}</p>
                   </div>
                 </div>
               </div>
 
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">状态机</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.dev_state_title")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                  程序基于四态循环状态机：<code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">idle → running → paused → resting → idle</code>。所有状态转换逻辑集中在主循环的 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">_tick()</code> 方法中。新增状态时需同步更新 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">_BTN_CONFIG</code>、对应的 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">_handle_*</code> 方法、以及主循环路由分支。
+                  {t("docs.dev_state_desc")}
                 </p>
               </div>
 
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">构建 EXE</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.dev_build_title")}</h3>
                 <pre className="bg-[var(--surface)] rounded-lg p-4 text-xs font-mono text-[#b5651d] overflow-x-auto">
 {`pyinstaller RestReminder.spec`}
                 </pre>
                 <p className="text-[var(--fg-dim)] text-xs mt-3 leading-relaxed">
-                  spec 文件已配置好 hiddenimports 和 icon。构建产物在 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">dist/</code> 目录，约 48MB。
+                  {t("docs.dev_build_note")}
                 </p>
               </div>
 
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">代码规范</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.dev_code_title")}</h3>
                 <ul className="text-[var(--fg-dim)] text-sm leading-relaxed space-y-1 list-disc list-inside">
-                  <li>改完代码后先 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">py_compile</code> 检查语法，再启动验证</li>
-                  <li>所有数据文件使用 JSONStore 统一读写，不直接 open/write</li>
-                  <li>PyQt 数值 API 只接受 int，float 必须显式 int() 转换</li>
-                  <li><code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">from PyQt5 import sip</code>（不能用 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">import sip</code>，3.14 不兼容）</li>
-                  <li>except 块必须有 log，不允许 bare <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">pass</code></li>
+                  <li>{t("docs.dev_code_0")}</li>
+                  <li>{t("docs.dev_code_1")}</li>
+                  <li>{t("docs.dev_code_2")}</li>
+                  <li>{t("docs.dev_code_3")}</li>
+                  <li>{t("docs.dev_code_4")}</li>
                 </ul>
               </div>
             </div>
@@ -518,41 +518,41 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
 
             <div className="space-y-5">
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">项目配置</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.claude_config_title")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                  项目已配置 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">CLAUDE.md</code> 和 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">AGENTS.md</code>，Claude Code 打开项目目录后会自动加载开发规则、踩坑记录和关键配置位置。无需额外配置。
+                  {t("docs.claude_config_desc")}
                 </p>
               </div>
 
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">开发工作流</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.claude_workflow_title")}</h3>
                 <ol className="text-[var(--fg-dim)] text-sm leading-relaxed list-decimal list-inside space-y-2">
-                  <li>杀掉旧进程：<code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">taskkill /F /IM python.exe</code></li>
-                  <li>语法检查：<code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">C:\Python314\python.exe -c "import py_compile; py_compile.compile('rest_reminder.py')"</code></li>
-                  <li>启动程序：<code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">C:\Python314\python.exe rest_reminder.py --silent</code></li>
-                  <li>验证进程：<code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">tasklist | findstr python.exe</code></li>
-                  <li>检查崩溃日志：<code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">type crash.log</code></li>
+                  <li><code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">taskkill /F /IM python.exe</code></li>
+                  <li><code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">C:\Python314\python.exe -c "import py_compile; py_compile.compile('rest_reminder.py')"</code></li>
+                  <li><code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">C:\Python314\python.exe rest_reminder.py --silent</code></li>
+                  <li><code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">tasklist | findstr python.exe</code></li>
+                  <li><code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">type crash.log</code></li>
                 </ol>
               </div>
 
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">注意事项</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.claude_note_title")}</h3>
                 <div className="space-y-2">
                   <div className="flex gap-3">
                     <span className="text-xs font-mono text-[var(--accent)] shrink-0">Python 版本</span>
-                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">必须用 3.14，PATH 中的 python 可能是其他版本</p>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">{t("docs.claude_note_0")}</p>
                   </div>
                   <div className="flex gap-3">
                     <span className="text-xs font-mono text-[var(--accent)] shrink-0">crash.log</span>
-                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">第一调试入口，改完代码先看这里</p>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">{t("docs.claude_note_1")}</p>
                   </div>
                   <div className="flex gap-3">
                     <span className="text-xs font-mono text-[var(--accent)] shrink-0">多实例</span>
-                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">Win32 Named Mutex 防护，崩溃自动释放</p>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">{t("docs.claude_note_2")}</p>
                   </div>
                   <div className="flex gap-3">
                     <span className="text-xs font-mono text-[var(--accent)] shrink-0">UI 修改</span>
-                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">状态机改动需同步 _BTN_CONFIG + _handle_* + 路由分支</p>
+                    <p className="text-xs text-[var(--fg-dim)] leading-relaxed">{t("docs.claude_note_3")}</p>
                   </div>
                 </div>
               </div>
@@ -876,7 +876,7 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
             </div>
 
             <p className="text-[var(--fg-dim)] text-sm mt-6">
-              完整更新日志（含 v3.0-v5.1 全部版本）见{" "}
+              {t("docs.changelog_footer")}{" "}
               <a
                 href="https://github.com/kuangketongxue/library-remind/blob/main/CHANGELOG.md"
                 target="_blank"
@@ -895,71 +895,71 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
 
             <div className="space-y-4">
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">程序启动后只看到浮球，主界面不显示？</h3>
-                <p className="text-[var(--fg-dim)] text-sm leading-relaxed">正常行为。默认静默启动只显示右下角浮球，点击浮球弹出信息面板。如需启动即显示主窗口，在设置中关闭「静默启动」。</p>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.faq_float_title")}</h3>
+                <p className="text-[var(--fg-dim)] text-sm leading-relaxed">{t("docs.faq_float_desc")}</p>
               </div>
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">B 站收藏夹没打开？</h3>
-                <p className="text-[var(--fg-dim)] text-sm leading-relaxed">检查设置中的 B 站收藏夹 ID（fid）和用户 ID（mid）是否正确。默认使用项目内置的收藏夹，如需更换请在设置中修改。</p>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.faq_bili_title")}</h3>
+                <p className="text-[var(--fg-dim)] text-sm leading-relaxed">{t("docs.faq_bili_desc")}</p>
               </div>
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">AI 报告生成失败？</h3>
-                <p className="text-[var(--fg-dim)] text-sm leading-relaxed">检查设置中是否配置了 SenseNova API Key。未配置时自动使用本地数据摘要报告，不会报错。可在「关于」页面的环境诊断中检查依赖状态。</p>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.faq_ai_title")}</h3>
+                <p className="text-[var(--fg-dim)] text-sm leading-relaxed">{t("docs.faq_ai_desc")}</p>
               </div>
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">复盘评分的数据存在哪里？</h3>
-                <p className="text-[var(--fg-dim)] text-sm leading-relaxed">所有复盘数据存储在程序同目录的 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">.review_log.json</code> 中。每轮学习结束后自动追加记录，包含时间、学科、标签和评分。</p>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.faq_review_title")}</h3>
+                <p className="text-[var(--fg-dim)] text-sm leading-relaxed">{t("docs.faq_review_desc")}</p>
               </div>
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">如何卸载？</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.faq_uninstall_title")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                  直接删除程序文件夹即可。如开启了开机自启，请先运行 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">uninstall.bat</code> 清除注册表项，再删除文件夹。
+                  {t("docs.faq_uninstall_desc")}
                 </p>
               </div>
 
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">数据会丢失吗？</h3>
-                <p className="text-[var(--fg-dim)] text-sm leading-relaxed">所有数据存储在本地 JSON 文件，重启电脑不丢失。重装系统前建议备份程序目录下的 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">.daily_log.json</code>、<code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">.review_log.json</code>、<code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">.streak.json</code> 等文件。</p>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.faq_lose_title")}</h3>
+                <p className="text-[var(--fg-dim)] text-sm leading-relaxed">{t("docs.faq_lose_desc")}</p>
               </div>
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">支持 macOS / Linux 吗？</h3>
-                <p className="text-[var(--fg-dim)] text-sm leading-relaxed">目前仅支持 Windows 10/11（基于 PyQt5 和 Windows API）。macOS 和 Linux 版本正在规划中。</p>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.faq_platform_title")}</h3>
+                <p className="text-[var(--fg-dim)] text-sm leading-relaxed">{t("docs.faq_platform_desc")}</p>
               </div>
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">需要联网才能用吗？</h3>
-                <p className="text-[var(--fg-dim)] text-sm leading-relaxed">核心功能（休息提醒、护眼、学习追踪、趋势分析）完全离线运行。只有 AI 学习分析需要联网调用 SenseNova API，其余功能全部本地可用。</p>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.faq_internet_title")}</h3>
+                <p className="text-[var(--fg-dim)] text-sm leading-relaxed">{t("docs.faq_internet_desc")}</p>
               </div>
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">连续打卡中断了怎么办？</h3>
-                <p className="text-[var(--fg-dim)] text-sm leading-relaxed">连续打卡基于每日学习时长判断（满 4 小时算一天）。如果某天未达标，连续天数归零，最佳记录保留。第二天达标后重新开始累计。</p>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.faq_streak_title")}</h3>
+                <p className="text-[var(--fg-dim)] text-sm leading-relaxed">{t("docs.faq_streak_desc")}</p>
               </div>
 
               {/* ── 赞助合作 ── */}
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">如何成为赞助商？</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.faq_sponsor_title")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                  我们欢迎 API 服务、工具产品或其他形式的合作。请发送邮件至 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">kuangketongxue@gmail.com</code>，注明合作意向和联系方式，我们会在 3 个工作日内回复。
+                  {t("docs.faq_sponsor_desc")}
                 </p>
               </div>
 
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">有哪些合作方案？</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.faq_plan_title")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                  支持多种合作形式：GitHub README 广告位、应用内预置接入、官网赞助商展示、优先技术支持等。具体方案可根据赞助商的资源和需求定制。
+                  {t("docs.faq_plan_desc")}
                 </p>
               </div>
 
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">完成洽谈后多久可以上线？</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.faq_launch_title")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                  根据合作内容不同，通常 1-2 周内完成接入和上线。简单的 API 接入可更快完成，复杂的定制化合作可能需要更长时间。
+                  {t("docs.faq_launch_desc")}
                 </p>
               </div>
 
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">赞助商可以获得什么？</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.faq_benefit_title")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                  赞助商可获得 GitHub README 广告位、应用内预置接入、官网赞助商展示、优先技术支持等权益。具体权益根据赞助等级和合作形式确定。
+                  {t("docs.faq_benefit_desc")}
                 </p>
               </div>
             </div>
@@ -972,49 +972,49 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
 
             <div className="space-y-4">
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">浮球不显示 / 点击无反应</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.ts_float_title")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed mb-2">按以下步骤排查：</p>
                 <ol className="text-xs text-[var(--fg-dim)] leading-relaxed list-decimal list-inside space-y-1">
-                  <li>检查程序是否在运行：查看系统托盘是否有图标。</li>
-                  <li>右键点击托盘图标 → 选择「⚡ 显示浮球」。</li>
-                  <li>若托盘图标也不存在，检查是否被安全软件拦截。</li>
-                  <li>重启程序，确保无 crash.log 生成。</li>
+                  <li>{t("docs.ts_float_0")}</li>
+                  <li>{t("docs.ts_float_1")}</li>
+                  <li>{t("docs.ts_float_2")}</li>
+                  <li>{t("docs.ts_float_3")}</li>
                 </ol>
               </div>
 
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">AI 报告生成失败 / 卡死</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.ts_ai_title")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed mb-2">按以下步骤排查：</p>
                 <ol className="text-xs text-[var(--fg-dim)] leading-relaxed list-decimal list-inside space-y-1">
-                  <li>进入「设置 → AI 服务」检查 API Key 是否配置正确。</li>
-                  <li>检查网络连接，确保能访问 API 端点。</li>
-                  <li>未配置 Key 时自动降级为本地数据摘要，不会报错。若仍异常，查看 crash.log。</li>
-                  <li>在「关于」页面的环境诊断中检查依赖状态。</li>
+                  <li>{t("docs.ts_ai_0")}</li>
+                  <li>{t("docs.ts_ai_1")}</li>
+                  <li>{t("docs.ts_ai_2")}</li>
+                  <li>{t("docs.ts_ai_3")}</li>
                 </ol>
               </div>
 
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">倒计时不准 / 计时漂移</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.ts_drift_title")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                  程序使用 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">time.perf_counter()</code> 作为计时源，长时间运行误差极小。若发现明显不准，请确认没有通过任务管理器强制暂停 python.exe 进程。
+                  {t("docs.ts_drift_desc")}
                 </p>
               </div>
 
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">B 站收藏夹没打开</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.ts_bili_title")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed mb-2">按以下步骤排查：</p>
                 <ol className="text-xs text-[var(--fg-dim)] leading-relaxed list-decimal list-inside space-y-1">
-                  <li>检查设置中的 B 站收藏夹 ID（fid）和用户 ID（mid）是否正确。</li>
-                  <li>确认默认浏览器可正常启动。</li>
-                  <li>尝试手动打开收藏夹链接：<code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">https://space.bilibili.com/529362421/favlist?fid=3648313921</code></li>
-                  <li>如收藏夹为私有，请确保账号已登录。</li>
+                  <li>{t("docs.ts_bili_0")}</li>
+                  <li>{t("docs.ts_bili_1")}</li>
+                  <li>{t("docs.ts_bili_2")}</li>
+                  <li>{t("docs.ts_bili_3")}</li>
                 </ol>
               </div>
 
               <div className="docs-card">
-                <h3 className="text-sm font-semibold mb-2">数据丢失 / 重装后恢复</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("docs.ts_data_title")}</h3>
                 <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
-                  所有数据存储在程序同目录的 <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">.daily_log.json</code>、<code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">.review_log.json</code>、<code className="bg-[var(--surface)] px-1 py-0.5 rounded text-xs font-mono">.streak.json</code>。重装前请备份这些文件。
+                  {t("docs.ts_data_desc")}
                 </p>
               </div>
             </div>
@@ -1027,8 +1027,8 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
               <div>
-                <p className="text-[var(--fg-muted)] text-xs">上一页</p>
-                <p className="text-[var(--fg)] font-medium group-hover:text-[var(--accent)] transition-colors">更新日志</p>
+                <p className="text-[var(--fg-muted)] text-xs">{t("nav.prev_page")}</p>
+                <p className="text-[var(--fg)] font-medium group-hover:text-[var(--accent)] transition-colors">{t("docs.changelog_title")}</p>
               </div>
             </a>
             <a href="#" className="group flex items-center gap-3 text-sm sm:flex-row-reverse">
@@ -1036,8 +1036,8 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
               <div className="sm:text-right">
-                <p className="text-[var(--fg-muted)] text-xs">回到顶部</p>
-                <p className="text-[var(--fg)] font-medium group-hover:text-[var(--accent)] transition-colors">回到顶部</p>
+                <p className="text-[var(--fg-muted)] text-xs">{t("nav.next_page")}</p>
+                <p className="text-[var(--fg)] font-medium group-hover:text-[var(--accent)] transition-colors">{t("docs.nav_back")}</p>
               </div>
             </a>
           </nav>

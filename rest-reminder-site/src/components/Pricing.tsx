@@ -1,36 +1,38 @@
 "use client";
 
+import { useI18n } from "@/lib/i18n";
 import { SectionHeader, ScaleIn } from "./Animations";
 
 const features = [
-  { text: "60分钟循环休息提醒", included: true },
-  { text: "20-20-20 护眼提醒", included: true },
-  { text: "学习时长 + 连续打卡", included: true },
-  { text: "趋势分析（5标签页）", included: true },
-  { text: "复盘记录（学科+标签+评分1-100）", included: true },
-  { text: "AI 学习分析（日报/周报/月报/季报/年报）", included: true, highlight: true },
-  { text: "开机自启+跨重启续接", included: true },
+  { textKey: "hero.pricing.feature1", included: true },
+  { textKey: "hero.pricing.feature2", included: true },
+  { textKey: "hero.pricing.feature3", included: true },
+  { textKey: "hero.pricing.feature4", included: true },
+  { textKey: "hero.pricing.feature5", included: true },
+  { textKey: "hero.pricing.feature6", included: true, highlight: true },
+  { textKey: "hero.pricing.feature7", included: true },
 ];
 
 export default function Pricing() {
+  const { t } = useI18n();
   return (
     <section className="py-28 px-6 section-glow" id="pricing">
       <div className="max-w-6xl mx-auto">
-        <SectionHeader label="定价" title="完全免费，永久开源" subtitle="MIT 协议，所有功能直接可用，无隐藏收费、无订阅、无限制。" />
+        <SectionHeader label={t("hero.pricing.label")} title={t("hero.pricing.title")} subtitle={t("hero.pricing.subtitle")} />
 
         <div className="max-w-2xl mx-auto">
           <ScaleIn>
             <div className="card p-9 text-center">
-              <h3 className="text-3xl font-bold font-display mb-2">¥0</h3>
-              <p className="text-sm text-[var(--fg-dim)] mb-8">永久免费 · MIT 开源</p>
+              <h3 className="text-3xl font-bold font-display mb-2">{t("hero.pricing.price_label")}</h3>
+              <p className="text-sm text-[var(--fg-dim)] mb-8">{t("hero.pricing.price_desc")}</p>
 
               <ul className="space-y-3.5 mb-8 text-left max-w-sm mx-auto">
                 {features.map((f) => (
-                  <li key={f.text} className="flex items-start gap-3 text-sm text-[var(--fg-dim)]">
+                  <li key={f.textKey} className="flex items-start gap-3 text-sm text-[var(--fg-dim)]">
                     <span className={`mt-0.5 text-[var(--accent)] ${f.highlight ? 'font-bold' : ''}`}>
                       {f.included ? '✓' : '✗'}
                     </span>
-                    <span className={f.highlight ? 'font-semibold text-[var(--fg)]' : ''}>{f.text}</span>
+                    <span className={f.highlight ? 'font-semibold text-[var(--fg)]' : ''}>{t(f.textKey)}</span>
                   </li>
                 ))}
               </ul>
@@ -39,7 +41,7 @@ export default function Pricing() {
                 href="#download"
                 className="inline-block py-3.5 px-8 text-sm font-semibold btn-primary btn-shine"
               >
-                免费下载 ↓
+                {t("hero.pricing.cta")}
               </a>
             </div>
           </ScaleIn>
