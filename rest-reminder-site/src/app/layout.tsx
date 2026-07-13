@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
-import OfficialNotice from "@/components/OfficialNotice";
 import AnnouncementModal from "@/components/AnnouncementModal";
 import MetadataSync from "@/components/MetadataSync";
 import { I18nProvider } from "@/lib/i18n";
@@ -32,7 +31,6 @@ export default function RootLayout({
           <ThemeProvider>
             <MetadataSync />
             <Navbar />
-            <OfficialNotice />
             <AnnouncementModal />
             <div className="pt-16 flex-1 flex flex-col">
               {children}
