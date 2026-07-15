@@ -1,36 +1,95 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+<!-- Hero SVG -->
+<p align="center">
+  <img src="./assets/readme/hero.svg" width="100%" alt="Rest Reminder — healthy break reminders for developers: 48MB memory · 60min intervals · 12h+ battery · MIT open source" />
+</p>
 
-## Getting Started
+<h1 align="center">Rest Reminder</h1>
 
-First, run the development server:
+<p align="center">
+  <strong>Healthy break reminders for developers.</strong><br/>
+  <sub>Sitting is not a skill. Your health is.</sub>
+</p>
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+---
+
+## Why Rest Reminder?
+
+You focus. Time disappears. Your neck, eyes, and back pay the price.
+
+Rest Reminder is a **48MB** lightweight helper that nudges you every 60 minutes — so you can keep shipping without breaking your body.
+
+### Core principle
+
+> **Rest is not stopping. Rest is sustaining.**
+
+We do not remind you to quit. We remind you to keep going — for longer, healthier, better.
+
+---
+
+## Four Numbers
+
+| Metric | Value | What it means |
+|--------|-------|-------------|
+| **Memory** | 48MB | You will not even notice it is running |
+| **Interval** | 60 min | Science-backed break frequency |
+| **Battery** | 12h+ | Lasts a full workday |
+| **License** | MIT | Free, open, no lock-in |
+
+---
+
+## How It Works
+
+```
+You focus for 60 minutes
+  → Gentle notification appears
+    → 4-7-8 breathing exercise (4s in, 7s hold, 8s out)
+      → Return to work refreshed
+        → Cycle repeats
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Features
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Feature | Detail |
+|---------|--------|
+| **Smart Reminder** | 60-minute configurable intervals |
+| **Breathing Guide** | 4-7-8 method backed by science |
+| **Non-intrusive** | Notification does not steal focus |
+| **Day Tracking** | Visual summary of your break habits |
+| **Multi-language** | i18n support built in |
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## Quick Start
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+# Install dependencies
+npm install
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+# Start development server
+npm run dev
+```
 
-## Deploy on Vercel
+Open [http://localhost:3000](http://localhost:3000) to see it running.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Stack
+
+- **Framework:** Next.js 16 + React 19 + TypeScript 5
+- **Styling:** Tailwind CSS 4
+- **Motion:** framer-motion 12
+
+---
+
+## Links
+
+- **GitHub:** [rest-reminder-site](https://github.com/kuangketongxue/rest-reminder-site)
+- **MIT Licensed](./LICENSE)
+
+---
+
+<p align="center">
+  <sub>Rest is not stopping. Rest is sustaining.</sub>
+</p>

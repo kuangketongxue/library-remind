@@ -68,28 +68,25 @@ echo ✓ 依赖安装完成
 echo.
 
 REM ========================================
-REM 步骤3: 设置开机自启动
+REM 步骤3: 设置开机自启动（仅用注册表，不再创建 .lnk，避免与代码内 set_autostart 双机制并存）
 REM ========================================
 echo [3/4] 设置开机自启动...
 
 set CURRENT_DIR=%~dp0
 
-set STARTUP_FOLDER=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
-powershell -ExecutionPolicy Bypass -Command "^&
-    `$WshShell = New-Object -ComObject WScript.Shell;^n
-    `$Shortcut = `$WshShell.CreateShortcut('%STARTUP_FOLDER%\休息提醒.lnk');^n
-    `$Shortcut.TargetPath = '%PYTHONW%';^n
-    `$Shortcut.Arguments = '\"%APP_DIR%rest_reminder.py\" --silent';^n
-    `$Shortcut.WorkingDirectory = '%CURRENT_DIR%';^n
-    `$Shortcut.Description = '每小时休息提醒挂件（自动启动）';^n
-    `$Shortcut.WindowStyle = 7;^n
-    `$Shortcut.Save()^n"
+REM 单一启动源：注册表 Run 键（代码内 set_autostart(True) 也写这里，保持一致）
+reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "RestReminder" /t REG_SZ /d "\"%PYTHONW%\" \"%APP_DIR%rest_reminder.py\" --silent" /f >nul 2>&1
 if errorlevel 1 (
     echo.
     echo ⚠ 自启动设置可能失败（权限或系统限制）
     echo.
 ) else (
-    echo ✓ 开机自启动设置完成
+    echo ✓ 开机自启动设置完成（注册表）
+)
+REM 清理可能残留的旧 .lnk（避免旧版本一键安装留下的双启动）
+if exist "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\休息提醒.lnk" (
+    del "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\休息提醒.lnk" >nul 2>&1
+    echo ✓ 已清理旧版 .lnk 快捷方式
 )
 echo.
 

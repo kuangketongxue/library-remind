@@ -5,6 +5,47 @@ import { useI18n } from "@/lib/i18n";
 
 const RELEASES = [
   {
+    version: "v1.4.0",
+    date: "2026-07-15",
+    tagKey: "changelog.v140.tag",
+    sections: [
+      {
+        titleKey: "changelog.v140.s1.title",
+        itemKeys: [
+          "changelog.v140.s1.i1",
+          "changelog.v140.s1.i2",
+          "changelog.v140.s1.i3",
+          "changelog.v140.s1.i4",
+        ],
+      },
+      {
+        titleKey: "changelog.v140.s2.title",
+        itemKeys: [
+          "changelog.v140.s2.i1",
+          "changelog.v140.s2.i2",
+          "changelog.v140.s2.i3",
+          "changelog.v140.s2.i4",
+        ],
+      },
+      {
+        titleKey: "changelog.v140.s3.title",
+        itemKeys: [
+          "changelog.v140.s3.i1",
+          "changelog.v140.s3.i2",
+          "changelog.v140.s3.i3",
+        ],
+      },
+      {
+        titleKey: "changelog.v140.s4.title",
+        itemKeys: [
+          "changelog.v140.s4.i1",
+          "changelog.v140.s4.i2",
+          "changelog.v140.s4.i3",
+        ],
+      },
+    ],
+  },
+  {
     version: "v1.3.0",
     date: "2026-07-13",
     tagKey: "changelog.v130.tag",

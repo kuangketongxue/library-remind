@@ -42,7 +42,7 @@ import tempfile
 from PyQt5 import sip
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel,
-                             QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox, QFrame, QTabWidget, QStackedWidget, QComboBox, QLineEdit, QScrollArea, QDialog, QSlider, QSpinBox, QGroupBox, QTextBrowser, QToolTip, QGridLayout, QFileDialog)
+                             QProgressBar, QSystemTrayIcon, QMenu, QAction, QHBoxLayout, QPushButton, QMessageBox, QFrame, QTabWidget, QStackedWidget, QComboBox, QLineEdit, QScrollArea, QDialog, QSlider, QDoubleSpinBox, QSpinBox, QGroupBox, QTextBrowser, QToolTip, QGridLayout, QFileDialog)
 from PyQt5.QtCore import QTimer, Qt, QPoint, QPointF, QEvent, QThread, pyqtSignal, QRect
 from PyQt5.QtGui import (QIcon, QFont, QPainter, QColor, QBrush, QPen,
                          QLinearGradient, QRadialGradient, QPainterPath, QPixmap)
@@ -278,7 +278,29 @@ _LABELS = ['专注', '疲劳', '收获大', '走神', '其他']
 _SCORE_COLORS_OLD = {1: '#ff4444', 2: '#ff8844', 3: '#fcc419', 4: '#78B450', 5: '#51cf66'}
 
 
-def _score_to_color(score):
+def _normalize_version(tag):
+    """把版本标签解析成可比较的数值元组。
+    支持 v6.2.9 / 6.2.9 / v6.2.9-beta / 6.2.9.1 等格式。
+    非数字后缀（beta/rc）视为比 patch 小，避免误报 beta 为新版。
+    """
+    v = (tag or '').strip().lstrip('vV')
+    parts = []
+    for p in v.split('.'):
+        digits = ''
+        for ch in p:
+            if ch.isdigit():
+                digits += ch
+            else:
+                break
+        parts.append(int(digits) if digits else 0)
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts[:4])
+
+
+def _is_newer(latest_tag, current_tag):
+    """当前安装的版本是否低于最新版本"""
+    return _normalize_version(latest_tag) > _normalize_version(current_tag)
     """评分条填充色：旧格式(1-5)离散色板，新格式(1-100)三元映射"""
     if score <= 5:
         return _SCORE_COLORS_OLD.get(score, '#555')
@@ -347,7 +369,7 @@ def _aggregate_reviews_by_time(reviews_data, days=7):
 
 
 def _review_summary(entries):
-    """从复盘条目列表提取结构化摘要数据"""
+    """从复盘条目列表提取结构化摘要数据，含当日时间价值小计。"""
     scores_v = [e.get('score', 0) for e in entries]
     is_old = _is_old_format(scores_v)
     avg = sum(scores_v) / len(scores_v) if scores_v else 0
@@ -356,12 +378,40 @@ def _review_summary(entries):
         worst_idx = min(range(len(scores_v)), key=lambda i: scores_v[i])
     else:
         best_idx = worst_idx = 0
+    today_value = 0.0
+    for e in entries:
+        v = e.get('round_value')
+        if v:
+            try:
+                today_value += float(v)
+            except (TypeError, ValueError):
+                pass
     return {
         'is_old': is_old, 'avg': avg, 'count': len(entries),
         'best': entries[best_idx] if entries else None,
         'worst': entries[worst_idx] if entries else None,
         'scores': scores_v,
+        'today_value': today_value if today_value > 0 else None,
     }
+
+
+def _aggregate_review_debt(reviews_data):
+    """跨日累计时间负债与效率（计算用）。"""
+    cum_debt = 0.0
+    rounds = 0
+    for day_entries in reviews_data.values():
+        for e in day_entries:
+            if not isinstance(e, dict):
+                continue
+            rounds += 1
+            v = e.get('round_value')
+            if v:
+                try:
+                    cum_debt += float(v)
+                except (TypeError, ValueError):
+                    pass
+    eff = (cum_debt / rounds) if rounds > 0 else 0.0
+    return {'cum_debt': cum_debt, 'rounds': rounds, 'eff_per_min': eff}
 
 
 def _pick_quote():
@@ -1582,7 +1632,8 @@ class SingleInstanceChecker:
         try:
             kernel32 = ctypes.windll.kernel32
             # CreateMutexW: 如果 mutex 已存在，GetLastError 返回 ERROR_ALREADY_EXISTS (183)
-            self._mutex_handle = kernel32.CreateMutexW(None, False, self._MUTEX_NAME)
+            # bInitialOwner=True：创建者立即持有 mutex，第二个进程才能通过 WaitForSingleObject 检测到
+            self._mutex_handle = kernel32.CreateMutexW(None, True, self._MUTEX_NAME)
             last_error = kernel32.GetLastError()
             if last_error == 183:  # ERROR_ALREADY_EXISTS
                 # Mutex 已存在，尝试立即获取以判断是否 stale（上一个实例已崩溃但 mutex 未释放）
@@ -3552,6 +3603,15 @@ class RestReminderWidget(QWidget):
         # 启动时静默检查版本更新（后台线程，有新版才弹窗）
         QTimer.singleShot(3000, lambda: self._check_update(silent=True))
 
+        # ★ 后台常驻版本更新检查（每小时一次）
+        #   - 启动 5 分钟后首次自动检查（避免启动风暴）
+        #   - 每小时重复一次；发现新版本就弹窗提示，用户可"跳过此版本"免重复提醒
+        #   - "跳过此版本" 记录在 .settings.json（gitignored 本地文件）
+        self._update_check_timer = QTimer(self)
+        self._update_check_timer.timeout.connect(lambda: self._check_update(silent=True))
+        self._update_check_timer.start(60 * 60 * 1000)  # 每小时（毫秒）
+        QTimer.singleShot(5 * 60 * 1000, lambda: self._check_update(silent=True))  # 5 分钟后第一次后台检查
+
     def init_ui(self):
         self.setWindowTitle(f'休息提醒 {VERSION}')
         self.widget_width = 960
@@ -4225,6 +4285,18 @@ class RestReminderWidget(QWidget):
                 rc_detail = QLabel(f'平均 {info["avg"]:.1f}{sufx}')
             rc_detail.setStyleSheet('color: #888; font-size: 11px;')
             rc.addWidget(rc_detail)
+            # 今日累计时间价值
+            tv = info.get('today_value')
+            if tv is not None:
+                rc_tv = QLabel(f'💰 今日时间价值 {tv:.1f}¥')
+                rc_tv.setStyleSheet('color: #d4af37; font-size: 11px;')
+                rc.addWidget(rc_tv)
+            # 累计时间负债 + 时间负债效率
+            debt = _aggregate_review_debt(reviews_data)
+            rc_debt = QLabel(
+                f'💰 累计时间负债 {debt["cum_debt"]:.1f}¥  ·  ⚡ 效率 {debt["eff_per_min"]:.2f}¥/min')
+            rc_debt.setStyleSheet('color: #d4af37; font-size: 11px;')
+            rc.addWidget(rc_debt)
             layout.addWidget(review_card)
             layout.addSpacing(8)
 
@@ -6486,8 +6558,10 @@ class RestReminderWidget(QWidget):
         dialog.exec_()
 
     def _check_update(self, silent=False):
-        """检查 GitHub 最新版本，有新版时弹窗提示；silent=True 不弹窗仅静默检查"""
+        """检查 GitHub 最新版本，有新版时弹窗提示；silent=True 不弹窗仅静默检查。
+        版本比较用严格数值解析，避免 beta/非数字后缀误报。"""
         release_url = 'https://api.github.com/repos/kuangketongxue/library-remind/releases/latest'
+        download_url = 'https://crazy-rest-reminder.pages.dev'  # 国内友好，中文站
         def _do_check():
             try:
                 resp = requests.get(release_url, timeout=10,
@@ -6495,34 +6569,25 @@ class RestReminderWidget(QWidget):
                 resp.raise_for_status()
                 data = resp.json()
                 latest_tag = data.get('tag_name', '').strip()
-                release_page = data.get('html_url', 'https://github.com/kuangketongxue/library-remind/releases')
                 if not latest_tag:
                     return
-                latest_ver = latest_tag.lstrip('v')
-                local_ver = VERSION.lstrip('v')
-                # 简单数值比较：major.minor.patch
-                def ver_tuple(v):
-                    parts = []
-                    for p in v.split('.'):
-                        try:
-                            parts.append(int(p))
-                        except ValueError:
-                            break
-                    return tuple(parts) if parts else (0,)
-                if ver_tuple(latest_ver) > ver_tuple(local_ver):
-                    # 有新版，回到主线程弹窗
-                    QTimer.singleShot(0, lambda: self._show_update_dialog(latest_tag, release_page))
+                # "跳过此版本"去重：用户已跳过的版本不再提示
+                skipped = self.app_settings.get('skipped_update', '')
+                if skipped and skipped == latest_tag and _is_newer(latest_tag, VERSION) is False:
+                    return
+                if _is_newer(latest_tag, VERSION):
+                    QTimer.singleShot(0, lambda: self._show_update_dialog(latest_tag, download_url))
                 elif not silent:
                     QTimer.singleShot(0, lambda: self.tray_icon.showMessage(
                         '检查更新', f'当前已是最新版本 {VERSION}', QSystemTrayIcon.Information, 3000))
             except Exception as e:
                 log.debug(f'[_check_update] 检查失败: {e}')
                 if not silent:
-                    QTimer.singleShot(0, lambda: open_url('https://crazy-rest-reminder.pages.dev'))
+                    QTimer.singleShot(0, lambda: open_url(download_url))
         threading.Thread(target=_do_check, daemon=True).start()
 
-    def _show_update_dialog(self, latest_tag, release_page):
-        """弹窗提示有新版本可用"""
+    def _show_update_dialog(self, latest_tag, download_url):
+        """弹窗提示有新版本可用（常驻：一直显示直到用户选择升级或跳过此版本）"""
         try:
             if sip.isdeleted(self):
                 return
@@ -6531,7 +6596,7 @@ class RestReminderWidget(QWidget):
         dialog = QDialog(self)
         dialog.setWindowFlags(Qt.Dialog | Qt.WindowStaysOnTopHint)
         dialog.setWindowTitle('发现新版本')
-        dialog.setFixedSize(360, 180)
+        dialog.setFixedSize(380, 220)
         dialog.setStyleSheet(f"""
             QDialog {{
                 background-color: {THEMES.get(self._current_theme, THEMES['dark'])['bg_card']};
@@ -6542,6 +6607,9 @@ class RestReminderWidget(QWidget):
             QPushButton {{ background: #d4af37; color: #0d0d12; border: none; border-radius: 6px;
                           font-size: 13px; font-weight: bold; padding: 8px 16px; }}
             QPushButton:hover {{ background: #e8c44a; }}
+            QPushButton#skipBtn {{ background: transparent; color: #888; border: 1px solid #252530;
+                              font-weight: normal; padding: 6px 12px; font-size: 11px; }}
+            QPushButton#skipBtn:hover {{ background: #1e1e26; color: #bbb; }}
         """)
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(20, 16, 20, 16)
@@ -6550,15 +6618,32 @@ class RestReminderWidget(QWidget):
         title.setFont(QFont('Microsoft YaHei', 12, QFont.Bold))
         title.setStyleSheet('color: #d4af37; background: transparent;')
         layout.addWidget(title)
-        desc = QLabel(f'当前版本：{VERSION}\n点击下方按钮前往下载页面更新')
+        desc = QLabel(f'当前版本：{VERSION}\n点击下方按钮前往官网下载新版安装包')
         desc.setFont(QFont('Microsoft YaHei', 9))
         desc.setStyleSheet('color: #aaa; background: transparent;')
         layout.addWidget(desc)
         layout.addStretch()
-        btn = QPushButton('前往更新')
-        btn.setCursor(Qt.PointingHandCursor)
-        btn.clicked.connect(lambda: [open_url(release_page), dialog.accept()])
-        layout.addWidget(btn, 0, Qt.AlignCenter)
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        skip_btn = QPushButton('跳过此版本')
+        skip_btn.setObjectName('skipBtn')
+        skip_btn.setCursor(Qt.PointingHandCursor)
+
+        def _skip():
+            # 记录已跳过的版本，不再对这版本重复提示
+            try:
+                self.app_settings['skipped_update'] = latest_tag
+                LocalSync.save_settings(self.app_settings)
+            except Exception:
+                pass
+            dialog.accept()
+        skip_btn.clicked.connect(_skip)
+        btn_row.addWidget(skip_btn)
+        go_btn = QPushButton('前往更新')
+        go_btn.setCursor(Qt.PointingHandCursor)
+        go_btn.clicked.connect(lambda: [open_url(download_url), dialog.accept()])
+        btn_row.addWidget(go_btn)
+        layout.addLayout(btn_row)
         dialog.exec_()
 
     # ── 环境检查辅助方法 ──
@@ -6727,14 +6812,37 @@ class RestReminderWidget(QWidget):
             pass
         return f'"{pythonw}" "{script}" --silent'
 
+    def _get_startup_lnk_path(self):
+        """启动文件夹中的 .lnk 快捷方式路径（与注册表 Run 键并存的另一套自启机制）"""
+        return os.path.join(
+            os.environ.get('APPDATA', ''),
+            r'Microsoft\Windows\Start Menu\Programs\Startup',
+            '休息提醒.lnk'
+        )
+
+    def _remove_startup_lnk(self):
+        """移除启动文件夹中的 .lnk 快捷方式（忽略不存在的情况）"""
+        lnk = self._get_startup_lnk_path()
+        try:
+            if os.path.exists(lnk):
+                os.remove(lnk)
+                log.info(f'[自启动] 已删除启动文件夹快捷方式：{lnk}')
+        except Exception as e:
+            log.warning(f'[自启动] 删除启动文件夹快捷方式失败：{e}')
+
     def is_autostart_enabled(self):
+        # 两套机制任一存在即视为"已开启"，避免 UI 显示"已关闭"但实际仍能自启
         try:
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Run', 0, winreg.KEY_READ)
             val, _ = winreg.QueryValueEx(key, 'RestReminder')
             winreg.CloseKey(key)
-            return bool(val)
+            if val:
+                return True
         except (FileNotFoundError, OSError):
-            return False
+            pass
+        if os.path.exists(self._get_startup_lnk_path()):
+            return True
+        return False
 
     def set_autostart(self, enabled):
         try:
@@ -6763,6 +6871,8 @@ class RestReminderWidget(QWidget):
                 winreg.CloseKey(approved_key)
             except Exception as e2:
                 log.warning(f'[自启动] StartupApproved 写入失败：{e2}')
+            # 关键修复：无论启用还是禁用，都同步清理启动文件夹 .lnk，避免两套机制并存导致双启动
+            self._remove_startup_lnk()
             return True
         except Exception as e:
             log.error(f'设置自启动失败：{e}')
@@ -7152,39 +7262,16 @@ class RestReminderWidget(QWidget):
                 self.floating_ball.set_progress(0.0)
 
             # ★ 休息结束后弹出复盘弹窗（评分1-100）
+            # 复盘对话框 accept 后：_record_review → _write_review → _open_post_review_link
+            #   → 按累计学习小时打开收藏夹/护眼视频（提醒开始学习）
             if self.app_settings.get('review_reminder', True):
                 self._prompt_review()
             else:
                 self._pending_review = False
 
-            # 弹出本轮目标（非阻塞，60秒自动提交）
-            self._prompt_round_goal()
-
-            # 每3轮后（第3、6、9...轮）打开护眼视频，否则打开收藏夹
-            if self._round_count % 3 == 0:
-                eye_url = 'https://www.bilibili.com/video/BV14Y4y1N7PW/?spm_id_from=333.1387.favlist.content.click'
-                open_url(eye_url)
-                self.tray_icon.showMessage(
-                    '👁️ 护眼时间',
-                    '每3轮休息，看看护眼视频放松眼睛~',
-                    QSystemTrayIcon.Information,
-                    4000
-                )
-            else:
-                fid = self.app_settings.get('bilibili_fid', '3648313921')
-                mid = self.app_settings.get('bilibili_mid', '529362421')
-                fav_url = f'https://space.bilibili.com/{mid}/favlist?fid={fid}&ftype=create&spm_id_from=333.788.0.0'
-                open_url(fav_url)
-
             self.break_start = None
             self._transition_to('idle')
             self._sync_buttons()
-            self.tray_icon.showMessage(
-                '▶ 下一轮',
-                '休息结束，准备开始下一轮学习~',
-                QSystemTrayIcon.Information,
-                3000
-            )
         else:
             # 累加休息时长（每秒 +1/60 分钟）
             self.break_minutes_today = round(self.break_minutes_today + 1/60, 2)
@@ -7247,35 +7334,29 @@ class RestReminderWidget(QWidget):
             self._check_streak()
 
     def _update_countdown_display(self):
-        """更新今日tab中距离22:00的倒计时进度条（倒计时模式：4:30=100%, 22:00=0%）"""
+        """更新今日tab中"距离22:00"倒计时卡片。
+        进度条含义：今天剩余时间占比（0:00=100% → 24:00=0%），直观反映"今天还剩多少"。
+        文字：距离 22:00 还剩 Xh Xm；22:00 后显示"今天的学习已结束"。
+        """
         bar = getattr(self, '_cd_bar', None)
         lbl = getattr(self, '_cd_time', None)
         if bar is None or lbl is None or sip.isdeleted(bar) or sip.isdeleted(lbl):
             return
         now = datetime.now()
         midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        span_start = int(4.5 * 3600)  # 4:30 = 16200秒
-        total_span = int(22 * 3600 - 4.5 * 3600)  # 63000秒（从4:30到22:00）
+        secs_since_midnight = int((now - midnight).total_seconds())
+        DAY_SECS = 24 * 3600
+        # 进度条：今天剩余时间占比（0:00 满，24:00 空）
+        pct = max(0, min(100, int((1 - secs_since_midnight / DAY_SECS) * 100)))
+        bar.setValue(pct)
+
         if now.hour >= 22:
-            bar.setValue(0)
             lbl.setText('今天的学习已结束')
         else:
-            seconds_since_midnight = (now - midnight).total_seconds()
-            if seconds_since_midnight < span_start:
-                bar.setValue(100)
-                remaining_secs = 22 * 3600 - seconds_since_midnight
-                h = int(remaining_secs // 3600)
-                m = int((remaining_secs % 3600) // 60)
-                lbl.setText(f'剩余 {h}小时{m}分钟')
-            else:
-                # 倒计时模式：剩余时间占比 = 1 - 已用时间占比
-                elapsed = seconds_since_midnight - span_start
-                progress = max(0, int((1 - elapsed / total_span) * 100))
-                bar.setValue(min(progress, 100))
-                remaining = 22 * 3600 - seconds_since_midnight
-                h = int(remaining // 3600)
-                m = int((remaining % 3600) // 60)
-                lbl.setText(f'剩余 {h}小时{m}分钟')
+            remaining = 22 * 3600 - secs_since_midnight
+            h = int(remaining // 3600)
+            m = int((remaining % 3600) // 60)
+            lbl.setText(f'剩余 {h}小时{m:02d}分钟')
 
     def _load_yesterday_review_avg(self, reviews_data=None):
         """加载昨日平均评分"""
@@ -7553,7 +7634,7 @@ class RestReminderWidget(QWidget):
         slider_layout.addWidget(score_label, 0)
         layout.addLayout(slider_layout)
 
-        # 信息栏 + 倒计时
+        # 信息栏 + 自动提交倒计时
         info_bar = QWidget()
         info_bar.setStyleSheet('background: #16161c; border-radius: 6px;')
         info_layout = QHBoxLayout(info_bar)
@@ -7561,16 +7642,120 @@ class RestReminderWidget(QWidget):
         info_lbl = QLabel('💡 方便时提交即可，不急')
         info_lbl.setStyleSheet('color: #666; font-size: 11px; background: transparent;')
         info_layout.addWidget(info_lbl)
+        # ★ 自动提交倒计时：对话框打开 AUTO_SUBMIT_SECONDS 秒后自动提交（用当前值）
+        #   防止用户离开电脑导致复盘对话框卡死整个流程（下一轮无法开始、链接打不开）
+        dialog._auto_submit_remaining = [int(AUTO_SUBMIT_SECONDS)]
+        auto_cd_lbl = QLabel(f'{AUTO_SUBMIT_SECONDS}s 后自动提交')
+        auto_cd_lbl.setStyleSheet('color: #FFC620; font-size: 11px; font-weight: bold; background: transparent;')
+        info_layout.addStretch()
+        info_layout.addWidget(auto_cd_lbl)
         layout.addWidget(info_bar)
+
+        # 单发定时器：到时自动提交
+        auto_timer = QTimer(dialog)
+        auto_timer.setSingleShot(True)
+        auto_timer.timeout.connect(dialog.accept)
+        auto_timer.start(int(AUTO_SUBMIT_SECONDS * 1000))
+        # 每秒刷新倒计时显示
+        def _tick_cd():
+            dialog._auto_submit_remaining[0] -= 1
+            rem = dialog._auto_submit_remaining[0]
+            if rem > 0:
+                auto_cd_lbl.setText(f'{rem}s 后自动提交')
+            else:
+                auto_cd_lbl.setText('提交中…')
+        cd_tick = QTimer(dialog)
+        cd_tick.timeout.connect(_tick_cd)
+        cd_tick.start(1000)
+
+        # ── 时间价值输入区（参考飞书"时间负债"表）──
+        # 每分钟价值 = 理想分薪 × 状态加权；本小时价值 = 每分钟价值 × 60
+        tv_card = QWidget()
+        tv_card.setStyleSheet('background: #16161c; border-radius: 6px;')
+        tv_layout = QVBoxLayout(tv_card)
+        tv_layout.setContentsMargins(10, 8, 10, 8)
+        tv_layout.setSpacing(6)
+        tv_header = QLabel('💰 时间价值（可选）')
+        tv_header.setStyleSheet('color: #d4af37; font-size: 12px; font-weight: bold; background: transparent;')
+        tv_layout.addWidget(tv_header)
+
+        tv_row = QHBoxLayout()
+        # 理想分薪
+        ppm_col = QVBoxLayout()
+        ppm_col.setSpacing(2)
+        ppm_label = QLabel('理想分薪（元/min）')
+        ppm_label.setStyleSheet('color: #888; font-size: 10px; background: transparent;')
+        ppm_col.addWidget(ppm_label)
+        ideal_ppm_spin = QDoubleSpinBox()
+        ideal_ppm_spin.setRange(0.0, 100.0)
+        ideal_ppm_spin.setDecimals(2)
+        ideal_ppm_spin.setSingleStep(0.5)
+        ideal_ppm_spin.setValue(float(self.app_settings.get('last_ideal_ppm', 4.5)))
+        ideal_ppm_spin.setFixedWidth(110)
+        ideal_ppm_spin.setStyleSheet('background: #1e1e26; color: #e8e6e1; border: 1px solid #252530; border-radius: 4px; padding: 4px;')
+        ppm_col.addWidget(ideal_ppm_spin)
+        tv_row.addLayout(ppm_col)
+        # 状态加权
+        wt_col = QVBoxLayout()
+        wt_col.setSpacing(2)
+        wt_label = QLabel('状态加权（0.5~1.5）')
+        wt_label.setStyleSheet('color: #888; font-size: 10px; background: transparent;')
+        wt_col.addWidget(wt_label)
+        weight_spin = QDoubleSpinBox()
+        weight_spin.setRange(0.0, 5.0)
+        weight_spin.setDecimals(2)
+        weight_spin.setSingleStep(0.1)
+        weight_spin.setValue(float(self.app_settings.get('last_weight', 1.0)))
+        weight_spin.setFixedWidth(110)
+        weight_spin.setStyleSheet('background: #1e1e26; color: #e8e6e1; border: 1px solid #252530; border-radius: 4px; padding: 4px;')
+        wt_col.addWidget(weight_spin)
+        tv_row.addLayout(wt_col)
+        # 显示：每分钟价值 + 每小时价值
+        val_col = QVBoxLayout()
+        val_col.setSpacing(2)
+        val_label = QLabel('实时计算')
+        val_label.setStyleSheet('color: #888; font-size: 10px; background: transparent;')
+        val_col.addWidget(val_label)
+        val_display = QLabel()
+        val_display.setStyleSheet('color: #78B450; font-size: 12px; font-weight: bold; background: transparent;')
+        val_col.addWidget(val_display)
+        tv_row.addLayout(val_col)
+        tv_layout.addLayout(tv_row)
+        layout.addWidget(tv_card)
+
+        def _recompute_value():
+            ppm = ideal_ppm_spin.value()
+            wt = weight_spin.value()
+            if ppm > 0 and wt > 0:
+                per_min = ppm * wt
+                per_hour = per_min * 60
+                val_display.setText(f'{per_min:.2f}¥/min · {per_hour:.1f}¥/时')
+            else:
+                val_display.setText('—')
+        _recompute_value()
+        ideal_ppm_spin.valueChanged.connect(_recompute_value)
+        weight_spin.valueChanged.connect(_recompute_value)
 
         # 提交按钮
         submit_btn = QPushButton('提交复盘')
         submit_btn.clicked.connect(dialog.accept)
+
+        def _on_submit():
+            # 记忆分薪与加权，下次复盘默认带入
+            self.app_settings['last_ideal_ppm'] = ideal_ppm_spin.value()
+            self.app_settings['last_weight'] = weight_spin.value()
+            try:
+                LocalSync.save_settings(self.app_settings)
+            except Exception:
+                pass
+        submit_btn.clicked.connect(lambda: (_recompute_value(), _on_submit()))
         layout.addWidget(submit_btn)
 
         dialog._subject_val = subject_val
         dialog._label_val = label_val
         dialog._score_slider = score_slider
+        dialog._ideal_ppm = ideal_ppm_spin.value() if (ideal_ppm_spin.value() > 0 and weight_spin.value() > 0) else None
+        dialog._weight = weight_spin.value() if weight_spin.value() > 0 else None
         # 快照：避免 WA_DeleteOnClose 后，exec_() 退出时 slider 被销毁
         dialog._score = score_slider.value() if score_slider else 50
         return dialog
@@ -7610,17 +7795,31 @@ class RestReminderWidget(QWidget):
                 subject = dialog._subject_val[0]
                 label = dialog._label_val[0]
                 score = dialog._score_slider.value() if dialog._score_slider is not None else dialog._score
-                self._record_review(score, subject, label)
+                ideal_ppm = dialog._ideal_ppm if hasattr(dialog, '_ideal_ppm') else None
+                weight = dialog._weight if hasattr(dialog, '_weight') else None
+                self._record_review(score, subject, label,
+                                    ideal_ppm=ideal_ppm, weight=weight)
+            else:
+                # ★ 对话框被关闭（点 X / Esc）而未提交：不让 _pending_review 永久挂着
+                self._pending_review = False
+                log.info('[复盘] 用户关闭复盘弹窗，未提交')
         except Exception as e:
+            self._pending_review = False
             log.error(f'[复盘] 弹窗异常: {e}')
+            try:
+                self.tray_icon.showMessage('⚠️ 复盘异常', str(e)[:80], QSystemTrayIcon.Warning, 4000)
+            except Exception:
+                pass
 
-    def _record_review(self, score, subject='未记录', label='未记录'):
+    def _record_review(self, score, subject='未记录', label='未记录',
+                      ideal_ppm=None, weight=None):
         """记录自评分数（持久化到 .review_log.json）"""
         if not self._pending_review:
             return
         self._pending_review = False
         log.info(f'[复盘] 本周期评分: {score}/100 | {subject} | {label}')
-        self._write_review(score, subject, label)
+        self._write_review(score, subject, label,
+                            ideal_ppm=ideal_ppm, weight=weight)
 
     def _catchup_review(self):
         """补录复盘：托盘菜单入口"""
@@ -7634,11 +7833,22 @@ class RestReminderWidget(QWidget):
             subject = dialog._subject_val[0]
             label = dialog._label_val[0]
             score = dialog._score_slider.value()
-            self._write_review(score, subject, label)
+            ideal_ppm = dialog._ideal_ppm if hasattr(dialog, '_ideal_ppm') else None
+            weight = dialog._weight if hasattr(dialog, '_weight') else None
+            self._write_review(score, subject, label,
+                                ideal_ppm=ideal_ppm, weight=weight)
             self.tray_icon.showMessage('📝 已补录', f'{score}分 | {subject} | {label}', QSystemTrayIcon.Information, 2000)
 
-    def _write_review(self, score, subject='未记录', label='未记录'):
-        """写入复盘记录到文件（供正常复盘和补录共用）"""
+    def _write_review(self, score, subject='未记录', label='未记录',
+                      ideal_ppm=None, weight=None):
+        """写入复盘记录到文件（供正常复盘和补录共用）。
+        含时间价值计算：
+          - 每分钟价值 = 理想分薪 × 状态加权
+          - 本小时价值 = 每分钟价值 × 60
+          - 累计时间负债 = 历史累计 + 本小时价值
+          - 时间负债效率 = 累计时间负债 / 累计复盘次数
+        主流程（is_primary=True）时，评分提交后打开对应的 B 站放松链接。
+        """
         try:
             # 记忆学科和标签，下次复盘自动选中
             if subject != '未记录':
@@ -7651,16 +7861,107 @@ class RestReminderWidget(QWidget):
             today = datetime.now().date().isoformat()
             if today not in data:
                 data[today] = []
+
+            # ★ 时间价值计算（参考飞书"时间负债"表）：
+            #   每分钟价值（¥/min）= 理想分薪 × 状态加权
+            #   本小时价值（¥）= 每分钟价值 × 60
+            #   累计时间负债（¥）= 历史累计 + 本小时价值
+            round_value = 0.0
+            per_min = 0.0
+            if ideal_ppm is not None and weight is not None and ideal_ppm > 0:
+                per_min = ideal_ppm * weight
+                round_value = per_min * 60.0   # 1 小时 = 60 分钟
+            # 历史累计时间负债（所有天）
+            hist_debt = 0.0
+            for day_entries in data.values():
+                for e in day_entries:
+                    if isinstance(e, dict):
+                        v = e.get('round_value', 0) or 0
+                        try:
+                            hist_debt += float(v)
+                        except (TypeError, ValueError):
+                            pass
+            cum_debt = hist_debt + round_value
+            cum_rounds = sum(1
+                             for day_entries in data.values()
+                             for e in day_entries
+                             if isinstance(e, dict))
+            eff_per_min = (cum_debt / cum_rounds) if cum_rounds > 0 else 0.0
+
             data[today].append({
                 'time': datetime.now().strftime('%H:%M'),
                 'subject': subject,
                 'label': label,
-                'score': score
+                'score': score,
+                # 时间价值字段
+                'ideal_ppm': ideal_ppm,
+                'weight': weight,
+                'per_min': round(per_min, 4) if per_min else None,
+                'round_value': round(round_value, 2) if round_value else None,
+                'hist_debt': round(hist_debt, 2),
+                'cum_debt': round(cum_debt, 2),
+                'eff_per_min': round(eff_per_min, 4),
             })
             review_store.save(data)
-            log.info(f'[复盘] 已记录: {score}/100 | {subject} | {label}')
+            if round_value > 0:
+                log.info(f'[复盘] 已记录: {score}/100 | {subject} | {label} | '
+                         f'价值{round_value:.2f}¥ ({per_min:.3f}¥/min) | '
+                         f'累计负债{cum_debt:.2f}¥')
+            else:
+                log.info(f'[复盘] 已记录: {score}/100 | {subject} | {label}')
+
+            # ★ 复盘评分提交后，按累计学习小时数打开对应的 B 站放松链接：
+            #   每满 3 小时（3/6/9h）打开护眼视频，其余打开收藏夹（"开始学习了"入口）
+            #   用 study_hours_today 计算，避免暂停/中断导致"小时≠轮数"错位。
+            self._open_post_review_link()
         except Exception as e:
             log.error(f'[复盘] 保存失败: {e}')
+            # ★ 失败必须让用户感知：不能静默吞掉，否则用户以为提交了实际丢了
+            try:
+                self.tray_icon.showMessage(
+                    '⚠️ 复盘保存失败',
+                    f'评分{score}分已提交，但写入文件失败：{str(e)[:60]}',
+                    QSystemTrayIcon.Warning, 4000)
+            except Exception:
+                pass
+
+    # 放松链接模板（个人数据，不进入开源仓库；具体值从 .settings.json 读，默认值兜底）
+    _FAV_URL_TMPL = 'https://space.bilibili.com/{mid}/favlist?fid={fid}&ftype=create&spm_id_from=333.788.0.0'
+    _EYE_URL = 'https://www.bilibili.com/video/BV14Y4y1N7PW/?spm_id_from=333.1387.favlist.content.click'
+
+    def _resolve_fav_url(self):
+        """从本地设置解析收藏夹链接（mid/fid 存 .settings.json，不进开源）"""
+        mid = str(self.app_settings.get('bilibili_mid', '')).strip()
+        fid = str(self.app_settings.get('bilibili_fid', '')).strip()
+        if mid and fid:
+            return self._FAV_URL_TMPL.format(mid=mid, fid=fid)
+        return None
+
+    def _open_post_review_link(self):
+        """复盘提交后打开放松链接：每满 3 小时护眼视频，否则收藏夹（"开始学习"入口）。"""
+        try:
+            hours = self.study_hours_today
+            # 刚完成 1/2/3/4... 小时：用 floor 后的值判断"当前这个小时属于哪个 3 小时块"
+            block = int(hours) // 3          # 0,0,0, 1,1,1, 2,2,2, ...
+            if int(hours) > 0 and int(hours) % 3 == 0:
+                # 刚好踩在 3/6/9h 边界 → 护眼视频（长时间学习后放松眼睛优先级更高）
+                url = self._EYE_URL
+                title = '👁️ 护眼时间'
+                msg = f'已学习 {hours:.1f} 小时，看看护眼视频放松眼睛~'
+            else:
+                url = self._resolve_fav_url()
+                if not url:
+                    # 设置里没配 bilibili：无法打开，直接跳链接环节
+                    log.warning('[_open_post_review_link] bilibili_mid/fid 未配置，跳过打开放松链接')
+                    return
+                title = '▶ 准备学习'
+                msg = f'已完成 {hours:.1f} 小时，打开收藏夹准备学习~'
+            open_url(url)
+            self.tray_icon.showMessage(title, msg, QSystemTrayIcon.Information, 4000)
+        except Exception as e:
+            # ★ 失败时不再调用 open_url(self._FAV_URL)：_FAV_URL 已不存在
+            #   （收藏夹链接含个人 mid/fid，加密存在 .settings.json，这里不应重构）
+            log.error(f'[_open_post_review_link] 失败: {e}')
 
     def _show_onboarding(self):
         """首次引导：3页弹窗介绍核心功能"""
