@@ -13,6 +13,7 @@ export default function Navbar() {
       <div className="max-w-6xl mx-auto flex items-center justify-between h-16 px-6">
         <Link href="/" className="flex items-center gap-2.5">
           <img src="/favicon.ico" alt="Rest Reminder" className="w-8 h-8 rounded-md" />
+          <img src="/app-icon.png" alt="Rest Reminder" className="h-8 w-8 rounded-md" />
           <img src="/hero-rest-banner.jpg" alt="Rest Reminder" className="h-8 w-auto" />
         </Link>
 
