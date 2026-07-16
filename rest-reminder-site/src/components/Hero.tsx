@@ -63,13 +63,8 @@ export default function Hero() {
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] rounded-full bg-[radial-gradient(circle,rgba(245,158,11,0.05)_0%,transparent_60%)] pointer-events-none" />
 
       <div className="relative z-10 max-w-3xl mx-auto">
-        {/* Product Logo + Banner */}
-        <div className="flex flex-col items-center mb-6 animate-[fadeInUp_0.5s_ease-out]">
-          <img
-            src="/app-icon.png"
-            alt="Rest Reminder"
-            className="w-20 h-20 md:w-24 md:h-24 rounded-2xl shadow-xl mb-4"
-          />
+        {/* REST REMINDER Banner */}
+        <div className="flex justify-center mb-6 animate-[fadeInUp_0.5s_ease-out]">
           <img
             src="/hero-rest-banner.jpg"
             alt="Rest Reminder"
