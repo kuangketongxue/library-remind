@@ -92,6 +92,9 @@ pyinstaller RestReminder.spec
 - **发布时必须同步 VERSION 常量**：git tag / CHANGELOG / VERSION 三者必须一致，VERSION 是运行时显示的版本（2026-07-06）
 - **Windows 自启动必须双源同步清理**：存在两套独立自启机制（注册表 + 启动文件夹 .lnk），set_autostart() 必须同时管理两者。安装脚本只写注册表不再创建 .lnk；卸载脚本三处都删（Run + StartupApproved + .lnk）。自启路径含空格/中文必须加引号（2026-07-15 修复）
 - **Cloudflare Pages 部署**：`cd rest-reminder-site && npm run build && wrangler pages deploy out --project-name=crazy-rest-reminder --branch=main`。必须用 `wrangler pages deploy out`（JS/CSS 在 out/ 里）。构建后 `fix-routes.js` 自动修复路由。部署后 curl 测试所有页面 + AI 代理（2026-07-06）
+- **官网更新日志在 `/docs` 页面，不是 `/changelog`**：用户看到的更新日志在 `docs/page.tsx`（桌面版号 v6.x，key 格式 `changelog.v6_2_X.*`）。`/changelog` 页面无导航入口，用户看不到。发布新版本时同步 `docs/page.tsx` + `i18n.tsx` 三语块（2026-07-17 踩坑）
+- **桌面版和 Chrome 扩展是同一个产品**：统一叫 "Rest Reminder"，更新日志和公告不分开写。版本号跟桌面版走（v6.x）（2026-07-17）
+- **发版必同步公告弹窗**：更新 changelog 时，`ann.modal.*` i18n key 也要同步更新到最新版本内容，不等用户提醒（2026-07-17）
 
 ## 禁止事项
 - 不创建庆祝/确认类临时文件
