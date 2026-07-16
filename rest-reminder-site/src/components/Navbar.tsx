@@ -12,7 +12,7 @@ export default function Navbar() {
     <nav className="fixed top-0 left-0 right-0 z-50 bg-[color-mix(in_srgb,var(--bg)_85%,transparent)] backdrop-blur-xl border-b border-[var(--border)]">
       <div className="max-w-6xl mx-auto flex items-center justify-between h-16 px-6">
         <Link href="/" className="flex items-center gap-2.5">
-          <img src="/app-icon.png" alt="Rest Reminder" className="w-8 h-8 rounded-md" />
+          <img src="/favicon.ico" alt="Rest Reminder" className="w-8 h-8 rounded-md" />
           <span className="font-semibold text-[15px] font-display tracking-tight text-[var(--fg)]">Rest Reminder</span>
         </Link>
 
