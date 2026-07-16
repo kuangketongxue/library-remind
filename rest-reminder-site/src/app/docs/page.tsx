@@ -613,7 +613,6 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-sm font-bold">v6.2.7</span>
                   <span className="text-xs text-[var(--fg-dim)]">2026-07-09</span>
-                  <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">{t("docs.changelog_latest")}</span>
                 </div>
                 <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
                   <li>{t("changelog.v6_2_7.i1")}</li>
