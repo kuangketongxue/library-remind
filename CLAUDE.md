@@ -73,7 +73,7 @@ pyinstaller RestReminder.spec
 - **Windows 任务栏图标**：直接 `python.exe` 启动会显示 Python 图标；需创建 `.lnk` 快捷方式绑定 `cute_icon.ico`，或用 PyInstaller 打包 EXE（2026-06-28）
 - **centralized utility 迁移必须一次性完成**：创建 `open_url()` 后 grep 所有 `webbrowser.open`/`ShellExecuteW` 调用点，全部替换，不留绕过（2026-06-21）
 - **UI 重构后审计 settings 数据流**：每个 settings key 的写入点必须有对应的读取点，否则设置是摆设（2026-06-21）
-- **PyQt5 多实例防护**：`msvcrt.locking` 文件锁有竞态（两个实例同时启动都能通过 fallback）。改用 `kernel32.CreateMutexW + GetLastError==183` 检测，原子操作无竞态，崩溃自动释放，名称用 `Global\` 前缀（2026-06-29）
+- **PyQt5 单实例防护（Windows Named Mutex）**：`kernel32.CreateMutexW(None, True, name)` + `GetLastError()==183` 检测，原子操作无竞态，崩溃自动释放，名称用 `Global\`` 前缀。**关键：`bInitialOwner` 必须为 `True`**，否则创建者不拥有 mutex，第二个进程 `WaitForSingleObject(0)` 永远拿不到 `WAIT_TIMEOUT`，两个实例都通过检测 → 启动 2 个（2026-07-15 修复）
 - **Win11 任务栏图标 WS_EX_APPWINDOW**：`FramelessWindowHint + WindowStaysOnTopHint` 会丢失任务栏图标。修复：`showEvent` 中用 `ctypes.windll.user32` 设 `WS_EX_APPWINDOW`、去 `WS_EX_TOOLWINDOW`（2026-06-29）
 - **飞书日程 CalendarManager 初始化顺序**：`CalendarManager` 必须在 `init_ui()` 前初始化，因为 `_build_general_tab` 会读 `_calendar_enabled`（2026-06-29）
 - **pythonw 下 PATH 不完整**：`lark-cli` 找不到时，需用 `shutil.which` 或绝对路径 `%APPDATA%\npm\lark-cli.cmd`，不能依赖 PATH（2026-06-29）
@@ -90,7 +90,7 @@ pyinstaller RestReminder.spec
 - **framer-motion 在 Next.js 静态导出时 SSR 动画不执行**：`initial={{ opacity: 0 }}` 在静态 HTML 中保持透明，页面内容不可见。改用 CSS `@keyframes` + `animation` 替代（2026-07-06）
 - **跨项目 learnings 不混放**：不同项目的 .learnings/ 必须分别记录到各自目录，不能跨项目写入（2026-07-06）
 - **发布时必须同步 VERSION 常量**：git tag / CHANGELOG / VERSION 三者必须一致，VERSION 是运行时显示的版本（2026-07-06）
-- **Windows 自启动路径必须加引号**：注册表 `HKCU\...\Run` 的路径如果含空格/中文，必须用双引号包裹，否则 Windows 解析失败。优先调用 app 内置 `set_autostart()`（2026-07-06）
+- **Windows 自启动必须双源同步清理**：存在两套独立自启机制（注册表 + 启动文件夹 .lnk），set_autostart() 必须同时管理两者。安装脚本只写注册表不再创建 .lnk；卸载脚本三处都删（Run + StartupApproved + .lnk）。自启路径含空格/中文必须加引号（2026-07-15 修复）
 - **Cloudflare Pages 部署**：`cd rest-reminder-site && npm run build && wrangler pages deploy out --project-name=crazy-rest-reminder --branch=main`。必须用 `wrangler pages deploy out`（JS/CSS 在 out/ 里）。构建后 `fix-routes.js` 自动修复路由。部署后 curl 测试所有页面 + AI 代理（2026-07-06）
 
 ## 禁止事项

@@ -567,6 +567,50 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
             <div className="space-y-6">
               <div className="changelog-entry latest pl-6">
                 <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-bold">v6.2.10</span>
+                  <span className="text-xs text-[var(--fg-dim)]">2026-07-15</span>
+                  <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">{t("docs.changelog_latest")}</span>
+                </div>
+                <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
+                  <li>{t("changelog.v6_2_10.i1")}</li>
+                  <li>{t("changelog.v6_2_10.i2")}</li>
+                  <li>{t("changelog.v6_2_10.i3")}</li>
+                  <li>{t("changelog.v6_2_10.i4")}</li>
+                  <li>{t("changelog.v6_2_10.i5")}</li>
+                  <li>{t("changelog.v6_2_10.i6")}</li>
+                </ul>
+              </div>
+
+              <div className="changelog-entry pl-6">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-bold">v6.2.9</span>
+                  <span className="text-xs text-[var(--fg-dim)]">2026-07-15</span>
+                </div>
+                <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
+                  <li>{t("changelog.v6_2_9.i1")}</li>
+                  <li>{t("changelog.v6_2_9.i2")}</li>
+                  <li>{t("changelog.v6_2_9.i3")}</li>
+                  <li>{t("changelog.v6_2_9.i4")}</li>
+                  <li>{t("changelog.v6_2_9.i5")}</li>
+                  <li>{t("changelog.v6_2_9.i6")}</li>
+                </ul>
+              </div>
+
+              <div className="changelog-entry pl-6">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-bold">v6.2.8</span>
+                  <span className="text-xs text-[var(--fg-dim)]">2026-07-13</span>
+                </div>
+                <ul className="text-[var(--fg-dim)] text-sm space-y-1 list-disc list-inside">
+                  <li>{t("changelog.v6_2_8.i1")}</li>
+                  <li>{t("changelog.v6_2_8.i2")}</li>
+                  <li>{t("changelog.v6_2_8.i3")}</li>
+                  <li>{t("changelog.v6_2_8.i4")}</li>
+                </ul>
+              </div>
+
+              <div className="changelog-entry pl-6">
+                <div className="flex items-center gap-2 mb-1">
                   <span className="text-sm font-bold">v6.2.7</span>
                   <span className="text-xs text-[var(--fg-dim)]">2026-07-09</span>
                   <span className="text-xs bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded-full">{t("docs.changelog_latest")}</span>
