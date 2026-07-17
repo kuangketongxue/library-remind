@@ -5,88 +5,47 @@ import { useI18n } from "@/lib/i18n";
 
 const RELEASES = [
   {
-    version: "v1.4.0",
+    version: "v6.2.10",
     date: "2026-07-15",
-    tagKey: "changelog.v140.tag",
+    tagKey: "changelog.v6_2_10.tag",
     sections: [
-      { titleKey: "changelog.v140.s1.title", itemKeys: ["changelog.v140.s1.i1", "changelog.v140.s1.i2", "changelog.v140.s1.i3", "changelog.v140.s1.i4"] },
-      { titleKey: "changelog.v140.s2.title", itemKeys: ["changelog.v140.s2.i1", "changelog.v140.s2.i2", "changelog.v140.s2.i3", "changelog.v140.s2.i4"] },
-      { titleKey: "changelog.v140.s3.title", itemKeys: ["changelog.v140.s3.i1", "changelog.v140.s3.i2", "changelog.v140.s3.i3"] },
-      { titleKey: "changelog.v140.s4.title", itemKeys: ["changelog.v140.s4.i1", "changelog.v140.s4.i2", "changelog.v140.s4.i3"] },
+      { titleKey: "changelog.v6_2_10.s1.title", itemKeys: ["changelog.v6_2_10.i1", "changelog.v6_2_10.i2", "changelog.v6_2_10.i3"] },
+      { titleKey: "changelog.v6_2_10.s2.title", itemKeys: ["changelog.v6_2_10.i4", "changelog.v6_2_10.i5"] },
+      { titleKey: "changelog.v6_2_10.s3.title", itemKeys: ["changelog.v6_2_10.i6"] },
     ],
   },
   {
-    version: "v1.3.0",
-    date: "2026-07-13",
-    tagKey: "changelog.v130.tag",
-    sections: [
-      { titleKey: "changelog.v130.s1.title", itemKeys: ["changelog.v130.s1.i1", "changelog.v130.s1.i2", "changelog.v130.s1.i3", "changelog.v130.s1.i4", "changelog.v130.s1.i5", "changelog.v130.s1.i6", "changelog.v130.s1.i7"] },
-      { titleKey: "changelog.v130.s2.title", itemKeys: ["changelog.v130.s2.i1", "changelog.v130.s2.i2"] },
-      { titleKey: "changelog.v130.s3.title", itemKeys: ["changelog.v130.s3.i1", "changelog.v130.s3.i2", "changelog.v130.s3.i3"] },
-    ],
-  },
-  {
-    version: "v1.2.5",
+    version: "v6.2.9",
     date: "2026-07-15",
-    tagKey: "changelog.v125.tag",
+    tagKey: "changelog.v6_2_9.tag",
     sections: [
-      { titleKey: "changelog.v125.s1.title", itemKeys: ["changelog.v125.s1.i1", "changelog.v125.s1.i2", "changelog.v125.s1.i3"] },
-      { titleKey: "changelog.v125.s2.title", itemKeys: ["changelog.v125.s2.i1", "changelog.v125.s2.i2", "changelog.v125.s2.i3"] },
-      { titleKey: "changelog.v125.s3.title", itemKeys: ["changelog.v125.s3.i1", "changelog.v125.s3.i2"] },
-      { titleKey: "changelog.v125.s4.title", itemKeys: ["changelog.v125.s4.i1"] },
+      { titleKey: "changelog.v6_2_9.s1.title", itemKeys: ["changelog.v6_2_9.i1", "changelog.v6_2_9.i2", "changelog.v6_2_9.i3"] },
+      { titleKey: "changelog.v6_2_9.s2.title", itemKeys: ["changelog.v6_2_9.i4", "changelog.v6_2_9.i5", "changelog.v6_2_9.i6"] },
     ],
   },
   {
-    version: "v1.2.4",
+    version: "v6.2.8",
+    date: "2026-07-15",
+    tagKey: "changelog.v6_2_8.tag",
+    sections: [
+      { titleKey: "changelog.v6_2_8.s1.title", itemKeys: ["changelog.v6_2_8.i1", "changelog.v6_2_8.i2"] },
+      { titleKey: "changelog.v6_2_8.s2.title", itemKeys: ["changelog.v6_2_8.i3", "changelog.v6_2_8.i4"] },
+    ],
+  },
+  {
+    version: "v6.2.7",
     date: "2026-07-13",
-    tagKey: "changelog.v124.tag",
+    tagKey: "changelog.v6_2_7.tag",
     sections: [
-      { titleKey: "changelog.v124.s1.title", itemKeys: ["changelog.v124.s1.i1", "changelog.v124.s1.i2", "changelog.v124.s1.i3", "changelog.v124.s1.i4"] },
-      { titleKey: "changelog.v124.s2.title", itemKeys: ["changelog.v124.s2.i1", "changelog.v124.s2.i2", "changelog.v124.s2.i3", "changelog.v124.s2.i4"] },
-      { titleKey: "changelog.v124.s3.title", itemKeys: ["changelog.v124.s3.i1", "changelog.v124.s3.i2", "changelog.v124.s3.i3", "changelog.v124.s3.i4"] },
-      { titleKey: "changelog.v124.s4.title", itemKeys: ["changelog.v124.s4.i1", "changelog.v124.s4.i2", "changelog.v124.s4.i3"] },
+      { titleKey: "changelog.v6_2_7.s1.title", itemKeys: ["changelog.v6_2_7.i1", "changelog.v6_2_7.i2", "changelog.v6_2_7.i3", "changelog.v6_2_7.i4", "changelog.v6_2_7.i5", "changelog.v6_2_7.i6"] },
     ],
   },
   {
-    version: "v1.2.3",
-    date: "2026-07-13",
-    tagKey: "changelog.v123.tag",
-    sections: [
-      { titleKey: "changelog.v123.s1.title", itemKeys: ["changelog.v123.s1.i1", "changelog.v123.s1.i2", "changelog.v123.s1.i3"] },
-      { titleKey: "changelog.v123.s2.title", itemKeys: ["changelog.v123.s2.i1"] },
-      { titleKey: "changelog.v123.s3.title", itemKeys: ["changelog.v123.s3.i1", "changelog.v123.s3.i2", "changelog.v123.s3.i3", "changelog.v123.s3.i4"] },
-      { titleKey: "changelog.v123.s4.title", itemKeys: ["changelog.v123.s4.i1", "changelog.v123.s4.i2"] },
-    ],
-  },
-  {
-    version: "v1.2.2",
-    date: "2026-07-13",
-    tagKey: "changelog.v122.tag",
-    sections: [
-      { titleKey: "changelog.v122.s1.title", itemKeys: ["changelog.v122.s1.i1", "changelog.v122.s1.i2", "changelog.v122.s1.i3"] },
-      { titleKey: "changelog.v122.s2.title", itemKeys: ["changelog.v122.s2.i1", "changelog.v122.s2.i2", "changelog.v122.s2.i3", "changelog.v122.s2.i4"] },
-      { titleKey: "changelog.v122.s3.title", itemKeys: ["changelog.v122.s3.i1", "changelog.v122.s3.i2", "changelog.v122.s3.i3", "changelog.v122.s3.i4"] },
-    ],
-  },
-  {
-    version: "v1.2.1",
+    version: "v6.2.6",
     date: "2026-07-10",
-    tagKey: "changelog.v121.tag",
+    tagKey: "changelog.v6_2_6.tag",
     sections: [
-      { titleKey: "changelog.v121.s1.title", itemKeys: ["changelog.v121.s1.i1", "changelog.v121.s1.i2", "changelog.v121.s1.i3", "changelog.v121.s1.i4"] },
-      { titleKey: "changelog.v121.s2.title", itemKeys: ["changelog.v121.s2.i1", "changelog.v121.s2.i2", "changelog.v121.s2.i3", "changelog.v121.s2.i4"] },
-      { titleKey: "changelog.v121.s3.title", itemKeys: ["changelog.v121.s3.i1", "changelog.v121.s3.i2", "changelog.v121.s3.i3"] },
-      { titleKey: "changelog.v121.s4.title", itemKeys: ["changelog.v121.s4.i1", "changelog.v121.s4.i2", "changelog.v121.s4.i3"] },
-    ],
-  },
-  {
-    version: "v1.2.0",
-    date: "2026-07-10",
-    tagKey: "changelog.v120.tag",
-    sections: [
-      { titleKey: "changelog.v120.s1.title", itemKeys: ["changelog.v120.s1.i1", "changelog.v120.s1.i2", "changelog.v120.s1.i3", "changelog.v120.s1.i4", "changelog.v120.s1.i5"] },
-      { titleKey: "changelog.v120.s2.title", itemKeys: ["changelog.v120.s2.i1", "changelog.v120.s2.i2", "changelog.v120.s2.i3", "changelog.v120.s2.i4"] },
-      { titleKey: "changelog.v120.s3.title", itemKeys: ["changelog.v120.s3.i1", "changelog.v120.s3.i2", "changelog.v120.s3.i3", "changelog.v120.s3.i4"] },
+      { titleKey: "changelog.v6_2_6.s1.title", itemKeys: ["changelog.v6_2_6.i1", "changelog.v6_2_6.i2", "changelog.v6_2_6.i3", "changelog.v6_2_6.i4", "changelog.v6_2_6.i5"] },
     ],
   },
 ];

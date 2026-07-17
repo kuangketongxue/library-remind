@@ -2,6 +2,32 @@
 
 所有重要版本更新记录。
 
+## 官网 UI 全面修复 + 认证徽章 v6.2.11 (2026-07-17) — 10 项修复 + Fable 5 / GPT Sol 认证
+
+### 🎨 官网 UI 修复（10 项）
+- **Navbar 三图改一图**：移除 favicon.ico 和 hero-rest-banner.jpg，仅保留 app-icon.png + 品牌文字
+- **Hero 版本号修正**：v6.2.6 → v6.2.10
+- **Changelog 页版本号修正**：从 Chrome 扩展版（v1.x）改为桌面版（v6.2.10/v6.2.9/v6.2.8/v6.2.7/v6.2.6）
+- **Footer 更新日志链接修正**：从 GitHub CHANGELOG.md → 站内 /changelog
+- **移动端导航菜单**：新增 hamburger 按钮 + 下拉菜单（导航/语言/主题/GitHub/下载）
+- **CSS @import 顺序修复**：Google Fonts 移到 Tailwind 之前，消除构建警告
+- **删除空 body::before**：opacity:0 无实际作用的伪元素
+- **删除未使用的 breathe 动画**：CSS 定义但从未引用
+- **不必要的图片 preload 清理**：hero-rest-banner.jpg 等不再被 Navbar 引用后自动消除
+- **Docs 页重复 changelog 替换为链接卡片**：避免与独立 /changelog 页内容重复
+
+### 🏅 认证徽章
+- **新增 Fable 5 Verified + GPT Sol Verified 认证徽章**
+- 官网 Hero 区（统计数字下方）、桌面版关于页（品牌 Hero 区）、Chrome 扩展 popup（底部链接下方）
+- PyInstaller spec 同步更新，打包时自动包含徽章图片
+
+### 📦 安装
+```
+git pull && C:\Python314\python.exe rest_reminder.py
+```
+
+---
+
 ## 开机自启修复 v6.2.10 (2026-07-15) — 双启动修复 + 单实例锁修复 + 安装/卸载脚本统一
 
 ### 🐛 关键修复：开机启动 2 个实例

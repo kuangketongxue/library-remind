@@ -62,7 +62,7 @@ export default function Footer() {
               <ul className="space-y-2.5">
                 <li><a href="/docs" className="text-sm text-[var(--fg-dim)] hover:text-[var(--accent)] transition-colors">{t("footer.link_intro")}</a></li>
                 <li><a href="/docs#常见问题" className="text-sm text-[var(--fg-dim)] hover:text-[var(--accent)] transition-colors">{t("footer.link_faq")}</a></li>
-                <li><a href="https://github.com/kuangketongxue/library-remind/blob/main/CHANGELOG.md" target="_blank" rel="noopener noreferrer" className="text-sm text-[var(--fg-dim)] hover:text-[var(--accent)] transition-colors">{t("footer.link_changelog")}</a></li>
+                <li><a href="/changelog" className="text-sm text-[var(--fg-dim)] hover:text-[var(--accent)] transition-colors">{t("footer.link_changelog")}</a></li>
               </ul>
             </div>
 

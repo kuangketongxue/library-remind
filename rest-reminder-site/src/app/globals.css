@@ -1,5 +1,4 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap');
-
 @import "tailwindcss";
 
 :root {
@@ -63,15 +62,6 @@
   --color-border: var(--border);
   --color-muted: var(--fg-dim);
   --font-sans: var(--font-body);
-}
-
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  opacity: 0;
-  pointer-events: none;
-  z-index: 9999;
 }
 
 body {
@@ -212,14 +202,6 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
 html { scroll-behavior: smooth; }
-
-@keyframes breathe {
-  0%, 100% { opacity: 0.04; }
-  50% { opacity: 0.08; }
-}
-.animate-breathe {
-  animation: breathe 8s ease-in-out infinite;
-}
 
 @keyframes fade-in-up {
   from { opacity: 0; transform: translateY(16px); }

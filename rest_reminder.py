@@ -104,7 +104,7 @@ if os.path.isdir(_PRO_DIR) and _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v6.2.9'
+VERSION = 'v6.2.10'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=500_000, backupCount=7, encoding='utf-8')
@@ -6157,6 +6157,27 @@ class RestReminderWidget(QWidget):
             self._about_tab_connections.append(conn)
             btn_row.addWidget(btn)
         hero_layout.addLayout(btn_row)
+
+        # 认证徽章行
+        badge_row = QHBoxLayout()
+        badge_row.setSpacing(12)
+        badge_row.setContentsMargins(0, 6, 0, 0)
+        for img_name, img_file in [('Fable 5 Verified', 'fable5-verified.png'), ('GPT Sol Verified', 'gptsol-verified.jpg')]:
+            badge_label = QLabel()
+            badge_label.setFixedHeight(36)
+            # 从 exe 同目录或脚本同目录加载
+            base_dir = sys._MEIPASS if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
+            badge_path = os.path.join(base_dir, img_file)
+            if os.path.exists(badge_path):
+                pm = QPixmap(badge_path).scaledToHeight(36, Qt.SmoothTransformation)
+                badge_label.setPixmap(pm)
+            else:
+                badge_label.setText(img_name)
+            badge_label.setStyleSheet('background: transparent;')
+            badge_row.addWidget(badge_label)
+        badge_row.addStretch()
+        hero_layout.addLayout(badge_row)
+
         layout.addWidget(hero)
 
         # ═══ 系统状态（两列：环境 + 数据） ═══

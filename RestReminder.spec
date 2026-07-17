@@ -5,7 +5,7 @@ a = Analysis(
     ['rest_reminder.py'],
     pathex=[],
     binaries=[],
-    datas=[('cute_icon.png', '.')],
+    datas=[('cute_icon.png', '.'), ('fable5-verified.png', '.'), ('gptsol-verified.jpg', '.')],
     hiddenimports=['storage', 'tray_card', 'feishu_calendar', 'PyQt5.QtWidgets'],
     hookspath=[],
     hooksconfig={},

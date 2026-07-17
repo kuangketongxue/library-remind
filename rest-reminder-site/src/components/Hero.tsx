@@ -67,7 +67,7 @@ export default function Hero() {
           <span className="text-[11px] font-semibold text-[var(--accent)] bg-[var(--accent-soft)] px-3 py-1 rounded-full border border-[var(--border)]">
             {t("hero.badge")}
           </span>
-          <span className="text-xs text-white/70">v6.2.6</span>
+          <span className="text-xs text-white/70">v6.2.10</span>
         </div>
 
         <h1
@@ -120,6 +120,12 @@ export default function Hero() {
             <div className="text-xl font-bold font-display text-[var(--accent)]">MIT</div>
             <div className="text-xs text-white/60 mt-0.5">{t("hero.stat_mit")}</div>
           </div>
+        </div>
+
+        {/* 认证徽章 */}
+        <div className="flex items-center justify-center gap-4 mt-8 animate-[fadeInUp_0.6s_ease-out_0.4s_both]">
+          <img src="/fable5-verified.png" alt="Fable 5 Verified" className="h-10 md:h-12 rounded-full border border-white/10" />
+          <img src="/gptsol-verified.jpg" alt="GPT Sol Verified" className="h-10 md:h-12 rounded-full border border-white/10" />
         </div>
       </div>
     </section>
