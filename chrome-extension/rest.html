@@ -83,7 +83,13 @@ function playChime() {
   } catch (e) {}
 }
 
-const DURATION = 300; // 5 分钟 = 300 秒
+let DURATION = 300; // 默认 5 分钟，从 storage 读取实际值
+chrome.storage.local.get('restMinutes', r => {
+  if (r.restMinutes) {
+    DURATION = r.restMinutes * 60;
+    remaining = DURATION;
+  }
+});
 let remaining = DURATION;
 const circumference = 2 * Math.PI * 70;
 

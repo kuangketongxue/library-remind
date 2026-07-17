@@ -54,6 +54,7 @@ let state = {
   roundCount: 0,
   studyMinutes: 0,
   breakMinutes: 0,
+  totalStudyAllTime: 0,
   lastEyeRest: null,
   currentDate: null,
   ambientSound: '',
@@ -568,8 +569,8 @@ async function getAchievementStats() {
       });
     }
   }
-  totalStudy = state.studyMinutes; // 简化：只计今日
-  totalRounds = state.roundCount;
+  totalStudy = (state.totalStudyAllTime || 0) + state.studyMinutes; // 累计 = 历史 + 今日
+  totalRounds = totalReviews; // 每条 review 代表一轮完成
 
   // 连续打卡
   let streak = 0;
@@ -648,6 +649,8 @@ async function exportData() {
 function checkDateReset() {
   const today = new Date().toISOString().slice(0, 10);
   if (state.currentDate !== today) {
+    // 累积昨日数据到全量计数器
+    state.totalStudyAllTime = (state.totalStudyAllTime || 0) + state.studyMinutes;
     state.currentDate = today;
     state.roundCount = 0;
     state.studyMinutes = 0;

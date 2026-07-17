@@ -2,6 +2,37 @@
 
 所有重要版本更新记录。
 
+## 全面扫描修复 v6.2.12 (2026-07-17) — 桌面版 3 崩溃修复 + 扩展安全加固 + 官网全面修复
+
+### 🐛 桌面版崩溃修复（P0）
+- **TrendWindow `_score_to_color` NameError 崩溃**：函数体被错误嵌入 `_is_newer` 的 return 之后（死代码），导致所有趋势页面渲染时 NameError。提取为独立函数
+- **`insertWidget(idx, None)` 崩溃**：`_build_ai_tab()` 在已构建时返回 None，`insertWidget` 接收 None 抛 TypeError。加 None 守卫
+- **`_decrypt_key` 返回密文作为 API key**：解密失败时返回 `enc:...` 密文字符串，被当作 API key 发往服务器导致 401。改为返回 None，调用方优雅降级
+
+### 🔒 Chrome 扩展安全 + 功能修复
+- **移除 `<all_urls>` host 权限**：`chrome.scripting.insertCSS` 不需要该权限，移除后通过 CWS 审核更容易
+- **成就统计改为累计数据**：`getAchievementStats` 从只用今日数据改为跨天累计（新增 `totalStudyAllTime` 字段持久化），成就系统终于能正常解锁
+- **休息/复盘时长读取用户设置**：`rest.html` 和 `review.html` 从 storage 读取 `restMinutes` / `focusMinutes`，不再硬编码
+
+### 🌐 官网全面修复
+- **面包屑链接文字修复**：5 个子页面（docs/pricing/terms/rules/privacy）面包屑首页链接显示"文档"→改为"Rest Reminder"
+- **Sponsor 动画修复**：从 mount 即播放改为 `whileInView`（滚动到才触发），避免用户看不到动画
+- **Sponsor 网格修复**：`grid-cols-5` → `grid-cols-3`（3 个技术伙伴不需要 5 列）
+- **Navbar 图标修复**：从 `app-icon.png`（2172×724 横幅图）改为 `favicon.png`（256×256 正方形）
+- **CSS 重复 keyframes 清理**：`fade-in-up` + `fadeInUp` 合并为单一 `fadeInUp`
+- **i18n 补全**：7 个缺失翻译 key（`hero.banner.alt`/`hero.video.alt`/`nav.language_switch`/`site.title`/`site.description`/`notice.col_category`/`notice.col_official`），三语同步
+- **版本号统一**：`download.note` 从 v6.2.0 更新为 v6.2.10
+- **死文件清理**：删除 `app-icon.png`（1225KB 横幅）、`hero-banner.png`（278KB 未引用）、`hero-rest-banner.jpg`、`screenshot-menu.png`
+- **Footer CTA 按钮**：从手写样式改为 `btn-primary`，hover 行为与全局一致
+- **DocsNav**：移除未使用的 `Link` import
+
+### 📦 安装
+```
+git pull && C:\Python314\python.exe rest_reminder.py
+```
+
+---
+
 ## 官网 UI 全面修复 + 认证徽章 v6.2.11 (2026-07-17) — 10 项修复 + Fable 5 / GPT Sol 认证
 
 ### 🎨 官网 UI 修复（10 项）

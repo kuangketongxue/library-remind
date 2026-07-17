@@ -16,7 +16,7 @@ export default function DocsPage() {
         <div className="docs-main" style={{ maxWidth: "800px" }}>
           {/* Breadcrumb */}
           <nav className="flex items-center gap-2 text-xs text-[var(--fg-dim)] mb-6">
-            <a href="/" className="hover:text-[var(--fg)] transition-colors">{t("nav.docs")}</a>
+            <a href="/" className="hover:text-[var(--fg)] transition-colors">Rest Reminder</a>
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
@@ -118,7 +118,7 @@ export default function DocsPage() {
                   <p className="text-[var(--fg-dim)] text-sm leading-relaxed">
                     {t("docs.step1_note")}
                   </p>
-                  <pre className="bg-[var(--surface)] rounded-lg p-4 mt-3 text-xs font-mono text-[#b5651d] overflow-x-auto">
+                  <pre className="bg-[var(--surface)] rounded-lg p-4 mt-3 text-xs font-mono text-[var(--accent)] overflow-x-auto">
 {`pip install -r requirements.txt
 python rest_reminder.py`}
                   </pre>
@@ -441,7 +441,7 @@ python rest_reminder.py`}
 
               <div className="docs-card">
                 <h3 className="text-sm font-semibold mb-2">{t("docs.dev_quick_title")}</h3>
-                <pre className="bg-[var(--surface)] rounded-lg p-4 text-xs font-mono text-[#b5651d] overflow-x-auto">
+                <pre className="bg-[var(--surface)] rounded-lg p-4 text-xs font-mono text-[var(--accent)] overflow-x-auto">
 {`git clone https://github.com/kuangketongxue/library-remind.git
 cd library-remind
 C:\\Python314\\python.exe rest_reminder.py --silent`}
@@ -490,7 +490,7 @@ C:\\Python314\\python.exe rest_reminder.py --silent`}
 
               <div className="docs-card">
                 <h3 className="text-sm font-semibold mb-2">{t("docs.dev_build_title")}</h3>
-                <pre className="bg-[var(--surface)] rounded-lg p-4 text-xs font-mono text-[#b5651d] overflow-x-auto">
+                <pre className="bg-[var(--surface)] rounded-lg p-4 text-xs font-mono text-[var(--accent)] overflow-x-auto">
 {`pyinstaller RestReminder.spec`}
                 </pre>
                 <p className="text-[var(--fg-dim)] text-xs mt-3 leading-relaxed">

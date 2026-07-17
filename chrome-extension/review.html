@@ -161,7 +161,10 @@ function playChime() {
 
 const SUBJECTS = ['语', '数', '英', '物', '化', '政', '其他'];
 const LABELS = ['专注', '疲劳', '收获大', '走神', '其他'];
-const FOCUS_MINUTES = 60;
+let FOCUS_MINUTES = 60; // 默认值，从 storage 读取
+chrome.storage.local.get('focusMinutes', r => {
+  if (r.focusMinutes) FOCUS_MINUTES = r.focusMinutes;
+});
 
 let selectedSubject = null;
 let selectedLabel = null;

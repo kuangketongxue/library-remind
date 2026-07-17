@@ -182,6 +182,13 @@ const translations: Record<Locale, Record<string, string>> = {
     "nav.search_shortcut": "Ctrl K",
     "nav.download": "免费下载",
     "nav.changelog": "更新日志",
+    "nav.language_switch": "切换语言",
+    "site.title": "Rest Reminder — 久坐提醒 & 护眼",
+    "site.description": "48MB 轻量桌面挂件，60 分钟专注循环，自动提醒休息护眼",
+    "hero.banner.alt": "Rest Reminder 产品横幅",
+    "hero.video.alt": "Rest Reminder 产品宣传视频",
+    "notice.col_category": "类别",
+    "notice.col_official": "官方",
 
     // Docs Nav
     "docs.quick_start": "快速开始",
@@ -235,7 +242,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "download.step3_desc": "学习时长、连续打卡一目了然，AI 自动生成学习报告",
     "download.cta_download": "↓ 立即下载",
     "download.cta_github": "查看 GitHub →",
-    "download.note": "支持 Windows 10/11 · v6.2.0 · MIT 开源 · 若 GitHub 访问慢可联系作者获取直链",
+    "download.note": "支持 Windows 10/11 · v6.2.10 · MIT 开源 · 若 GitHub 访问慢可联系作者获取直链",
 
     // Contact
     "contact.title": "联系我们",
@@ -1213,6 +1220,13 @@ const translations: Record<Locale, Record<string, string>> = {
     "nav.search_shortcut": "Ctrl K",
     "nav.download": "Free Download",
     "nav.changelog": "Changelog",
+    "nav.language_switch": "Switch Language",
+    "site.title": "Rest Reminder — Break Reminder & Eye Care",
+    "site.description": "A 48MB lightweight desktop widget with 60-minute focus cycles and auto break reminders",
+    "hero.banner.alt": "Rest Reminder product banner",
+    "hero.video.alt": "Rest Reminder product promo video",
+    "notice.col_category": "Category",
+    "notice.col_official": "Official",
 
     // Docs Nav
     "docs.quick_start": "Quick Start",
@@ -1263,7 +1277,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "download.step3_desc": "Study hours, streak, and AI reports at a glance",
     "download.cta_download": "↓ Download Now",
     "download.cta_github": "View GitHub →",
-    "download.note": "Windows 10/11 · v6.2.0 · MIT · Contact author if GitHub is slow",
+    "download.note": "Windows 10/11 · v6.2.10 · MIT · Contact author if GitHub is slow",
 
     "contact.title": "Contact Us",
     "contact.subtitle": "Whether you're a user, developer, or partner, we'd love to hear from you.",
@@ -2233,6 +2247,13 @@ const translations: Record<Locale, Record<string, string>> = {
     "nav.search_shortcut": "Ctrl K",
     "nav.download": "無料ダウンロード",
     "nav.changelog": "更新履歴",
+    "nav.language_switch": "言語切替",
+    "site.title": "Rest Reminder — 久座リマインダー & アイケア",
+    "site.description": "48MB 軽量デスクトップウィジェット、60分フォーカスサイクル、自動休憩リマインダー",
+    "hero.banner.alt": "Rest Reminder 製品バナー",
+    "hero.video.alt": "Rest Reminder 製品プロモ動画",
+    "notice.col_category": "カテゴリ",
+    "notice.col_official": "公式",
 
     // Docs Nav
     "docs.quick_start": "クイックスタート",
@@ -2283,7 +2304,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "download.step3_desc": "学習時間、ストリーク、AIレポートが一目で確認可能",
     "download.cta_download": "↓ 今すぐダウンロード",
     "download.cta_github": "GitHubを見る →",
-    "download.note": "Windows 10/11 · v6.2.0 · MIT · GitHubが遅い場合は作者まで",
+    "download.note": "Windows 10/11 · v6.2.10 · MIT · GitHubが遅い場合は作者まで",
 
     "contact.title": "お問い合わせ",
     "contact.subtitle": "ユーザー、開発者、パートナーを問わず、ご連絡をお待ちしています。",

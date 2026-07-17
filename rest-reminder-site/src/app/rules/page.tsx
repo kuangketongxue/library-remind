@@ -11,7 +11,7 @@ export default function RulesPage() {
         <DocsNav />
         <div className="docs-main" style={{ maxWidth: "960px" }}>
           <nav className="flex items-center gap-2 text-xs text-[var(--fg-dim)] mb-6">
-            <a href="/" className="hover:text-[var(--fg)] transition-colors">{t("nav.docs")}</a>
+            <a href="/" className="hover:text-[var(--fg)] transition-colors">Rest Reminder</a>
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>

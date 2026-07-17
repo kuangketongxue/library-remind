@@ -8,7 +8,7 @@ const path = require('path');
 const outDir = path.join(__dirname, '..', 'out');
 
 // 需要修复的页面
-const pages = ['contact', 'docs', 'pricing', 'privacy', 'terms', 'rules'];
+const pages = ['contact', 'docs', 'pricing', 'privacy', 'terms', 'rules', 'changelog', 'privacy-chrome'];
 
 for (const page of pages) {
   const htmlFile = path.join(outDir, `${page}.html`);

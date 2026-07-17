@@ -15,7 +15,7 @@ export default function Navbar() {
       <nav className="fixed top-0 left-0 right-0 z-50 bg-[color-mix(in_srgb,var(--bg)_85%,transparent)] backdrop-blur-xl border-b border-[var(--border)]">
         <div className="max-w-6xl mx-auto flex items-center justify-between h-20 px-6">
           <Link href="/" className="flex items-center gap-3">
-            <img src="/app-icon.png" alt="Rest Reminder" className="w-10 h-10 rounded-lg" />
+            <img src="/favicon.png" alt="Rest Reminder" className="w-10 h-10 rounded-lg" />
             <span className="text-lg font-bold font-display text-[var(--fg)] hidden sm:block">Rest Reminder</span>
           </Link>
 

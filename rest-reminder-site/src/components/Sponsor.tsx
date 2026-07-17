@@ -5,7 +5,8 @@ import { motion } from "framer-motion";
 
 const fade = (delay = 0) => ({
   initial: { opacity: 0, y: 24 },
-  animate: { opacity: 1, y: 0 },
+  whileInView: { opacity: 1, y: 0 },
+  viewport: { once: true },
   transition: { duration: 0.7, delay, ease: [0.22, 1, 0.36, 1] as const },
 });
 
@@ -61,7 +62,7 @@ export default function Sponsor() {
           <h3 className="text-2xl md:text-3xl font-bold mb-3 font-display">{t("hero.sponsor.partners_title")}</h3>
           <p className="text-[var(--fg-dim)] mb-10">{t("hero.sponsor.partners_subtitle")}</p>
 
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 max-w-3xl mx-auto">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-3xl mx-auto">
             {techSupport.map((s) => (
               <div key={s.nameKey} className="card p-4 text-center">
                 <h5 className="text-sm font-semibold mb-1">{t(s.nameKey)}</h5>

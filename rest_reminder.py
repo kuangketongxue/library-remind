@@ -92,7 +92,7 @@ def _decrypt_key(stored):
         xored = base64.b64decode(stored[len(_KEY_PREFIX):])
         return bytes(b ^ salt[i % len(salt)] for i, b in enumerate(xored)).decode('utf-8')
     except Exception:
-        return stored  # 解密失败，返回原值
+        return None  # 解密失败，返回 None 让调用方跳过
 import winsound
 import logging
 from logging.handlers import RotatingFileHandler
@@ -104,7 +104,7 @@ if os.path.isdir(_PRO_DIR) and _PRO_DIR not in sys.path:
     sys.path.insert(0, _PRO_DIR)
 
 # 日志配置：写入文件（pythonw 模式下 print 全部丢失），自动轮转 3×1MB
-VERSION = 'v6.2.10'
+VERSION = 'v6.2.12'
 AUTO_SUBMIT_SECONDS = 60  # 自动提交超时（秒），三处复用
 _LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rest_reminder.log')
 _handler = RotatingFileHandler(_LOG_FILE, maxBytes=500_000, backupCount=7, encoding='utf-8')
@@ -301,6 +301,9 @@ def _normalize_version(tag):
 def _is_newer(latest_tag, current_tag):
     """当前安装的版本是否低于最新版本"""
     return _normalize_version(latest_tag) > _normalize_version(current_tag)
+
+
+def _score_to_color(score):
     """评分条填充色：旧格式(1-5)离散色板，新格式(1-100)三元映射"""
     if score <= 5:
         return _SCORE_COLORS_OLD.get(score, '#555')
@@ -682,20 +685,33 @@ class FloatingBall(QWidget):
             painter.drawRoundedRect(24, 22, 5, 16, 2.5, 2.5)
             painter.drawRoundedRect(33, 22, 5, 16, 2.5, 2.5)
         else:
-            # 学习态：矢量闪电（亮金渐变填充）
+            # 学习态：精致矢量闪电（曲线 + 光晕 + 亮金渐变）
+            # 光晕层（柔和外发光）
+            glow = QRadialGradient(QPointF(30, 30), 28)
+            glow.setColorAt(0.0, QColor(212, 168, 83, 40))
+            glow.setColorAt(0.6, QColor(212, 168, 83, 12))
+            glow.setColorAt(1.0, QColor(212, 168, 83, 0))
+            painter.setBrush(QBrush(glow))
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(2, 2, 56, 56)
+            # 闪电主体（曲线路径）
             bolt_path = QPainterPath()
-            bolt_path.moveTo(33, 18)
-            bolt_path.lineTo(22, 34)
-            bolt_path.lineTo(29, 34)
-            bolt_path.lineTo(27, 46)
-            bolt_path.lineTo(38, 30)
-            bolt_path.lineTo(31, 30)
+            bolt_path.moveTo(31, 14)
+            bolt_path.cubicTo(29, 16, 23, 27, 21, 31)
+            bolt_path.lineTo(28, 31)
+            bolt_path.cubicTo(26, 34, 25, 37, 24, 40)
+            bolt_path.lineTo(23, 46)
+            bolt_path.cubicTo(23, 48, 27, 46, 29, 43)
+            bolt_path.lineTo(38, 29)
+            bolt_path.cubicTo(39, 27, 39, 25, 37, 22)
+            bolt_path.lineTo(31, 14)
             bolt_path.closeSubpath()
-            bolt_grad = QLinearGradient(22, 18, 38, 46)
-            bolt_grad.setColorAt(0.0, QColor(240, 200, 112))
-            bolt_grad.setColorAt(1.0, QColor(212, 168, 83))
+            bolt_grad = QLinearGradient(21, 14, 38, 48)
+            bolt_grad.setColorAt(0.0, QColor(255, 220, 120))
+            bolt_grad.setColorAt(0.5, QColor(240, 200, 112))
+            bolt_grad.setColorAt(1.0, QColor(190, 140, 50))
             painter.setBrush(QBrush(bolt_grad))
-            painter.setPen(QPen(QColor(212, 168, 83), 0.5))
+            painter.setPen(QPen(QColor(255, 220, 120, 60), 0.6))
             painter.drawPath(bolt_path)
 
     def mousePressEvent(self, event):
@@ -1977,7 +1993,7 @@ class EyeRestOverlay(DraggableOverlay):
         self.raise_()
 
         self._countdown_timer.start(1000)
-        self._auto_hide_timer.start(15000)
+        self._auto_hide_timer.start(20000)
 
     def _tick(self):
         self._remaining -= 1
@@ -3574,6 +3590,7 @@ class RestReminderWidget(QWidget):
         self._update_tray_ball_action()
         # 创建5分钟倒计时浮层
         self.countdown_overlay = CountdownOverlay()
+        self.countdown_overlay.main_window = self
         # 20-20-20 护眼提醒
         self.eye_rest_overlay = EyeRestOverlay()
         self._last_eye_rest_time = None
@@ -3662,7 +3679,7 @@ class RestReminderWidget(QWidget):
         sb_layout.setContentsMargins(8, 12, 8, 12)
         sb_layout.setSpacing(2)
 
-        # Logo / 品牌（矢量闪电，取代 emoji 保证跨机器一致）
+        # Logo / 品牌（精致矢量闪电，曲线+光晕）
         logo = QLabel()
         logo.setFixedSize(40, 40)
         logo.setAlignment(Qt.AlignCenter)
@@ -3671,15 +3688,32 @@ class RestReminderWidget(QWidget):
         _pm.fill(Qt.transparent)
         _p = QPainter(_pm)
         _p.setRenderHint(QPainter.Antialiasing)
+        # 光晕
+        _glow = QRadialGradient(QPointF(20, 20), 18)
+        _glow.setColorAt(0.0, QColor(212, 168, 83, 35))
+        _glow.setColorAt(0.6, QColor(212, 168, 83, 10))
+        _glow.setColorAt(1.0, QColor(212, 168, 83, 0))
+        _p.setBrush(QBrush(_glow))
+        _p.setPen(Qt.NoPen)
+        _p.drawEllipse(1, 1, 38, 38)
+        # 闪电曲线
         _bolt = QPainterPath()
-        _bolt.moveTo(33, 18); _bolt.lineTo(22, 34); _bolt.lineTo(29, 34)
-        _bolt.lineTo(27, 46); _bolt.lineTo(38, 30); _bolt.lineTo(31, 30)
+        _bolt.moveTo(21, 9)
+        _bolt.cubicTo(19, 11, 15, 18, 14, 21)
+        _bolt.lineTo(19, 21)
+        _bolt.cubicTo(17, 23, 17, 25, 16, 27)
+        _bolt.lineTo(15, 31)
+        _bolt.cubicTo(15, 32, 18, 31, 19, 29)
+        _bolt.lineTo(26, 19)
+        _bolt.cubicTo(26, 18, 26, 17, 25, 15)
+        _bolt.lineTo(21, 9)
         _bolt.closeSubpath()
-        _grad = QLinearGradient(22, 18, 38, 46)
-        _grad.setColorAt(0.0, QColor(240, 200, 112))
-        _grad.setColorAt(1.0, QColor(212, 168, 83))
+        _grad = QLinearGradient(14, 9, 26, 32)
+        _grad.setColorAt(0.0, QColor(255, 220, 120))
+        _grad.setColorAt(0.5, QColor(240, 200, 112))
+        _grad.setColorAt(1.0, QColor(190, 140, 50))
         _p.setBrush(QBrush(_grad))
-        _p.setPen(QPen(QColor(212, 168, 83), 0.5))
+        _p.setPen(QPen(QColor(255, 220, 120, 50), 0.4))
         _p.drawPath(_bolt)
         _p.end()
         logo.setPixmap(_pm)
@@ -3965,7 +3999,7 @@ class RestReminderWidget(QWidget):
         days_since_sunday = (today.weekday() + 1) % 7
         end_of_week = today + timedelta(days=(6 - days_since_sunday))
         # 往前推 52 周 + 当周 = 53 列
-        start_date = end_of_week - timedelta(weeks=52, days=end_of_week.weekday())
+        start_date = end_of_week - timedelta(weeks=52)
         data = {}
         total_study = 0
         total_days = 0
@@ -4102,7 +4136,8 @@ class RestReminderWidget(QWidget):
             widget = self._build_settings_tab()
         elif idx == 4:
             widget = self._build_about_tab()
-        self._tab_content.insertWidget(idx, widget)
+        if widget is not None:
+            self._tab_content.insertWidget(idx, widget)
 
     def _build_general_tab(self):
         """今日 tab：学习概览 + 今日数据"""
@@ -4335,7 +4370,6 @@ class RestReminderWidget(QWidget):
             btn.setChecked(key == theme_key)
             btn.setStyleSheet(active_style if key == theme_key else base_style)
         self._toast('🎨 主题', f'已切换为{theme_name}主题')
-        self._toast('设置', '已保存配置')
 
     def _toggle_silent_start(self, checked):
         self.app_settings['silent_start'] = checked == 1
@@ -4639,10 +4673,14 @@ class RestReminderWidget(QWidget):
         for b in self._report_buttons.values():
             b.setEnabled(False)
 
-        # 取消旧的 worker（防止竞态）
+        # 取消旧的 worker（防止竞态 + 旧回调覆盖新引用）
         if hasattr(self, '_report_worker') and self._report_worker is not None:
+            try:
+                self._report_worker.result_ready.disconnect()
+            except (TypeError, RuntimeError):
+                pass
             self._report_worker.quit()
-            self._report_worker.wait()
+            self._report_worker.wait(2000)
 
         worker = _ReportWorker(self, report_type, force_refresh)
         self._report_worker = worker
@@ -4993,14 +5031,21 @@ class RestReminderWidget(QWidget):
         n = len(days)
         if n == 0:
             t = THEMES.get(self._current_theme, THEMES['dark'])
-            # 矢量闪电图标（淡化，暗示"待激活"）
+            # 矢量闪电图标（淡化，暗示"待激活"）— 曲线版
             p.save()
             p.setOpacity(0.22)
             p.translate(w // 2 - 15, h // 2 - 28)
             p.scale(0.6, 0.6)
             bolt = QPainterPath()
-            bolt.moveTo(33, 18); bolt.lineTo(22, 34); bolt.lineTo(29, 34)
-            bolt.lineTo(27, 46); bolt.lineTo(38, 30); bolt.lineTo(31, 30)
+            bolt.moveTo(31, 14)
+            bolt.cubicTo(29, 16, 23, 27, 21, 31)
+            bolt.lineTo(28, 31)
+            bolt.cubicTo(26, 34, 25, 37, 24, 40)
+            bolt.lineTo(23, 46)
+            bolt.cubicTo(23, 48, 27, 46, 29, 43)
+            bolt.lineTo(38, 29)
+            bolt.cubicTo(39, 27, 39, 25, 37, 22)
+            bolt.lineTo(31, 14)
             bolt.closeSubpath()
             p.setBrush(QBrush(QColor(t['accent'])))
             p.setPen(Qt.NoPen)
@@ -5524,7 +5569,7 @@ class RestReminderWidget(QWidget):
         token_input = QLineEdit()
         token_input.setEchoMode(QLineEdit.Password)
         token_input.setPlaceholderText('ghp_...')
-        token_input.setText(_decrypt_key(self.app_settings.get('github_backup_token', '')))
+        token_input.setText(_decrypt_key(self.app_settings.get('github_backup_token', '')) or '')
         token_input.setStyleSheet('QLineEdit { background: #16161c; color: #e8e4dc; border: 1px solid #252530; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-family: Consolas; }')
         token_row.addWidget(token_input, 1)
         backup_layout.addLayout(token_row)
@@ -5658,7 +5703,7 @@ class RestReminderWidget(QWidget):
         now = datetime.now()
         if now.weekday() != 0:  # 不是周一
             return
-        if now.hour != 8:  # 不是 8 点
+        if now.hour < 7 or now.hour > 10:  # 周一 7:00-10:00 窗口
             return
         # 检查今天是否已发送
         last_sent = self.app_settings.get('mail_last_sent', '')
@@ -5739,7 +5784,7 @@ class RestReminderWidget(QWidget):
             status_label.setText('未配置')
             status_label.setStyleSheet('color: #fcc419; font-size: 11px; background: transparent;')
             self._toast('设置', '已保存配置')
-        log.info(f'[AI] {key_name} updated, len={len(key_value)}')
+        log.info(f'[AI] {key_name} updated, has_key={bool(key_value)}')
 
     # ═══ AI 提供商管理 ═══
     def _refresh_ai_providers_ui(self):
@@ -5832,7 +5877,7 @@ class RestReminderWidget(QWidget):
         key_input.setEchoMode(QLineEdit.Password)
         key_input.setPlaceholderText('API Key')
         raw_key = provider.get('api_key', '')
-        key_input.setText(_decrypt_key(raw_key) if raw_key else '')
+        key_input.setText((_decrypt_key(raw_key) if raw_key else '') or '')
         key_input.setStyleSheet('QLineEdit { background: #16161c; color: #e8e4dc; border: 1px solid #252530; border-radius: 6px; padding: 4px 8px; font-size: 11px; font-family: Consolas; }')
         mk_row.addWidget(key_input, 1)
         cl.addLayout(mk_row)
@@ -6603,7 +6648,8 @@ class RestReminderWidget(QWidget):
             except Exception as e:
                 log.debug(f'[_check_update] 检查失败: {e}')
                 if not silent:
-                    QTimer.singleShot(0, lambda: open_url(download_url))
+                    QTimer.singleShot(0, lambda: self.tray_icon.showMessage(
+                        '检查更新', '网络异常，请稍后重试', QSystemTrayIcon.Warning, 3000))
         threading.Thread(target=_do_check, daemon=True).start()
 
     def _show_update_dialog(self, latest_tag, download_url):
@@ -6867,28 +6913,32 @@ class RestReminderWidget(QWidget):
     def set_autostart(self, enabled):
         try:
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Run', 0, winreg.KEY_SET_VALUE)
-            if enabled:
-                winreg.SetValueEx(key, 'RestReminder', 0, winreg.REG_SZ, self._get_autostart_cmd())
-            else:
-                try:
-                    winreg.DeleteValue(key, 'RestReminder')
-                except FileNotFoundError:
-                    pass
-            winreg.CloseKey(key)
+            try:
+                if enabled:
+                    winreg.SetValueEx(key, 'RestReminder', 0, winreg.REG_SZ, self._get_autostart_cmd())
+                else:
+                    try:
+                        winreg.DeleteValue(key, 'RestReminder')
+                    except FileNotFoundError:
+                        pass
+            finally:
+                winreg.CloseKey(key)
             # Windows 10/11 还需要 StartupApproved\Run 条目，否则 Run 键值会被忽略
             approved_path = r'Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
             try:
                 approved_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, approved_path, 0, winreg.KEY_SET_VALUE)
-                if enabled:
-                    # 02 00...00 = 启用
-                    winreg.SetValueEx(approved_key, 'RestReminder', 0, winreg.REG_BINARY,
-                                      b'\x02' + b'\x00' * 11)
-                else:
-                    try:
-                        winreg.DeleteValue(approved_key, 'RestReminder')
-                    except FileNotFoundError:
-                        pass
-                winreg.CloseKey(approved_key)
+                try:
+                    if enabled:
+                        # 02 00...00 = 启用
+                        winreg.SetValueEx(approved_key, 'RestReminder', 0, winreg.REG_BINARY,
+                                          b'\x02' + b'\x00' * 11)
+                    else:
+                        try:
+                            winreg.DeleteValue(approved_key, 'RestReminder')
+                        except FileNotFoundError:
+                            pass
+                finally:
+                    winreg.CloseKey(approved_key)
             except Exception as e2:
                 log.warning(f'[自启动] StartupApproved 写入失败：{e2}')
             # 关键修复：无论启用还是禁用，都同步清理启动文件夹 .lnk，避免两套机制并存导致双启动

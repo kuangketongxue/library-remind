@@ -67,7 +67,7 @@ export default function Hero() {
           <span className="text-[11px] font-semibold text-[var(--accent)] bg-[var(--accent-soft)] px-3 py-1 rounded-full border border-[var(--border)]">
             {t("hero.badge")}
           </span>
-          <span className="text-xs text-white/70">v6.2.10</span>
+          <span className="text-xs text-white/70">v6.2.12</span>
         </div>
 
         <h1
