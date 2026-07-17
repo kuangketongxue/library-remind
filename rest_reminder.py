@@ -6162,14 +6162,13 @@ class RestReminderWidget(QWidget):
         badge_row = QHBoxLayout()
         badge_row.setSpacing(12)
         badge_row.setContentsMargins(0, 6, 0, 0)
-        for img_name, img_file in [('Fable 5 Verified', 'fable5-verified.png'), ('GPT Sol Verified', 'gptsol-verified.jpg')]:
+        for img_name, img_file, target_h in [('Fable 5 Verified', 'fable5-verified.png', 48), ('GPT Sol Verified', 'gptsol-verified.jpg', 40)]:
             badge_label = QLabel()
-            badge_label.setFixedHeight(36)
-            # 从 exe 同目录或脚本同目录加载
+            badge_label.setFixedHeight(target_h)
             base_dir = sys._MEIPASS if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
             badge_path = os.path.join(base_dir, img_file)
             if os.path.exists(badge_path):
-                pm = QPixmap(badge_path).scaledToHeight(36, Qt.SmoothTransformation)
+                pm = QPixmap(badge_path).scaledToHeight(target_h, Qt.SmoothTransformation)
                 badge_label.setPixmap(pm)
             else:
                 badge_label.setText(img_name)

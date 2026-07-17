@@ -123,9 +123,9 @@ export default function Hero() {
         </div>
 
         {/* 认证徽章 */}
-        <div className="flex items-center justify-center gap-4 mt-8 animate-[fadeInUp_0.6s_ease-out_0.4s_both]">
-          <img src="/fable5-verified.png" alt="Fable 5 Verified" className="h-10 md:h-12 rounded-full border border-white/10" />
-          <img src="/gptsol-verified.jpg" alt="GPT Sol Verified" className="h-10 md:h-12 rounded-full border border-white/10" />
+        <div className="flex flex-col items-center gap-3 mt-8 animate-[fadeInUp_0.6s_ease-out_0.4s_both]">
+          <img src="/fable5-verified.png" alt="Fable 5 Verified" className="w-full max-w-sm rounded-xl border border-white/10" />
+          <img src="/gptsol-verified.jpg" alt="GPT Sol Verified" className="w-full max-w-xs rounded-xl border border-white/10" />
         </div>
       </div>
     </section>
