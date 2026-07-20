@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="360" viewBox="0 0 1200 360"
+     role="img" aria-labelledby="title desc">
+  <title id="title">Rest Reminder — healthy break reminders for developers</title>
+  <desc id="desc">48MB memory · 60min intervals · 12h+ battery · MIT open source</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#064E3B"/>
+      <stop offset="100%" stop-color="#0F172A"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#38BDF8"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="360" rx="24" fill="url(#bg)"/>
+
+  <!-- Subtle rhythm grid -->
+  <g opacity="0.07" stroke="#ffffff" stroke-width="0.5">
+    <line x1="0" y1="120" x2="1200" y2="120"/>
+    <line x1="0" y1="240" x2="1200" y2="240"/>
+    <line x1="400" y1="0" x2="400" y2="360"/>
+    <line x1="800" y1="0" x2="800" y2="360"/>
+  </g>
+
+  <!-- Title block (left 58%) -->
+  <g id="title-block" transform="translate(56 48)">
+    <text font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="500" fill="#10B981" letter-spacing="1">健康 · 开发者工具</text>
+    <text x="0" y="56" font-family="ui-sans-serif, -apple-system, sans-serif" font-size="44" font-weight="700" fill="#FFFFFF">Rest Reminder</text>
+    <text x="0" y="96" font-family="ui-sans-serif, -apple-system, sans-serif" font-size="20" font-weight="400" fill="#A7F3D0">Healthy break reminders for developers</text>
+    <text x="0" y="140" font-family="ui-sans-serif, -apple-system, sans-serif" font-size="14" font-weight="400" fill="#6EE7B7">Sitting is not a skill. Your health is.</text>
+
+    <!-- 4 stats -->
+    <g transform="translate(0 178)">
+      <text font-family="ui-monospace, monospace" font-size="22" font-weight="700" fill="#FFFFFF">48MB</text>
+      <text x="0" y="20" font-family="sans-serif" font-size="13" fill="#A7F3D0">极致轻量</text>
+      <text x="120" y="0" font-family="ui-monospace, monospace" font-size="22" font-weight="700" fill="#10B981">60min</text>
+      <text x="120" y="20" font-family="sans-serif" font-size="13" fill="#A7F3D0">提醒间隔</text>
+      <text x="240" y="0" font-family="ui-monospace, monospace" font-size="22" font-weight="700" fill="#38BDF8">12h+</text>
+      <text x="240" y="20" font-family="sans-serif" font-size="13" fill="#A7F3D0">全天续航</text>
+      <text x="360" y="0" font-family="ui-monospace, monospace" font-size="22" font-weight="700" fill="#FFFFFF">MIT</text>
+      <text x="360" y="20" font-family="sans-serif" font-size="13" fill="#A7F3D0">开源协议</text>
+    </g>
+  </g>
+
+  <!-- Breathing circle motif (right 42%) -->
+  <g id="breathing-motif" transform="translate(820 80)">
+    <!-- Three concentric circles representing breathing rhythm -->
+    <circle cx="0" cy="0" r="80" fill="none" stroke="#10B981" stroke-width="1.5" opacity="0.3"/>
+    <circle cx="0" cy="0" r="55" fill="none" stroke="#10B981" stroke-width="1.5" opacity="0.5"/>
+    <circle cx="0" cy="0" r="30" fill="#10B981" opacity="0.2"/>
+
+    <!-- Center label -->
+    <text x="0" y="6" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="600" fill="#FFFFFF">深呼吸</text>
+    <text x="0" y="26" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#6EE7B7">4-7-8 法则</text>
+
+    <!-- Orbit dots representing break cycle -->
+    <g transform="translate(0 -80)">
+      <circle cx="0" cy="0" r="4" fill="#38BDF8"/>
+    </g>
+    <g transform="translate(56 56)">
+      <circle cx="0" cy="0" r="4" fill="#10B981"/>
+    </g>
+    <g transform="translate(-56 56)">
+      <circle cx="0" cy="0" r="4" fill="#6EE7B7"/>
+    </g>
+  </g>
+
+  <!-- Principle at bottom -->
+  <g transform="translate(720 260)">
+    <text font-family="ui-monospace, monospace" font-size="12" font-weight="600" fill="#38BDF8">核心原则</text>
+    <text x="0" y="26" font-family="sans-serif" font-size="18" font-weight="600" fill="#FFFFFF">不是让你休息，是让你持续</text>
+    <text x="0" y="52" font-family="sans-serif" font-size="12" fill="#6EE7B7">Rest is not stopping. Rest is sustaining.</text>
+  </g>
+</svg>
